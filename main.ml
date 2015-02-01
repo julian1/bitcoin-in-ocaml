@@ -13,7 +13,7 @@
 *)
 
 
-type host_info = { 
+type state_type = { 
 	a_balance: int;
 	b_balance: int;
 };;
