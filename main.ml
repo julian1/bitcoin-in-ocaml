@@ -24,21 +24,32 @@ let genesis_state  = {
 	b_balance = 0; 
 };;
 
-let f x = { a_balance = x.a_balance; b_balance = 0; };;
-
-(* let myprint state = output_string stdout (string_of_int state.a_balance );;   *)
-let myprint state = output_string stdout @@ string_of_int state.a_balance ;;  
 
 let myprint2 state = 
-	print_endline @@ "a_balance: " ^ (string_of_int state.a_balance )
+	print_endline @@ 
+      "a_balance: " ^ (string_of_int state.a_balance )
     ^ ", b_balance " ^ (string_of_int state.b_balance );
 
 
 let give state1 symbol from to_ = 123 in give "AUD" "account1" () ;;
 
 
-let _ = output_string stdout "hi\n";;
+let tx state = { 
+	a_balance = state.a_balance - 1; 
+	b_balance = state.b_balance ; 
+};;
 
 
-myprint2 genesis_state;
+let chain = [ tx; tx ];; 
+
+myprint2 genesis_state;;
+
+
+let result = List.fold_left 
+  (fun state f -> f( state) ) genesis_state chain;;
+
+myprint2 result ;;
+
+
+
 
