@@ -10,6 +10,12 @@
 	if transactions are functions, (that might refer to other functions) then	
 	we should fold over them.
 	tx is partially bound function (eg arguments bound in).
+
+TODO
+  - exception, or monad for failure. 
+  - Note, that we don't need to wind back because it's functional. its the fold
+  that decides whether to apply the change
+  - bind the party into the tx
 *)
 
 
@@ -40,20 +46,20 @@ let tx state = {
 };;
 
 (* partial application *)
-let tx2 amount state = { 
+let transfer_k_tx amount state = { 
 	a_balance = state.a_balance - amount; 
-	b_balance = state.b_balance ; 
+	b_balance = state.b_balance + amount ; 
 };;
 
 
-(* ledger *)
-let ledger = [ tx; tx; tx2 5 ];; 
+(* chain/ledger *)
+let ledger = [ tx; tx; transfer_k_tx 5 ];; 
 
 myprint2 genesis;;
 
 
 let result = List.fold_left 
-  (fun state f -> f( state) ) genesis ledger;;
+  (fun state f -> f state ) genesis ledger;;
 
 myprint2 result ;;
 
