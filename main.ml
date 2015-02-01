@@ -33,27 +33,27 @@ let myprint2 state =
 
 let give state1 symbol from to_ = 123 in give "AUD" "account1" () ;;
 
-
+(* simple tx *)
 let tx state = { 
 	a_balance = state.a_balance - 1; 
 	b_balance = state.b_balance ; 
 };;
 
-
+(* partial application *)
 let tx2 amount state = { 
 	a_balance = state.a_balance - amount; 
 	b_balance = state.b_balance ; 
 };;
 
 
-
-let chain = [ tx; tx; tx2 5 ];; 
+(* ledger *)
+let ledger = [ tx; tx; tx2 5 ];; 
 
 myprint2 genesis;;
 
 
 let result = List.fold_left 
-  (fun state f -> f( state) ) genesis chain;;
+  (fun state f -> f( state) ) genesis ledger;;
 
 myprint2 result ;;
 
