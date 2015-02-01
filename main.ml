@@ -19,7 +19,7 @@ type host_info = {
 };;
 
 
-let genesis_state  = { 
+let genesis  = { 
 	a_balance = 123 ; 
 	b_balance = 0; 
 };;
@@ -40,13 +40,20 @@ let tx state = {
 };;
 
 
-let chain = [ tx; tx ];; 
+let tx2 amount state = { 
+	a_balance = state.a_balance - amount; 
+	b_balance = state.b_balance ; 
+};;
 
-myprint2 genesis_state;;
+
+
+let chain = [ tx; tx; tx2 5 ];; 
+
+myprint2 genesis;;
 
 
 let result = List.fold_left 
-  (fun state f -> f( state) ) genesis_state chain;;
+  (fun state f -> f( state) ) genesis chain;;
 
 myprint2 result ;;
 
