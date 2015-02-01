@@ -16,6 +16,7 @@ TODO
   - Note, that we don't need to wind back because it's functional. its the fold
   that decides whether to apply the change
   - bind the party into the tx
+  - issue of events and advertising subscription state ...
 *)
 
 
@@ -41,11 +42,14 @@ let give state1 symbol from to_ = 123 in give "AUD" "account1" () ;;
 
 (* simple tx *)
 let tx state = { 
+  state with
 	a_balance = state.a_balance - 1; 
-	b_balance = state.b_balance ; 
 };;
 
-(* partial application *)
+(* partial application 
+  - want to bind the parties into tx as well
+  - and extract actual transfer k
+*)
 let transfer_k_tx amount state = { 
 	a_balance = state.a_balance - amount; 
 	b_balance = state.b_balance + amount ; 
