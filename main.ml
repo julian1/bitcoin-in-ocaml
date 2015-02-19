@@ -17,6 +17,9 @@ TODO
   that decides whether to apply the change
   - bind the party into the tx
   - issue of events and advertising subscription state ...
+
+  corebuild  main.byte
+
 *)
 
 
