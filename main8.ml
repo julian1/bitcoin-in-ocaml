@@ -1,14 +1,16 @@
 
-(* 64 bit ocaml uses 64 bit ints by default *)
+(* 
+  corebuild -package sha main8.byte
+   *)
 
-open Core
-
-
-
-let decs s pos bytes = String.sub s pos bytes in
-let dec1 s pos = int_of_char @@ String.get s pos in
+(* open Core  *)
+(*open Sha256 *)
 
 
+
+let dec1 s pos = 
+  int_of_char @@ String.get s pos 
+in
 (* decode string s, at pos, reading l bytes as a 64 bit Int *)
 (*
 	little-endian ?
@@ -20,7 +22,7 @@ let rec dec_ s pos bytes acc =
 	dec_ s pos (pos+bytes-1) 0
 in
 *)
-
+(* decode integer value of string s at position using n bytes *)
 let dec s pos bytes =
   let rec dec_ s start pos acc =
     let value = (acc lsl 8) + (dec1 s pos) in
@@ -28,17 +30,22 @@ let dec s pos bytes =
       else dec_ s start (pos-1) value in
     dec_ s pos (pos+bytes-1) 0
 in
-
+(* and return new position in string *)
 let dec_ s pos bytes =
   bytes+pos, dec s pos bytes
 in
 
+(* decode string value strings *)
+let decs s pos bytes = 
+  String.sub s pos bytes 
+in
+(* and return new position *)
 let decs_ s pos bytes =
   bytes+pos, decs s pos bytes
 in
-
+(* dump the string *)
 let rec dump s a b =
-	Printf.printf "magic %d - '%c' %d %d %d\n" a s.[a] (int_of_char s.[a])   (dec s a 4) (dec s a 8);
+	Printf.printf "magic %d - '%c' %d %d %d\n" a s.[a] (int_of_char s.[a]) (dec s a 4) (dec s a 8);
   if a > b then ()
   else dump s (a+1) b
 in
@@ -63,7 +70,7 @@ let h =
   then
     "\xF9\xBE\xB4\xD9version\x00\x00\x00\x00\x00j\x00\x00\x00\xE8\xFF\x94\xD0q\x11\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00(#\xE0T\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\x7F\x00\x00\x01 \x8D\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\x12\xBDzI \x8D\xE9\xD4n\x1F0!\xF8\x11\x14/bitcoin-ruby:0.0.6/\xD1\xF3\x01\x00\xFF" else
     let in_channel = open_in "response.bin" in
-    let h = In_channel.input_all in_channel in
+    let h = Core.In_channel.input_all in_channel in
     let () = close_in in_channel in
     h
 in
@@ -71,7 +78,10 @@ in
   let pos = 0 in
   let pos, magic = decs_ h pos 4 in
   let pos, command = decs_ h pos 12 in  (* maybe should just be 20 bytes *)
-  let pos, unknown = dec_ h pos 8 in
+  let pos, length = dec_ h pos 4 in
+  (* checksum is double sha256 *)
+  let pos, checksum = decs_ h pos 4 in
+
   let pos, protocol = dec_ h pos 4 in
   let pos, nlocalServices = dec_ h pos 8 in
   let pos, nTime = dec_ h pos 8 in
@@ -84,10 +94,10 @@ in
   let pos, relay = dec_ h pos 1 in
 
   let () = Printf.printf "pos %d, length %d \n" pos ( String.length h ) in
-
   let () = Printf.printf "magic %s\n"   magic in
   let () = Printf.printf "command %s\n" command in
-  let () = Printf.printf "unknown %x\n"  unknown in (* checksum ? *)
+  let () = Printf.printf "length %d %d\n" length (length + 24) in
+  let () = Printf.printf "checksum %s\n" checksum in
 
   let () = Printf.printf "protocol_version %d\n" protocol in
   let () = Printf.printf "nLocalServices %d\n" nlocalServices in
@@ -99,8 +109,48 @@ in
   let () = Printf.printf "height %d\n" height in
   let () = Printf.printf "relay %d\n" relay in
 
+
+let sha256d_ s = 
+  Sha256.string s |> Sha256.to_bin |> Sha256.string |> Sha256.to_bin
+in
+
+  let () = Printf.printf "u is %s\n" ( String.sub h 24 106 |> sha256d_ |> (fun x -> String.sub x 0 4 )) in
+  
+
+(*
+let reverse = Core_string.rev 
+in
+
+  let () = Printf.printf "y is %s\n" @@ reverse "hello"   in
+
+let m = Hex.of_string ~pretty:true "Hello world!" in 
+let () = Printf.printf "m is %s" m 
+in
+*)
+
+(* 
+  Ok, we need a hex version of the value...
+  which means we need a hexkb
+
+  why are the digits reversed ? 
+
+  actually we don't need to convert to hex at all!!!
+*)
+
+(*
+  let () = Printf.printf "u is %s\n" (sha256d "hello") in
+  let sha2 = Sha256.to_hex ( Sha1.string sha1bin ) in
+  let () = Printf.printf "u is %s\n" sha2 in
+*)
+
+
+
+
   (* let () = dump h 0 (String.length h - 9)  in *)
 Printf.printf "finished\n"
+
+
+
 
 (*
 283     static member Parse(reader: BinaryReader) =
