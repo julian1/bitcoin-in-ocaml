@@ -1,72 +1,246 @@
 
-(* 
+(*
   corebuild -package sha main8.byte
    *)
 
 (* open Core  *)
 (*open Sha256 *)
 
+type header =
+{
+  magic : int;
+  command : string;
+  length : int;
+  checksum : int;
+}
+
+type ip_address =
+{
+  (* use a tuple or list ?, or 32 byte integer ? or 4 8 byte integers*)
+  a : int;
+  b : int;
+  c : int;
+  d : int;
+  port : int;
+}
+
+(* change name version_pkt? or version msg *)
+type version =
+{
+  protocol : int ;
+  nlocalServices : Int64.t;
+  nTime : Int64.t;
+  from : ip_address;
+  to_ : ip_address;
+  nonce : Int64.t;
+  agent : string;
+  height : int;
+  relay : int;
+}
+
+let printf = Printf.printf
+
+let hex_of_char c =
+  let hexa = "0123456789abcdef" in
+  let x = Char.code c in
+  hexa.[x lsr 4], hexa.[x land 0xf]
+
+let hex_of_string s =
+  (* functional *)
+  let n = String.length s in
+  let buf = Buffer.create (n*2) in
+  for i = 0 to n-1 do
+    let x, y = hex_of_char s.[i] in
+    Buffer.add_char buf x;
+    Buffer.add_char buf y;
+    (*Buffer.add_char buf ' ';
+    Buffer.add_char buf s.[i];
+    Buffer.add_char buf '\n';
+    *)
+  done;
+  Buffer.contents buf
 
 
-let dec1 s pos = 
-  int_of_char @@ String.get s pos 
-in
-(* decode string s, at pos, reading l bytes as a 64 bit Int *)
-(*
-	little-endian ?
+
+(* decode byte in s at pos *)
+let dec1 s pos = int_of_char @@ String.get s pos
+
+(* other endiness form
 let dec s pos bytes =
 let rec dec_ s pos bytes acc =
 	let value = (acc lsl 8) + (dec1 s pos) in
     if pos >= bytes then value
     else dec_ s (pos+1) bytes value in
 	dec_ s pos (pos+bytes-1) 0
-in
 *)
+
 (* decode integer value of string s at position using n bytes *)
-let dec s pos bytes =
-  let rec dec_ s start pos acc =
+let dec s start bytes =
+  let rec dec_ pos acc =
     let value = (acc lsl 8) + (dec1 s pos) in
       if pos == start then value
-      else dec_ s start (pos-1) value in
-    dec_ s pos (pos+bytes-1) 0
-in
-(* and return new position in string *)
-let dec_ s pos bytes =
-  bytes+pos, dec s pos bytes
-in
+      else dec_ (pos-1) value in
+    dec_ (start+bytes-1) 0
 
-(* decode string value strings *)
-let decs s pos bytes = 
-  String.sub s pos bytes 
-in
-(* and return new position *)
-let decs_ s pos bytes =
-  bytes+pos, decs s pos bytes
-in
-(* dump the string *)
-let rec dump s a b =
-	Printf.printf "magic %d - '%c' %d %d %d\n" a s.[a] (int_of_char s.[a]) (dec s a 4) (dec s a 8);
+(* with new position in string - change name decodeInteger *)
+let dec_ s pos n = n+pos, dec s pos n
+let decodeInteger8 s pos = dec_ s pos 1
+let decodeInteger32 s pos = dec_ s pos 4
+
+(* decode integer value of string s at position using n bytes *)
+let dec64_ s start bytes =
+  let rec dec_ pos acc =
+    let value = Int64.add (Int64.shift_left acc 8) (Int64.of_int (dec1 s pos)) in
+      if pos == start then value
+      else dec_ (pos-1) value in
+    dec_ (start+bytes-1) 0L
+
+let decodeInteger64 s pos = 8+pos, dec64_ s pos 8
+
+(* string manipulation *)
+let strsub = String.sub
+let strlen = String.length
+let strrev = Core.Core_string.rev
+
+(* with new position *)
+let decs_ s pos n = n+pos, strsub s pos n
+
+let sha256 s = Sha256.string s |> Sha256.to_bin
+let sha256d s = sha256 s |> sha256
+(*let checksum s = sha256d s |> (fun x -> strsub x 0 4) |> (fun x -> decodeInteger32 x 0 ) *)
+
+let checksum s = let (x: string ) = sha256d s in
+  dec x 0 4
+
+let decodeString s pos =
+  let pos, len = decodeInteger8 s pos in
+  let pos, s = decs_ s pos len in
+  pos, s
+
+let decodeAddress s pos =
+  (* let () = printf "Addr %s\n" @@ hex_of_string (strsub s pos 26 ) in *)
+  let pos, _ = dec_ s pos 20 in
+  let pos, a = decodeInteger8 s pos in
+  let pos, b = decodeInteger8 s pos in
+  let pos, c = decodeInteger8 s pos in
+  let pos, d = decodeInteger8 s pos in
+  let pos, e = decodeInteger8 s pos in
+  let pos, f = decodeInteger8 s pos in
+  let port = (e lsl 8 + f) in
+  pos, { a = a; b = b; c = c; d = d; port = port }
+
+let decodeHeader s pos =
+  let pos, magic = decodeInteger32 s pos in
+  let pos, command = decs_ s pos 12 in
+  let pos, length = decodeInteger32 s pos in
+  let _, checksum = decodeInteger32 s pos in
+  { magic = magic; command = command; length = length; checksum = checksum; }
+
+let decodeVersion s pos =
+  let pos, protocol = decodeInteger32 s pos in
+  let pos, nlocalServices = decodeInteger64 s pos in
+  let pos, nTime = decodeInteger64 s pos in
+  let pos, from = decodeAddress s pos in
+  let pos, to_ = decodeAddress s pos in
+  let pos, nonce = decodeInteger64 s pos in
+  let pos, agent = decodeString s pos in
+  let pos, height = decodeInteger32 s pos in
+  let _, relay = decodeInteger8 s pos in
+  { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
+  from = from; to_ = to_; nonce  = nonce; agent = agent; height = height;
+  relay = relay;
+  }
+
+let enc bytes value =
+  String.init bytes (fun i ->
+    let h = 0xff land (value lsr (i * 8)) in
+    char_of_int h
+  )
+
+let encodeInteger8 value = enc 1 value
+let encodeInteger16 value = enc 2 value
+let encodeInteger32 value = enc 4 value
+
+let enc64 bytes value =
+  String.init bytes (fun i ->
+    let h = Int64.logand 0xffL (Int64.shift_right value (i * 8)) in
+    char_of_int (Int64.to_int h)
+  )
+
+let encodeInteger64 value = enc64 8 value
+
+let encodeString (h : string) = enc 1 (strlen h) ^ h
+
+(* should use a concat function, for string building *)
+let encodeAddress (h : ip_address ) =
+  let zeros n = String.init n (fun _ -> char_of_int 0) in
+  encodeInteger8 0x1
+  ^ zeros 17
+  ^ encodeInteger16 0xffff
+  ^ encodeInteger8 h.a
+  ^ encodeInteger8 h.b
+  ^ encodeInteger8 h.c
+  ^ encodeInteger8 h.d
+  ^ (encodeInteger8 (h.port lsr 8))
+  ^ (encodeInteger8 h.port )
+
+let encodeVersion (h : version) =
+  encodeInteger32 h.protocol
+  ^ encodeInteger64 h.nlocalServices
+  ^ encodeInteger64 h.nTime
+  ^ encodeAddress h.from
+  ^ encodeAddress h.to_
+  ^ encodeInteger64 h.nonce
+  ^ encodeString h.agent
+  ^ encodeInteger32 h.height
+  ^ encodeInteger8 h.relay
+
+
+let encodeHeader (h : header ) =
+  let zeros n = String.init n (fun _ -> char_of_int 0) in
+  (* we have a string with hex values that we have to change to encoded vals
+    really not sure if the magic shouldn't be decoded as int? 0xffwwaaa
+    etc.
+  *)
+
+  encodeInteger32 h.magic
+  ^ h.command 
+  ^ zeros (12 - strlen h.command)
+  ^ encodeInteger32 h.length
+  ^ encodeInteger32 h.checksum
+
+
+
+(* dump the string - not pure *)
+let rec printRaw s a b =
+	let () = printf "magic %d - '%c' %d %d %d\n" a s.[a] (int_of_char s.[a]) (dec s a 4) (dec s a 8) in
   if a > b then ()
-  else dump s (a+1) b
-in
+  else printRaw s (a+1) b
+
+let printHeader (h : header) =
+  (* let () = printf "magic %s\n" h.magic in *)
+  let () = printf "magic %x\n"  h.magic in
+  let () = printf "command %s\n" h.command in
+  let () = printf "length %d %d\n" h.length (h.length + 24) in
+  printf "checksum %x\n" h.checksum
+
+let printAddress (h : ip_address ) =
+  printf "%d.%d.%d.%d:%d\n" h.a h.b h.c h.d h.port
+
+let printVersion (h : version ) =
+  let () = printf "protocol_version %d\n" h.protocol in
+  let () = printf "nLocalServices %s\n" @@ Int64.to_string h.nlocalServices in
+  let () = printf "nTime %s\n" @@ Int64.to_string h.nTime  in
+  let () = printAddress h.from in
+  let () = printAddress h.to_ in
+  let () = printf "nonce %s\n" @@ Int64.to_string h.nonce in
+  let () = printf "agent %s\n" h.agent in
+  let () = printf "height %d\n" h.height in
+  printf "relay %d\n" h.relay
 
 
-let decAddress s pos =
-  (* 26 bytes *)
-  let pos, unknown2 = dec_ s pos 20 in
-  let pos, a = dec_ s pos 1 in
-  let pos, b = dec_ s pos 1 in
-  let pos, c = dec_ s pos 1 in
-  let pos, d = dec_ s pos 1 in
-  let pos, e = dec_ s pos 1 in
-  let pos, f = dec_ s pos 1 in
-  let port = (e * 256 + f) in
-  pos, (a, b, c, d, port)
-in
-
-
-let h = 
-  if true
+let h =
+  if false
   then
     "\xF9\xBE\xB4\xD9version\x00\x00\x00\x00\x00j\x00\x00\x00\xE8\xFF\x94\xD0q\x11\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00(#\xE0T\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\x7F\x00\x00\x01 \x8D\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\x12\xBDzI \x8D\xE9\xD4n\x1F0!\xF8\x11\x14/bitcoin-ruby:0.0.6/\xD1\xF3\x01\x00\xFF" else
     let in_channel = open_in "response.bin" in
@@ -74,80 +248,54 @@ let h =
     let () = close_in in_channel in
     h
 in
+  let header = decodeHeader h 0 in
+  let payload = strsub h 24 header.length in
+  let version = decodeVersion payload 0 in
+  let () = printHeader header in
+  let () = printf "\n" in
+(*  let () = printf "%s\n" @@ hex_of_string payload in *)
+  let () = printVersion version in
+(*  let () = printf "payload checksum is %s\n" (payload |> checksum |> hex_of_string) in *)
+  let () = printf "payload checksum is %x \n" ( checksum payload ) in
 
-  let pos = 0 in
-  let pos, magic = decs_ h pos 4 in
-  let pos, command = decs_ h pos 12 in  (* maybe should just be 20 bytes *)
-  let pos, length = dec_ h pos 4 in
-  (* checksum is double sha256 *)
-  let pos, checksum = decs_ h pos 4 in
+  let () = printf "----------\n" in
 
-  let pos, protocol = dec_ h pos 4 in
-  let pos, nlocalServices = dec_ h pos 8 in
-  let pos, nTime = dec_ h pos 8 in
-  let pos, (a,b,c,d, port) = decAddress h pos in
-  let pos, (a1,b1,c1,d1, port1) = decAddress h pos in
-  let pos, nonce = dec_ h pos 8 in
-  let pos, size = dec_ h pos 1 in
-  let pos, agent = decs_ h pos size in
-  let pos, height = dec_ h pos 4 in
-  let pos, relay = dec_ h pos 1 in
+  let u = encodeVersion version in
+  let () = printVersion ( decodeVersion u 0 ) in
+  let () = printf "checksum is %x\n" ( checksum u ) in
 
-  let () = Printf.printf "pos %d, length %d \n" pos ( String.length h ) in
-  let () = Printf.printf "magic %s\n"   magic in
-  let () = Printf.printf "command %s\n" command in
-  let () = Printf.printf "length %d %d\n" length (length + 24) in
-  let () = Printf.printf "checksum %s\n" checksum in
-
-  let () = Printf.printf "protocol_version %d\n" protocol in
-  let () = Printf.printf "nLocalServices %d\n" nlocalServices in
-  let () = Printf.printf "nTime %d\n" nTime  in
-  let () = Printf.printf "a %d.%d.%d.%d:%d\n" a b c d port in
-  let () = Printf.printf "a %d.%d.%d.%d:%d\n" a1 b1 c1 d1 port1  in
-  let () = Printf.printf "nonce %x\n" nonce in
-  let () = Printf.printf "agent %s\n" agent in
-  let () = Printf.printf "height %d\n" height in
-  let () = Printf.printf "relay %d\n" relay in
+  let () = printf "----------\n" in
+(*  let () = printf "%s\n" @@ hex_of_string u in *)
 
 
-let sha256d_ s = 
-  Sha256.string s |> Sha256.to_bin |> Sha256.string |> Sha256.to_bin
-in
+let pack =
+  let header = {
+    magic = 0xf9beb4d9;
+    command = "version";
+    length = strlen u ;
+    checksum = checksum u;
+  } in
+  let eheader = encodeHeader header in
 
-  let () = Printf.printf "u is %s\n" ( String.sub h 24 106 |> sha256d_ |> (fun x -> String.sub x 0 4 )) in
-  
+  let header = decodeHeader eheader 0 in
+  let () = printHeader header in
+
+
+
+  () in
+()
+
 
 (*
-let reverse = Core_string.rev 
-in
+  TODO
+  - done - fix the address encoder
 
-  let () = Printf.printf "y is %s\n" @@ reverse "hello"   in
-
-let m = Hex.of_string ~pretty:true "Hello world!" in 
-let () = Printf.printf "m is %s" m 
-in
-*)
-
-(* 
-  Ok, we need a hex version of the value...
-  which means we need a hexkb
-
-  why are the digits reversed ? 
-
-  actually we don't need to convert to hex at all!!!
-*)
-
-(*
-  let () = Printf.printf "u is %s\n" (sha256d "hello") in
-  let sha2 = Sha256.to_hex ( Sha1.string sha1bin ) in
-  let () = Printf.printf "u is %s\n" sha2 in
+  - need to hex functions - to easily compare the data .
+    can only use printf %x with integers
 *)
 
 
-
-
-  (* let () = dump h 0 (String.length h - 9)  in *)
-Printf.printf "finished\n"
+let () = printf "finished\n"
 
 
 
@@ -173,7 +321,7 @@ PrddrYou.ToString(), addr.ToString());
  553 }
  554
 intf.printf "payload %d\n" (dec h 16 4);
-Printf.printf "version %d\n" (dec h 20 4);
+printf "version %d\n" (dec h 20 4);
 *)
 
 
