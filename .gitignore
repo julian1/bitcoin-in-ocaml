@@ -1,4 +1,5 @@
 *.swp
 *.swo
+*.swn
 _build
 *.byte

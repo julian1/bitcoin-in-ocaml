@@ -1,10 +1,12 @@
 
 (*
-  corebuild -package sha main8.byte
+	corebuild  -package sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax main8.byte
    *)
 
 (* open Core  *)
 (*open Sha256 *)
+
+open Lwt (* for >>= *)
 
 type header =
 {
@@ -17,10 +19,14 @@ type header =
 type ip_address =
 {
   (* use a tuple or list ?, or 32 byte integer ? or 4 8 byte integers*)
+(*
   a : int;
   b : int;
   c : int;
   d : int;
+*)
+
+  address : int * int * int * int;
   port : int;
 }
 
@@ -60,6 +66,9 @@ let hex_of_string s =
   done;
   Buffer.contents buf
 
+(* horrible *)
+let hex_of_int =
+  Printf.sprintf "%x"
 
 
 (* decode byte in s at pos *)
@@ -101,16 +110,15 @@ let decodeInteger64 s pos = 8+pos, dec64_ s pos 8
 let strsub = String.sub
 let strlen = String.length
 let strrev = Core.Core_string.rev
+let zeros n = String.init n (fun _ -> char_of_int 0)
 
-(* with new position *)
+(* returning position *)
 let decs_ s pos n = n+pos, strsub s pos n
 
-let sha256 s = Sha256.string s |> Sha256.to_bin
-let sha256d s = sha256 s |> sha256
-(*let checksum s = sha256d s |> (fun x -> strsub x 0 4) |> (fun x -> decodeInteger32 x 0 ) *)
-
-let checksum s = let (x: string ) = sha256d s in
-  dec x 0 4
+(* hashing *)
+let sha256 s = s |> Sha256.string |> Sha256.to_bin
+let sha256d s = s |> sha256 |> sha256
+let checksum s = s |> sha256d |> fun x -> dec x 0 4
 
 let decodeString s pos =
   let pos, len = decodeInteger8 s pos in
@@ -127,14 +135,19 @@ let decodeAddress s pos =
   let pos, e = decodeInteger8 s pos in
   let pos, f = decodeInteger8 s pos in
   let port = (e lsl 8 + f) in
-  pos, { a = a; b = b; c = c; d = d; port = port }
+  pos, { address = a, b, c, d; port = port }
 
 let decodeHeader s pos =
   let pos, magic = decodeInteger32 s pos in
   let pos, command = decs_ s pos 12 in
   let pos, length = decodeInteger32 s pos in
   let _, checksum = decodeInteger32 s pos in
-  { magic = magic; command = command; length = length; checksum = checksum; }
+  { magic = magic; 
+  
+  (* factor into function decodeCommand s pos ? *)
+  command = strsub command 0 (String.index_from command 0 '\x00' ); 
+
+  length = length; checksum = checksum; }
 
 let decodeVersion s pos =
   let pos, protocol = decodeInteger32 s pos in
@@ -172,15 +185,16 @@ let encodeInteger64 value = enc64 8 value
 let encodeString (h : string) = enc 1 (strlen h) ^ h
 
 (* should use a concat function, for string building *)
-let encodeAddress (h : ip_address ) =
-  let zeros n = String.init n (fun _ -> char_of_int 0) in
+let encodeAddress (h : ip_address) =
+  (* replace with concat, better algorithmaclly *)
+  let a,b,c,d = h.address in
   encodeInteger8 0x1
   ^ zeros 17
   ^ encodeInteger16 0xffff
-  ^ encodeInteger8 h.a
-  ^ encodeInteger8 h.b
-  ^ encodeInteger8 h.c
-  ^ encodeInteger8 h.d
+  ^ encodeInteger8 a
+  ^ encodeInteger8 b
+  ^ encodeInteger8 c
+  ^ encodeInteger8 d
   ^ (encodeInteger8 (h.port lsr 8))
   ^ (encodeInteger8 h.port )
 
@@ -195,20 +209,12 @@ let encodeVersion (h : version) =
   ^ encodeInteger32 h.height
   ^ encodeInteger8 h.relay
 
-
-let encodeHeader (h : header ) =
-  let zeros n = String.init n (fun _ -> char_of_int 0) in
-  (* we have a string with hex values that we have to change to encoded vals
-    really not sure if the magic shouldn't be decoded as int? 0xffwwaaa
-    etc.
-  *)
-
+let encodeHeader (h : header) =
   encodeInteger32 h.magic
-  ^ h.command 
+  ^ h.command
   ^ zeros (12 - strlen h.command)
   ^ encodeInteger32 h.length
   ^ encodeInteger32 h.checksum
-
 
 
 (* dump the string - not pure *)
@@ -217,29 +223,39 @@ let rec printRaw s a b =
   if a > b then ()
   else printRaw s (a+1) b
 
-let printHeader (h : header) =
-  (* let () = printf "magic %s\n" h.magic in *)
-  let () = printf "magic %x\n"  h.magic in
-  let () = printf "command %s\n" h.command in
-  let () = printf "length %d %d\n" h.length (h.length + 24) in
-  printf "checksum %x\n" h.checksum
 
-let printAddress (h : ip_address ) =
-  printf "%d.%d.%d.%d:%d\n" h.a h.b h.c h.d h.port
+let formatHeader (h : header) =
+  String.concat "" [
+    "magic:    "; hex_of_int h.magic;
+    "\ncommand:  "; h.command;
+    "\nlength:   "; string_of_int h.length;
+    "\nchecksum: "; hex_of_int h.checksum
+  ]
 
-let printVersion (h : version ) =
-  let () = printf "protocol_version %d\n" h.protocol in
-  let () = printf "nLocalServices %s\n" @@ Int64.to_string h.nlocalServices in
-  let () = printf "nTime %s\n" @@ Int64.to_string h.nTime  in
-  let () = printAddress h.from in
-  let () = printAddress h.to_ in
-  let () = printf "nonce %s\n" @@ Int64.to_string h.nonce in
-  let () = printf "agent %s\n" h.agent in
-  let () = printf "height %d\n" h.height in
-  printf "relay %d\n" h.relay
+let formatAddress (h : ip_address ) =
+  let soi = string_of_int in
+  let a,b,c,d = h.address  in
+  String.concat "" [
+    soi a; "." ; soi b; "."; soi c; "."; soi d; ":"; soi h.port
+  ]
+
+let formatVersion (h : version) =
+  (* we can easily write a concat that will space fields, insert separator etc, pass as tuple pairs instead*)
+  String.concat "" [
+    "protocol_version: "; string_of_int h.protocol;
+    "\nnLocalServices:   "; Int64.to_string h.nlocalServices;
+    "\nnTime:            "; Int64.to_string h.nTime;
+    "\nfrom:             "; formatAddress h.from;
+    "\nto:               "; formatAddress h.to_;
+    "\nnonce:            "; Int64.to_string h.nonce;
+    "\nagent:            "; h.agent;
+    "\nrelay:            "; string_of_int h.relay
+  ]
 
 
-let h =
+
+let mytest1 () =
+  let h =
   if false
   then
     "\xF9\xBE\xB4\xD9version\x00\x00\x00\x00\x00j\x00\x00\x00\xE8\xFF\x94\xD0q\x11\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00(#\xE0T\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\x7F\x00\x00\x01 \x8D\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\x12\xBDzI \x8D\xE9\xD4n\x1F0!\xF8\x11\x14/bitcoin-ruby:0.0.6/\xD1\xF3\x01\x00\xFF" else
@@ -251,24 +267,31 @@ in
   let header = decodeHeader h 0 in
   let payload = strsub h 24 header.length in
   let version = decodeVersion payload 0 in
-  let () = printHeader header in
+  let () = printf "%s" @@ formatHeader header in
   let () = printf "\n" in
-(*  let () = printf "%s\n" @@ hex_of_string payload in *)
-  let () = printVersion version in
-(*  let () = printf "payload checksum is %s\n" (payload |> checksum |> hex_of_string) in *)
-  let () = printf "payload checksum is %x \n" ( checksum payload ) in
-
+  let () = printf "%s" @@ formatVersion version in
+  let () = printf "checksum is %x \n" ( checksum payload ) in
   let () = printf "----------\n" in
-
   let u = encodeVersion version in
-  let () = printVersion ( decodeVersion u 0 ) in
+  let () = printf "%s" @@ formatVersion ( decodeVersion u 0 ) in
   let () = printf "checksum is %x\n" ( checksum u ) in
-
-  let () = printf "----------\n" in
-(*  let () = printf "%s\n" @@ hex_of_string u in *)
+  printf "----------\n"
 
 
-let pack =
+let mytest2 () =
+  (* lets try to manually pack the payload *)
+  let payload = {
+      protocol = 70002;
+      nlocalServices = 1L;
+      nTime = 1424343350L;
+      from = { address = 203,57,212,102; port = 34185 };
+      to_ = { address = 50,68,44,128; port = 8333 };
+      nonce = -4035119509127777989L ;
+      agent = "/Satoshi:0.9.4/";
+      height = 344194;
+      relay = 1;
+  } in
+  let u = encodeVersion payload in
   let header = {
     magic = 0xf9beb4d9;
     command = "version";
@@ -276,28 +299,145 @@ let pack =
     checksum = checksum u;
   } in
   let eheader = encodeHeader header in
+  let dheader = decodeHeader eheader 0 in
+  let () = printf "**** here\n" in
+  let () = printf "%s" @@ formatHeader dheader in
+  ()
 
-  let header = decodeHeader eheader 0 in
-  let () = printHeader header in
 
 
 
-  () in
-()
+let y =
+  let payload = encodeVersion {
+      protocol = 70002;
+      nlocalServices = 1L; (* doesn't seem to like non- full network 0L *)
+      nTime = 1424343054L;
+      from = { address = 127,0,0,1; port = 8333 };
+      to_ = { address = 50,68,44,128; port = 8333 };
+      (* nonce = -4035119509127777989L ; *)
+      nonce = -8358291686216098076L ;
+      agent = "/Satoshi:0.9.3/"; (* "/bitcoin-ruby:0.0.6/"; *)
+      height = 127953;
+      relay = 0xff;
+  } in
+  let header = encodeHeader {
+    magic = 0xd9b4bef9;
+    command = "version";
+    length = strlen payload;
+    checksum = checksum payload;
+  } in
+  header ^ payload
+
+
+let z =
+  encodeHeader {
+    magic = 0xd9b4bef9;
+    command = "verack";
+    length = 0;
+    (* clients seem to use e2e0f65d - hash of first part of header? *)
+    checksum = 0;
+  }
+
+
+
+
+let getResponse header payload outchan =
+  (* we kind of want to be able to write to stdout here 
+    and return a value...
+  *)
+  match header.command with
+  | "version"  -> 
+     let version = decodeVersion payload 0 in
+      Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
+    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
+    >>= fun _ -> Lwt_io.write outchan z
+
+
+  | "verack"  -> 
+    Lwt_io.write_line Lwt_io.stdout ("* got veack" )
+
+  | "inv"  -> 
+    Lwt_io.write_line Lwt_io.stdout ("* got inv" )
+
+  | _ -> 
+    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
+
+
+
+
+let mainLoop inchan outchan =
+  let rec loop () =
+    (* read header *)
+    Lwt_io.read ~count:24 inchan
+    >>= fun s -> let header = decodeHeader s 0 in return ()
+    (* read payload *)
+    >>= fun _ -> Lwt_io.read ~count: header.length inchan
+    >>= fun s ->  getResponse header s outchan
+    (* do again *)
+    >>= fun _ -> loop ()
+  in
+    loop()
+
+
+let addr ~host ~port =
+  lwt entry = Lwt_unix.gethostbyname host in
+  if Array.length entry.Unix.h_addr_list = 0 then begin
+    failwith (Printf.sprintf "no address found for host %S\n" host)
+  end;
+  return (Unix.ADDR_INET (entry.Unix.h_addr_list.(0) , port))
+
+
+
+let mytest3 () =  
+  Lwt_main.run (
+    addr ~host: "50.68.44.128" ~port: 8333  
+    (*    149.210.187.10  *)
+    (* addr ~host: "173.69.49.106" ~port: 8333  *)
+    (* addr ~host: "198.52.212.235" ~port: 8333 was good *)
+    (* addr ~host: "127.0.0.1" ~port: 8333 *)
+
+    >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
+
+    >>= fun () -> let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+      let inchan = Lwt_io.of_fd ~mode:Lwt_io.input fd in
+      let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
+      Lwt_unix.connect fd ip
+
+    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "connected"
+    (* send version *)
+    >>= fun _ -> Lwt_io.write outchan y
+    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "maybe wrote version"
+
+    (* go into main loop *)
+    >>= fun _ ->
+      mainLoop inchan outchan
+
+    (* return () *)
+    (*  >>= (fun () -> Lwt_unix.close fd)  *)
+  )
+
+
+let () = mytest3 ()
+
+
+(*
+  ok, we need to work out why it's not responding ... when we send our packet
+*)
+
+(*
+let () = mytest () in
+let () = mytest2 () in
+*)
+
+
+
 
 
 (*
   TODO
-  - done - fix the address encoder
-
   - need to hex functions - to easily compare the data .
     can only use printf %x with integers
 *)
-
-
-let () = printf "finished\n"
-
-
 
 
 (*
