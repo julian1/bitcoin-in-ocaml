@@ -430,15 +430,21 @@ let handleMessage header payload outchan =
     let pos, tx_in_count = decodeVarInt payload pos in
 
     let pos, previous = decodeHash32 payload pos in
-
-
+    let pos, index = decodeInteger32 payload pos in
+    let pos, scriptLen = decodeVarInt payload pos in
+    let pos, signatureScript = decs_ payload pos scriptLen in
+    let pos, sequence = decodeInteger32 payload pos in
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
       ^ "\n hash " ^ hex_of_string hash 
       ^ "\n version " ^ string_of_int version 
       ^ "\n tx_in_count " ^ string_of_int tx_in_count 
-      ^ "\n previous " ^ hex_of_string previous 
+      ^ "\n  previous " ^ hex_of_string previous 
+      ^ "\n  index " ^ string_of_int index 
+      ^ "\n  script_len " ^ string_of_int scriptLen
+      ^ "\n  script " ^ hex_of_string signatureScript 
+      ^ "\n  sequence " ^ string_of_int sequence
     )
 
 
@@ -486,11 +492,10 @@ let addr ~host ~port =
 
 let mytest3 () =  
   Lwt_main.run (
-    (* addr ~host: "50.68.44.128" ~port: 8333  *)
+     addr ~host: "50.68.44.128" ~port: 8333  
     (*    149.210.187.10  *)
      (* addr ~host: "173.69.49.106" ~port: 8333   no good *)
-    addr ~host: "198.52.212.235" ~port: 8333 (* good *)
-    (* addr ~host: "127.0.0.1" ~port: 8333 *)
+    (* addr ~host: "198.52.212.235" ~port: 8333 *) (* good, not anymore *)
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
     (* connect *)
