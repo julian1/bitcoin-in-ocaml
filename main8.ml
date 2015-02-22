@@ -3,7 +3,7 @@
 	corebuild  -package sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax main8.byte
    *)
 
-(* open Core  *)
+(* open Core   *)
 (*open Sha256 *)
 
 open Lwt (* for >>= *)
@@ -150,10 +150,20 @@ let decodeHeader s pos =
   let pos, command = decs_ s pos 12 in
   let pos, length = decodeInteger32 s pos in
   let _, checksum = decodeInteger32 s pos in
+
+  let x = match ( Core.Std.String.index_from command 0 '\x00' ) with
+    | Some n -> strsub command 0 n 
+    | None -> command
+  in
   { magic = magic; 
   
-  (* factor into function decodeCommand s pos ? *)
-  command = strsub command 0 (String.index_from command 0 '\x00' ); 
+  (* factor into function decodeCommand s pos ? 
+    index_from i think is throwing...
+    why not just a fold with a flag as to whether
+    we are ignoring? 
+    
+  *)
+  command = x; (*strsub command 0 (String.index_from command 0 '\x00' );  *)
 
   length = length; checksum = checksum; }
 
@@ -398,7 +408,7 @@ let handleMessage header payload outchan =
     (* now we want to be able to encode a getdata function using inventory structure *)
 
   | _ -> 
-    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
+    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "' " ^ string_of_int header.length  )
 
 
 let mainLoop inchan outchan =
