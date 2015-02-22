@@ -408,8 +408,15 @@ let handleMessage header payload outchan =
     (* now we want to be able to encode a getdata function using inventory structure *)
 
   | _ -> 
-    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "' " ^ string_of_int header.length  )
+    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command  )
 
+(*
+  ok, there's an issue that lwt_io.read doesn't can return with a smaller amount
+  of data than what we requested.
+
+  this probably affects all read actions - including the getting of the headers ...
+
+*)
 
 let mainLoop inchan outchan =
   let rec loop () =
@@ -417,13 +424,22 @@ let mainLoop inchan outchan =
     Lwt_io.read ~count:24 inchan
 
     (* log details before we read payload *)
-    >>= fun s -> let header = decodeHeader s 0 in
-      Lwt_io.write_line Lwt_io.stdout ("* command '" ^ header.command ^ "' length " ^ string_of_int header.length  )
-
+    >>= fun s -> 
+      let header = decodeHeader s 0 in
+      Lwt_io.write_line Lwt_io.stdout ("----\n" ^ hex_of_string s ^ "\n" ^ formatHeader header ^ "\n") 
     (* read payload *)
-    >>= fun _ -> Lwt_io.read ~count: header.length inchan
+    (*>>= fun _ -> Lwt_io.read ~count: header.length inchan *)
+      
+    >>= fun _ ->
+      let buf = Bytes.create header.length in 
+      Lwt_io.read_into_exactly inchan buf 0 header.length 
+
+    >>= fun _ -> 
+      let s = ( Bytes.to_string buf ) in
+      Lwt_io.write_line Lwt_io.stdout ("lwt payload length " ^ string_of_int (String.length s ) ^ "\n" ) 
+
     (* handle  *)
-    >>= fun s -> handleMessage header s outchan
+    >>= fun _ -> handleMessage header s outchan
     (* repeat *)
     >>= fun _ -> loop ()
   in
@@ -440,10 +456,10 @@ let addr ~host ~port =
 
 let mytest3 () =  
   Lwt_main.run (
-    addr ~host: "50.68.44.128" ~port: 8333  
+    (* addr ~host: "50.68.44.128" ~port: 8333  *)
     (*    149.210.187.10  *)
-    (* addr ~host: "173.69.49.106" ~port: 8333  *)
-    (* addr ~host: "198.52.212.235" ~port: 8333 was good *)
+     (* addr ~host: "173.69.49.106" ~port: 8333   no good *)
+    addr ~host: "198.52.212.235" ~port: 8333 (* good *)
     (* addr ~host: "127.0.0.1" ~port: 8333 *)
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
