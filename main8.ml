@@ -3,7 +3,7 @@
 	corebuild  -package sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax main8.byte
    *)
 
-(* open Core  *)
+(* open Core   *)
 (*open Sha256 *)
 
 open Lwt (* for >>= *)
@@ -18,14 +18,6 @@ type header =
 
 type ip_address =
 {
-  (* use a tuple or list ?, or 32 byte integer ? or 4 8 byte integers*)
-(*
-  a : int;
-  b : int;
-  c : int;
-  d : int;
-*)
-
   address : int * int * int * int;
   port : int;
 }
@@ -43,6 +35,22 @@ type version =
   height : int;
   relay : int;
 }
+
+type tx_in=
+{
+  previous : string ;
+  index : int ; 
+  signatureScript : string; 
+  sequence : int ; 
+}
+
+(* need to sort out naming convention for types *)
+type tx_out =
+{
+  value : Int64.t ;	
+  pkScript : string;
+}
+
 
 let printf = Printf.printf
 
@@ -70,6 +78,13 @@ let hex_of_string s =
 let hex_of_int =
   Printf.sprintf "%x"
 
+(* string manipulation *)
+let strsub = String.sub
+let strlen = String.length
+let strrev = Core.Core_string.rev
+let zeros n = String.init n (fun _ -> char_of_int 0)
+
+
 
 (* decode byte in s at pos *)
 let dec1 s pos = int_of_char @@ String.get s pos
@@ -93,8 +108,14 @@ let dec s start bytes =
 
 (* with new position in string - change name decodeInteger *)
 let dec_ s pos n = n+pos, dec s pos n
+
 let decodeInteger8 s pos = dec_ s pos 1
+let decodeInteger16 s pos = dec_ s pos 2
 let decodeInteger32 s pos = dec_ s pos 4
+
+
+
+(*dec_ s pos 4 let pos, hash = decs_ s pos 32 in *)
 
 (* decode integer value of string s at position using n bytes *)
 let dec64_ s start bytes =
@@ -106,19 +127,33 @@ let dec64_ s start bytes =
 
 let decodeInteger64 s pos = 8+pos, dec64_ s pos 8
 
-(* string manipulation *)
-let strsub = String.sub
-let strlen = String.length
-let strrev = Core.Core_string.rev
-let zeros n = String.init n (fun _ -> char_of_int 0)
-
-(* returning position *)
+(* returning position - should obsolete *)
 let decs_ s pos n = n+pos, strsub s pos n
+
+(* 256 bit hash *)
+let decodeHash32 s pos = 
+  let (a,b) = decs_ s pos 32 in
+  a, strrev b
 
 (* hashing *)
 let sha256 s = s |> Sha256.string |> Sha256.to_bin
 let sha256d s = s |> sha256 |> sha256
 let checksum s = s |> sha256d |> fun x -> dec x 0 4
+
+
+(* decode items - this should be generalized decodeItems 
+  - don't pass f through the recursion and shield the rec function
+- can do it with a fold? 
+*)
+
+(* f is decode function, at pos, count items *)
+let decodeNItems s pos f count =
+  let rec fff pos acc count =
+    if count == 0 then pos, acc
+    else let pos, x = f s pos in
+      fff pos (x::acc) (count-1) 
+  in fff pos [] count 
+
 
 let decodeString s pos =
   let pos, len = decodeInteger8 s pos in
@@ -142,12 +177,11 @@ let decodeHeader s pos =
   let pos, command = decs_ s pos 12 in
   let pos, length = decodeInteger32 s pos in
   let _, checksum = decodeInteger32 s pos in
-  { magic = magic; 
-  
-  (* factor into function decodeCommand s pos ? *)
-  command = strsub command 0 (String.index_from command 0 '\x00' ); 
-
-  length = length; checksum = checksum; }
+  let x = match ( Core.Std.String.index_from command 0 '\x00' ) with
+    | Some n -> strsub command 0 n 
+    | None -> command
+  in
+  pos, { magic = magic; command = x; length = length; checksum = checksum; }
 
 let decodeVersion s pos =
   let pos, protocol = decodeInteger32 s pos in
@@ -159,10 +193,34 @@ let decodeVersion s pos =
   let pos, agent = decodeString s pos in
   let pos, height = decodeInteger32 s pos in
   let _, relay = decodeInteger8 s pos in
-  { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
-  from = from; to_ = to_; nonce  = nonce; agent = agent; height = height;
-  relay = relay;
-  }
+  pos, { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
+    from = from; to_ = to_; nonce  = nonce; agent = agent; height = height;
+    relay = relay;
+  } 
+
+let decodeInvItem s pos =
+  let pos, inv_type = decodeInteger32 s pos in
+  let pos, hash = decodeHash32 s pos in
+  pos, (inv_type, hash)
+
+
+let decodeVarInt s pos = 
+  let pos, first = decodeInteger8 s pos in
+  match first with
+    | 0xfd -> decodeInteger16 s pos
+    | 0xfe -> decodeInteger32 s pos 
+    | 0xff -> (pos, first) (* TODO uggh... this will need a 64 bit int return type *)
+    | _ -> (pos, first)
+    
+
+let decodeInv s pos =
+  (* TODO this is a varInt 
+    returns a list, should wrap in a record ? 
+  *)
+  let pos, count = decodeVarInt s pos in
+  decodeNItems s pos decodeInvItem count
+
+
 
 let enc bytes value =
   String.init bytes (fun i ->
@@ -252,6 +310,33 @@ let formatVersion (h : version) =
     "\nrelay:            "; string_of_int h.relay
   ]
 
+let formatInv h = 
+  String.concat "" @@ List.map (
+    fun (inv_type, hash ) -> 
+      "\n inv_type " ^ string_of_int inv_type 
+      ^ ", hash " ^ hex_of_string hash 
+    )h  
+
+(* not sure if we want to enclose this scope, in the format tx action *)
+let formatInput input = String.concat "" [
+  "\n previous: " ^ hex_of_string input.previous 
+  ^ "\n index: " ^ string_of_int input.index 
+  ^ "\n script: " ^ hex_of_string input.signatureScript 
+  ^ "\n sequence: " ^ string_of_int input.sequence
+] 
+
+let formatInputs inputs = 
+  String.concat "\n" @@ List.map formatInput inputs
+
+let formatOutput output = String.concat "" [
+  "\n value: " ^ Int64.to_string output.value
+  ^ "\n pkScript: " ^ hex_of_string output.pkScript
+] 
+
+let formatOutputs outputs = 
+  String.concat "\n" @@ List.map formatOutput outputs
+
+
 
 
 let mytest1 () =
@@ -264,16 +349,16 @@ let mytest1 () =
     let () = close_in in_channel in
     h
 in
-  let header = decodeHeader h 0 in
+  let _, header = decodeHeader h 0 in
   let payload = strsub h 24 header.length in
-  let version = decodeVersion payload 0 in
+  let _, version = decodeVersion payload 0 in
   let () = printf "%s" @@ formatHeader header in
   let () = printf "\n" in
   let () = printf "%s" @@ formatVersion version in
   let () = printf "checksum is %x \n" ( checksum payload ) in
   let () = printf "----------\n" in
   let u = encodeVersion version in
-  let () = printf "%s" @@ formatVersion ( decodeVersion u 0 ) in
+(*  let () = printf "%s" @@ formatVersion ( decodeVersion u 0 ) in *)
   let () = printf "checksum is %x\n" ( checksum u ) in
   printf "----------\n"
 
@@ -299,7 +384,7 @@ let mytest2 () =
     checksum = checksum u;
   } in
   let eheader = encodeHeader header in
-  let dheader = decodeHeader eheader 0 in
+  let _, dheader = decodeHeader eheader 0 in
   let () = printf "**** here\n" in
   let () = printf "%s" @@ formatHeader dheader in
   ()
@@ -341,39 +426,111 @@ let z =
 
 
 
-let getResponse header payload outchan =
+let handleMessage header payload outchan =
   (* we kind of want to be able to write to stdout here 
     and return a value...
+    - we may want to do async database actions here. so keep the io
   *)
   match header.command with
-  | "version"  -> 
-     let version = decodeVersion payload 0 in
-      Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
+  | "version" -> 
+    let _, version = decodeVersion payload 0 in
+    Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
     >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
     >>= fun _ -> Lwt_io.write outchan z
 
-
-  | "verack"  -> 
+  | "verack" -> 
     Lwt_io.write_line Lwt_io.stdout ("* got veack" )
 
-  | "inv"  -> 
-    Lwt_io.write_line Lwt_io.stdout ("* got inv" )
+  | "inv" -> 
+    let _, inv = decodeInv payload 0 in
+    Lwt_io.write_line Lwt_io.stdout ("* whoot got inv" ^ formatInv inv )
+    (* request inventory item *)
+    >>=  fun _ -> 
+      let header = encodeHeader {
+        magic = 0xd9b4bef9;
+        command = "getdata";
+        length = strlen payload;
+        checksum = checksum payload;
+      } in 
+      Lwt_io.write outchan (header ^ payload )
+
+    (* 
+      ok just firing off a request for all inventory items means we cant' associate 
+      ahhh - we can, cause the tx id is the hash of the tx? so when we have it 
+      we can work it out!!
+    *)
+
+  | "tx" -> 
+    let hash = sha256d payload |> strrev in
+    let pos = 0 in
+    let pos, version = decodeInteger32 payload pos in 
+
+    let decodeInput s pos = 
+      let pos, previous = decodeHash32 s pos in
+      let pos, index = decodeInteger32 s pos in
+      let pos, scriptLen = decodeVarInt s pos in
+      let pos, signatureScript = decs_ s pos scriptLen in
+      let pos, sequence = decodeInteger32 s pos in
+      pos, { previous = previous; index = index; signatureScript = signatureScript ; sequence = sequence; }
+    in
+    let decodeInputs s pos n = decodeNItems s pos decodeInput n in
+    (* should we be reversing the list, when running decodeInput ?  *)
+    let pos, inputsCount = decodeVarInt payload pos in
+    let pos, inputs = decodeInputs payload pos inputsCount in
+
+
+    let decodeOutput s pos =
+      let pos, value = decodeInteger64 payload pos in
+      let pos, scriptLen = decodeVarInt s pos in
+      let pos, pkScript = decs_ s pos scriptLen in
+      pos, { value = value; pkScript = pkScript; }  
+	  in
+    let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
+
+    let pos, outputsCount = decodeVarInt payload pos in
+    let pos, outputs = decodeOutputs payload pos outputsCount in
+
+    Lwt_io.write_line Lwt_io.stdout (
+      "* got tx!!!" 
+      ^ "\n hash " ^ hex_of_string hash 
+      ^ "\n version " ^ string_of_int version 
+      ^ "\n inputsCount " ^ string_of_int inputsCount 
+      ^ "\n inputs" ^ ( formatInputs inputs )
+
+      ^ "\n outputsCount " ^ string_of_int outputsCount
+      ^ "\n outputs" ^ ( formatOutputs outputs )
+    )
+
 
   | _ -> 
-    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
+    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command  )
 
 
+
+(* change name to readn or something? *) 
+let readChannel inchan length   =
+  let buf = Bytes.create length in 
+  Lwt_io.read_into_exactly inchan buf 0 length 
+  >>= fun _ -> 
+    return @@ Bytes.to_string buf
 
 
 let mainLoop inchan outchan =
   let rec loop () =
     (* read header *)
-    Lwt_io.read ~count:24 inchan
-    >>= fun s -> let header = decodeHeader s 0 in return ()
+    readChannel inchan 24 
+    (* log *)
+    (* >>= fun s -> 
+      let header = decodeHeader s 0 in
+      Lwt_io.write_line Lwt_io.stdout ("----\n" ^ hex_of_string s ^ "\n" ^ formatHeader header ^ "\n") 
+    *)
     (* read payload *)
-    >>= fun _ -> Lwt_io.read ~count: header.length inchan
-    >>= fun s ->  getResponse header s outchan
-    (* do again *)
+    >>= fun s -> 
+      let _, header = decodeHeader s 0 in
+      readChannel inchan header.length 
+    (* handle  *)
+    >>= fun s -> handleMessage header s outchan
+    (* repeat *)
     >>= fun _ -> loop ()
   in
     loop()
@@ -387,35 +544,27 @@ let addr ~host ~port =
   return (Unix.ADDR_INET (entry.Unix.h_addr_list.(0) , port))
 
 
-
 let mytest3 () =  
   Lwt_main.run (
-    addr ~host: "50.68.44.128" ~port: 8333  
+     addr ~host: "50.68.44.128" ~port: 8333  
     (*    149.210.187.10  *)
-    (* addr ~host: "173.69.49.106" ~port: 8333  *)
-    (* addr ~host: "198.52.212.235" ~port: 8333 was good *)
-    (* addr ~host: "127.0.0.1" ~port: 8333 *)
+     (* addr ~host: "173.69.49.106" ~port: 8333   no good *)
+    (* addr ~host: "198.52.212.235" ~port: 8333 *) (* good, not anymore *)
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
-
+    (* connect *)
     >>= fun () -> let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
       let inchan = Lwt_io.of_fd ~mode:Lwt_io.input fd in
       let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
       Lwt_unix.connect fd ip
-
-    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "connected"
     (* send version *)
     >>= fun _ -> Lwt_io.write outchan y
-    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "maybe wrote version"
-
-    (* go into main loop *)
-    >>= fun _ ->
-      mainLoop inchan outchan
-
+    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "sending version"
+    (* enter main loop *)
+    >>= fun _ -> mainLoop inchan outchan
     (* return () *)
     (*  >>= (fun () -> Lwt_unix.close fd)  *)
   )
-
 
 let () = mytest3 ()
 
