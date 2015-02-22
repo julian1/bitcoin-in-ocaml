@@ -418,10 +418,20 @@ let handleMessage header payload outchan =
 
 *)
 
+ 
+let read inchan length   =
+  let buf = Bytes.create length in 
+  Lwt_io.read_into_exactly inchan buf 0 length 
+  >>= fun _ -> 
+    return ( Bytes.to_string buf )
+
+
 let mainLoop inchan outchan =
   let rec loop () =
     (* read header *)
-    Lwt_io.read ~count:24 inchan
+    (* Lwt_io.read ~count:24 inchan *)
+
+    read inchan 24 
 
     (* log details before we read payload *)
     >>= fun s -> 
@@ -429,13 +439,19 @@ let mainLoop inchan outchan =
       Lwt_io.write_line Lwt_io.stdout ("----\n" ^ hex_of_string s ^ "\n" ^ formatHeader header ^ "\n") 
     (* read payload *)
     (*>>= fun _ -> Lwt_io.read ~count: header.length inchan *)
-      
+
+    >>= fun _ -> read inchan  header.length 
+  
+(* 
     >>= fun _ ->
       let buf = Bytes.create header.length in 
       Lwt_io.read_into_exactly inchan buf 0 header.length 
-
     >>= fun _ -> 
-      let s = ( Bytes.to_string buf ) in
+      return ( Bytes.to_string buf )
+*)
+
+    >>= fun s -> 
+      (* let s = ( Bytes.to_string buf ) in *)
       Lwt_io.write_line Lwt_io.stdout ("lwt payload length " ^ string_of_int (String.length s ) ^ "\n" ) 
 
     (* handle  *)
