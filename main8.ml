@@ -384,14 +384,13 @@ let handleMessage header payload outchan =
     let j = String.concat "" @@ List.map (
 	    fun (inv_type, hash ) -> 
     		"\n inv_type " ^ string_of_int inv_type 
-	    	^ "hash " ^ hex_of_string (strrev hash )
+	    	^ ", hash " ^ hex_of_string (strrev hash )
 	  ) result in 
 
     Lwt_io.write_line Lwt_io.stdout ( 
       "* got inv - "
-      ^ "\n payload length " ^ string_of_int header.length
       ^ "\n count " ^ string_of_int count
-      ^ "\n count " ^ string_of_int (List.length result)
+      (* ^ "\n count " ^ string_of_int (List.length result) *)
       ^ j 
     )
 
