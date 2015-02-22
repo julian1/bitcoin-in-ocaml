@@ -310,6 +310,20 @@ let formatInv h =
       ^ ", hash " ^ hex_of_string hash 
     )h  
 
+(* not sure if we want to enclose this scope *)
+let formatTxInput txIn = String.concat "" [
+  "\n previous: " ^ hex_of_string txIn.previous 
+  ^ "\n index: " ^ string_of_int txIn.index 
+  ^ "\n script: " ^ hex_of_string txIn.signatureScript 
+  ^ "\n sequence: " ^ string_of_int txIn.sequence
+] 
+
+let formatTxInputs inputs = String.concat "" @@ List.map formatTxInput inputs
+
+
+
+
+
 let mytest1 () =
   let h =
   if false
@@ -446,18 +460,9 @@ let handleMessage header payload outchan =
       pos, { previous = previous; index = index; signatureScript = signatureScript ; sequence = sequence; }
     in
 
-    (* decodeNItems isn't returning the pos *)
-    let _, txInputs = decodeNItems payload pos decodeTxIn txInCount in
+    (* should we be reversing the list, when running decodeTxIn ?  *)
+    let pos, txInputs = decodeNItems payload pos decodeTxIn txInCount in
 
-    let formatTxInput txIn = String.concat "" [
-      "\n previous: " ^ hex_of_string txIn.previous 
-      ^ "\n index: " ^ string_of_int txIn.index 
-      ^ "\n script: " ^ hex_of_string txIn.signatureScript 
-      ^ "\n sequence: " ^ string_of_int txIn.sequence
-    ] in
-
-    let formatTxInputs inputs = String.concat "" @@ List.map formatTxInput inputs
-    in
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
