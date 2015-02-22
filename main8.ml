@@ -38,10 +38,17 @@ type version =
 
 type tx_in=
 {
-    previous : string ;
-    index : int ; 
-    signatureScript : string; 
-    sequence : int ; 
+  previous : string ;
+  index : int ; 
+  signatureScript : string; 
+  sequence : int ; 
+}
+
+(* need to sort out naming convention for types *)
+type tx_out =
+{
+  value : Int64.t ;	
+  pkScript : string;
 }
 
 
@@ -311,15 +318,15 @@ let formatInv h =
     )h  
 
 (* not sure if we want to enclose this scope, in the format tx action *)
-let formatTxInput txIn = String.concat "" [
-  "\n previous: " ^ hex_of_string txIn.previous 
-  ^ "\n index: " ^ string_of_int txIn.index 
-  ^ "\n script: " ^ hex_of_string txIn.signatureScript 
-  ^ "\n sequence: " ^ string_of_int txIn.sequence
+let formatInput input = String.concat "" [
+  "\n previous: " ^ hex_of_string input.previous 
+  ^ "\n index: " ^ string_of_int input.index 
+  ^ "\n script: " ^ hex_of_string input.signatureScript 
+  ^ "\n sequence: " ^ string_of_int input.sequence
 ] 
 
-let formatTxInputs inputs = 
-  String.concat "\n" @@ List.map formatTxInput inputs
+let formatInputs inputs = 
+  String.concat "\n" @@ List.map formatInput inputs
 
 
 
@@ -465,7 +472,12 @@ let handleMessage header payload outchan =
 
     let pos, outputsCount = decodeVarInt payload pos in
 
-    let pos, value = decodeInteger64 payload pos in
+    let decodeOutputs s pos =
+      let pos, value = decodeInteger64 payload pos in
+      let pos, scriptLen = decodeVarInt s pos in
+      let pos, pkScript = decs_ s pos scriptLen in
+      pos, { value = value; pkScript = pkScript; }  
+	in
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
@@ -473,10 +485,9 @@ let handleMessage header payload outchan =
       ^ "\n version " ^ string_of_int version 
       ^ "\n inputsCount " ^ string_of_int inputsCount 
 
-      ^ "\ntxins" ^ ( formatTxInputs inputs )
+      ^ "\ntxins" ^ ( formatInputs inputs )
 
       ^ "\n outputsCount " ^ string_of_int outputsCount
-      ^ "\n value " ^ Int64.to_string value
 
     )
 
