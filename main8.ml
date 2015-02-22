@@ -274,7 +274,12 @@ let formatVersion (h : version) =
     "\nrelay:            "; string_of_int h.relay
   ]
 
-
+let formatInv h = 
+  String.concat "" @@ List.map (
+    fun (inv_type, hash ) -> 
+      "\n inv_type " ^ string_of_int inv_type 
+      ^ ", hash " ^ hex_of_string (strrev hash )
+    )h  
 
 let mytest1 () =
   let h =
@@ -381,20 +386,11 @@ let handleMessage header payload outchan =
 
   | "inv"  -> 
     (* ok, we need an inventory data structure, and decode function *)
+    let inv = decodeInv payload 0 in
 
-    let result = decodeInv payload 0 in
+    Lwt_io.write_line Lwt_io.stdout ("* whoot got inv\n" ^ formatInv inv )
 
-    let j = String.concat "" @@ List.map (
-	    fun (inv_type, hash ) -> 
-    		"\n inv_type " ^ string_of_int inv_type 
-	    	^ ", hash " ^ hex_of_string (strrev hash )
-	  ) result in 
 
-    Lwt_io.write_line Lwt_io.stdout ( 
-      "* got inv - "
-      ^ "\n count " ^ string_of_int (List.length result) 
-      ^ j 
-    )
 
   | _ -> 
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
