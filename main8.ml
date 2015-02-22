@@ -360,22 +360,26 @@ let handleMessage header payload outchan =
     let pos = 0 in
     let pos, count = decodeInteger8 payload pos in
 
+    (* decode inv item *)
     let f pos =
       let pos, inv_type = decodeInteger32 payload pos in
       let pos, hash = decs_ payload pos 32 in
-      pos, inv_type, hash
+      pos, (inv_type, hash)
     in
 
+    (* decode items - this should be generalized decodeItems 
+      by returning the second argument of the tuple 
+    *)
     let rec f2 pos acc count =
       if count == 0 then acc
       else 
-        let pos, inv_type, hash = f pos in
-        f2 pos (( inv_type, hash) :: acc) (count-1) 
+        let pos, x = f pos in
+        f2 pos (x :: acc) (count-1) 
     in
 
     let result = f2 pos [] count in
 
-    let pos, inv_type, hash = f pos in 
+    let _, (inv_type, hash) = f pos in 
 
     Lwt_io.write_line Lwt_io.stdout ( 
       "* got inv - "
