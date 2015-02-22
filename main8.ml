@@ -429,7 +429,7 @@ let handleMessage header payload outchan =
     let pos, version = decodeInteger32 payload pos in 
     let pos, tx_in_count = decodeVarInt payload pos in
 
-    let pos, tx_in_count = decodeVarInt payload pos in
+    let pos, previous = decodeHash32 payload pos in
 
 
 
@@ -438,6 +438,7 @@ let handleMessage header payload outchan =
       ^ "\n hash " ^ hex_of_string hash 
       ^ "\n version " ^ string_of_int version 
       ^ "\n tx_in_count " ^ string_of_int tx_in_count 
+      ^ "\n previous " ^ hex_of_string previous 
     )
 
 
