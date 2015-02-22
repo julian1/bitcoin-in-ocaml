@@ -18,14 +18,6 @@ type header =
 
 type ip_address =
 {
-  (* use a tuple or list ?, or 32 byte integer ? or 4 8 byte integers*)
-(*
-  a : int;
-  b : int;
-  c : int;
-  d : int;
-*)
-
   address : int * int * int * int;
   port : int;
 }
@@ -341,7 +333,7 @@ let z =
 
 
 
-let getResponse header payload outchan =
+let handleMessage header payload outchan =
   (* we kind of want to be able to write to stdout here 
     and return a value...
   *)
@@ -363,17 +355,15 @@ let getResponse header payload outchan =
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
 
 
-
-
 let mainLoop inchan outchan =
   let rec loop () =
     (* read header *)
     Lwt_io.read ~count:24 inchan
     >>= fun s -> let header = decodeHeader s 0 in return ()
-    (* read payload *)
+    (* read payload and handle *)
     >>= fun _ -> Lwt_io.read ~count: header.length inchan
-    >>= fun s ->  getResponse header s outchan
-    (* do again *)
+    >>= fun s -> handleMessage header s outchan
+    (* repeat *)
     >>= fun _ -> loop ()
   in
     loop()
@@ -387,7 +377,6 @@ let addr ~host ~port =
   return (Unix.ADDR_INET (entry.Unix.h_addr_list.(0) , port))
 
 
-
 let mytest3 () =  
   Lwt_main.run (
     addr ~host: "50.68.44.128" ~port: 8333  
@@ -397,25 +386,19 @@ let mytest3 () =
     (* addr ~host: "127.0.0.1" ~port: 8333 *)
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
-
+    (* connect *)
     >>= fun () -> let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
       let inchan = Lwt_io.of_fd ~mode:Lwt_io.input fd in
       let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
       Lwt_unix.connect fd ip
-
-    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "connected"
     (* send version *)
     >>= fun _ -> Lwt_io.write outchan y
-    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "maybe wrote version"
-
-    (* go into main loop *)
-    >>= fun _ ->
-      mainLoop inchan outchan
-
+    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "sending version"
+    (* enter main loop *)
+    >>= fun _ -> mainLoop inchan outchan
     (* return () *)
     (*  >>= (fun () -> Lwt_unix.close fd)  *)
   )
-
 
 let () = mytest3 ()
 
