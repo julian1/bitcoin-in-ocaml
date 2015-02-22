@@ -87,6 +87,7 @@ let dec s start bytes =
 let dec_ s pos n = n+pos, dec s pos n
 
 let decodeInteger8 s pos = dec_ s pos 1
+let decodeInteger16 s pos = dec_ s pos 2
 let decodeInteger32 s pos = dec_ s pos 4
 
 (* decode integer value of string s at position using n bytes *)
@@ -155,17 +156,7 @@ let decodeHeader s pos =
     | Some n -> strsub command 0 n 
     | None -> command
   in
-  { magic = magic; 
-  
-  (* factor into function decodeCommand s pos ? 
-    index_from i think is throwing...
-    why not just a fold with a flag as to whether
-    we are ignoring? 
-    
-  *)
-  command = x; (*strsub command 0 (String.index_from command 0 '\x00' );  *)
-
-  length = length; checksum = checksum; }
+  { magic = magic; command = x; length = length; checksum = checksum; }
 
 let decodeVersion s pos =
   let pos, protocol = decodeInteger32 s pos in
@@ -187,11 +178,21 @@ let decodeInvItem s pos =
   let pos, hash = decs_ s pos 32 in
   pos, (inv_type, hash)
 
+
+let decodeVarInt s pos = 
+  let pos, first = decodeInteger8 s pos in
+  match first with
+      | 0xfd -> decodeInteger16 s pos
+      | 0xfe -> decodeInteger32 s pos 
+      | 0xff -> (pos, first) (* TODO uggh... this will need a 64 bit int return type *)
+      | _ -> (pos, first)
+      
+
 let decodeInv s pos =
   (* TODO this is a varInt 
     returns a list, should wrap in a record ? 
   *)
-  let pos, count = decodeInteger8 s pos in
+  let pos, count = decodeVarInt s pos in
   decodeNItems s pos decodeInvItem count
 
 
@@ -395,7 +396,7 @@ let handleMessage header payload outchan =
 
   | "inv" -> 
     let inv = decodeInv payload 0 in
-    Lwt_io.write_line Lwt_io.stdout ("* whoot got inv\n" ^ formatInv inv )
+    Lwt_io.write_line Lwt_io.stdout ("* whoot got inv" ^ formatInv inv )
     (* request inventory item *)
     >>=  fun _ -> 
       let header = encodeHeader {
@@ -406,10 +407,26 @@ let handleMessage header payload outchan =
       } in 
       Lwt_io.write outchan (header ^ payload )
 
-    (* now we want to be able to encode a getdata function using inventory structure *)
+    (* 
+      ok just firing off a request for all inventory items means we cant' associate 
+      ahhh - we can, cause the tx id is the hash of the tx? so when we have it 
+      we can work it out!!
+    *)
 
   | "tx" -> 
-    Lwt_io.write_line Lwt_io.stdout ("* got tx!!! " )
+    let hash = sha256d payload |> strrev in
+    let pos = 0 in
+    let pos, version = decodeInteger32 payload pos in 
+    let pos, tx_in_count = decodeVarInt payload pos in
+
+    Lwt_io.write_line Lwt_io.stdout (
+      "* got tx!!!" 
+
+      ^ "\nhash " ^ hex_of_string hash 
+      ^ "\nversion " ^ string_of_int version 
+      ^ "\ntx_in_count " ^ string_of_int tx_in_count 
+
+    )
 
 
   | _ -> 
