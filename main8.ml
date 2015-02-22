@@ -396,6 +396,7 @@ let handleMessage header payload outchan =
   | "inv" -> 
     let inv = decodeInv payload 0 in
     Lwt_io.write_line Lwt_io.stdout ("* whoot got inv\n" ^ formatInv inv )
+    (* request inventory item *)
     >>=  fun _ -> 
       let header = encodeHeader {
         magic = 0xd9b4bef9;
@@ -407,55 +408,35 @@ let handleMessage header payload outchan =
 
     (* now we want to be able to encode a getdata function using inventory structure *)
 
+  | "tx" -> 
+    Lwt_io.write_line Lwt_io.stdout ("* got tx!!! " )
+
+
   | _ -> 
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command  )
 
-(*
-  ok, there's an issue that lwt_io.read doesn't can return with a smaller amount
-  of data than what we requested.
 
-  this probably affects all read actions - including the getting of the headers ...
 
-*)
-
- 
-let read inchan length   =
+(* change name to readn or something? *) 
+let readChannel inchan length   =
   let buf = Bytes.create length in 
   Lwt_io.read_into_exactly inchan buf 0 length 
   >>= fun _ -> 
-    return ( Bytes.to_string buf )
+    return @@ Bytes.to_string buf
 
 
 let mainLoop inchan outchan =
   let rec loop () =
     (* read header *)
-    (* Lwt_io.read ~count:24 inchan *)
-
-    read inchan 24 
-
-    (* log details before we read payload *)
+    readChannel inchan 24 
+    (* log *)
     >>= fun s -> 
       let header = decodeHeader s 0 in
       Lwt_io.write_line Lwt_io.stdout ("----\n" ^ hex_of_string s ^ "\n" ^ formatHeader header ^ "\n") 
     (* read payload *)
-    (*>>= fun _ -> Lwt_io.read ~count: header.length inchan *)
-
-    >>= fun _ -> read inchan  header.length 
-  
-(* 
-    >>= fun _ ->
-      let buf = Bytes.create header.length in 
-      Lwt_io.read_into_exactly inchan buf 0 header.length 
-    >>= fun _ -> 
-      return ( Bytes.to_string buf )
-*)
-
-    >>= fun s -> 
-      (* let s = ( Bytes.to_string buf ) in *)
-      Lwt_io.write_line Lwt_io.stdout ("lwt payload length " ^ string_of_int (String.length s ) ^ "\n" ) 
-
+    >>= fun _ -> readChannel inchan header.length 
     (* handle  *)
-    >>= fun _ -> handleMessage header s outchan
+    >>= fun s -> handleMessage header s outchan
     (* repeat *)
     >>= fun _ -> loop ()
   in
