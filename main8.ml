@@ -421,11 +421,9 @@ let handleMessage header payload outchan =
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
-
-      ^ "\nhash " ^ hex_of_string hash 
-      ^ "\nversion " ^ string_of_int version 
-      ^ "\ntx_in_count " ^ string_of_int tx_in_count 
-
+      ^ "\n hash " ^ hex_of_string hash 
+      ^ "\n version " ^ string_of_int version 
+      ^ "\n tx_in_count " ^ string_of_int tx_in_count 
     )
 
 
@@ -447,11 +445,14 @@ let mainLoop inchan outchan =
     (* read header *)
     readChannel inchan 24 
     (* log *)
-    >>= fun s -> 
+    (* >>= fun s -> 
       let header = decodeHeader s 0 in
       Lwt_io.write_line Lwt_io.stdout ("----\n" ^ hex_of_string s ^ "\n" ^ formatHeader header ^ "\n") 
+    *)
     (* read payload *)
-    >>= fun _ -> readChannel inchan header.length 
+    >>= fun s -> 
+      let header = decodeHeader s 0 in
+      readChannel inchan header.length 
     (* handle  *)
     >>= fun s -> handleMessage header s outchan
     (* repeat *)
