@@ -158,7 +158,7 @@ let checksum s = s |> sha256d |> fun x -> dec x 0 4
 (* f is decode function, at pos, count items *)
 let decodeNItems s pos f count =
   let rec fff pos acc count =
-    if count == 0 then pos, acc
+    if count == 0 then pos, (List.rev acc)
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1) 
   in fff pos [] count 
@@ -248,7 +248,6 @@ let decodeTx s pos =
   let pos, inputsCount = decodeVarInt s pos in
   let pos, inputs = decodeInputs s pos inputsCount in
 
-
   let decodeOutput s pos =
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
@@ -256,12 +255,10 @@ let decodeTx s pos =
     pos, { value = value; pkScript = pkScript; }  
   in
   let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
-
   let pos, outputsCount = decodeVarInt s pos in
   let pos, outputs = decodeOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-
   pos, { hash = hash; version = version; inputs = inputs; outputs = outputs; lockTime }
 
 
@@ -367,23 +364,31 @@ let formatInv h =
 
 (* not sure if we want to enclose this scope, in the format tx action *)
 let formatInput input = String.concat "" [
-  "\n previous: " ^ hex_of_string input.previous 
-  ^ "\n index: " ^ string_of_int input.index 
-  ^ "\n script: " ^ hex_of_string input.signatureScript 
-  ^ "\n sequence: " ^ string_of_int input.sequence
+  "  previous: " ^ hex_of_string input.previous 
+  ^ "\n  index: " ^ string_of_int input.index 
+  ^ "\n  script: " ^ hex_of_string input.signatureScript 
+  ^ "\n  sequence: " ^ string_of_int input.sequence
 ] 
 
 let formatInputs inputs = 
   String.concat "\n" @@ List.map formatInput inputs
 
 let formatOutput output = String.concat "" [
-  "\n value: " ^ Int64.to_string output.value
-  ^ "\n pkScript: " ^ hex_of_string output.pkScript
+  "  value: " ^ Int64.to_string output.value
+  ^ "\n  pkScript: " ^ hex_of_string output.pkScript
 ] 
 
 let formatOutputs outputs = 
   String.concat "\n" @@ List.map formatOutput outputs
 
+let formatTx tx = 
+  " hash " ^ hex_of_string tx.hash 
+  ^ "\n version " ^ string_of_int tx.version 
+  ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
+  ^ "\n" ^ formatInputs tx.inputs
+  ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
+  ^ "\n" ^ formatOutputs tx.outputs
+  ^ "\n lockTime " ^ string_of_int tx.lockTime
 
 
 
@@ -502,30 +507,12 @@ let handleMessage header payload outchan =
       } in 
       Lwt_io.write outchan (header ^ payload )
 
-    (* 
-      ok just firing off a request for all inventory items means we cant' associate 
-      ahhh - we can, cause the tx id is the hash of the tx? so when we have it 
-      we can work it out!!
-    *)
-
   | "tx" -> 
-
       let _, tx = decodeTx payload 0 in 
-
-      Lwt_io.write_line Lwt_io.stdout (
-        "* got tx!!!" 
-        ^ "\n hash " ^ hex_of_string tx.hash 
-        ^ "\n version " ^ string_of_int tx.version 
-        ^ "\n inputsCount " ^ (string_of_int @@ List.length tx.inputs)
-        ^ "\n inputs" ^ ( formatInputs tx.inputs )
-        ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
-        ^ "\n outputs" ^ ( formatOutputs tx.outputs )
-        ^ "\n lockTime " ^ string_of_int tx.lockTime
-    )
-
+      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx tx )
 
   | _ -> 
-    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command  )
+    Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
 
 
 
