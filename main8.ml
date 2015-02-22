@@ -347,8 +347,8 @@ let getResponse header payload outchan =
   *)
   match header.command with
   | "version"  -> 
-     let version = decodeVersion payload 0 in
-      Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
+    let version = decodeVersion payload 0 in
+    Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
     >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
     >>= fun _ -> Lwt_io.write outchan z
 
