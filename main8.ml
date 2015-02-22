@@ -368,26 +368,32 @@ let handleMessage header payload outchan =
     in
 
     (* decode items - this should be generalized decodeItems 
-      by returning the second argument of the tuple 
+      - and shield the inner rec function
+		- can do it with a fold? 
     *)
-    let rec f2 pos acc count =
+    let rec takeNItems f pos acc count =
       if count == 0 then acc
-      else 
-        let pos, x = f pos in
-        f2 pos (x :: acc) (count-1) 
+      else let pos, x = f pos in
+        takeNItems f pos (x::acc) (count-1) 
     in
 
-    let result = f2 pos [] count in
+    let result = takeNItems f pos [] count in
 
-    let _, (inv_type, hash) = f pos in 
+    let j = String.concat "" @@ List.map (
+	    fun (inv_type, hash ) -> 
+    		"\n inv_type " ^ string_of_int inv_type 
+	    	^ "hash " ^ hex_of_string (strrev hash )
+	  ) result in 
+
+(*    let _, (inv_type, hash) = f pos in  *)
 
     Lwt_io.write_line Lwt_io.stdout ( 
       "* got inv - "
       ^ "\n payload length " ^ string_of_int header.length
       ^ "\n count " ^ string_of_int count
       ^ "\n count " ^ string_of_int (List.length result)
-      ^ "\n inv_type " ^ string_of_int inv_type 
-      ^ "\n hash " ^ hex_of_string (strrev hash )
+      ^ j (* "\n inv_type " ^ string_of_int inv_type  
+      ^ "\n hash " ^ hex_of_string (strrev hash  ) *)
     )
 
   | _ -> 
