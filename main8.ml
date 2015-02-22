@@ -328,6 +328,15 @@ let formatInput input = String.concat "" [
 let formatInputs inputs = 
   String.concat "\n" @@ List.map formatInput inputs
 
+let formatOutput output = String.concat "" [
+  "\n value: " ^ Int64.to_string output.value
+  ^ "\n pkScript: " ^ hex_of_string output.pkScript
+] 
+
+let formatOutputs outputs = 
+  String.concat "\n" @@ List.map formatOutput outputs
+
+
 
 
 let mytest1 () =
@@ -486,11 +495,10 @@ let handleMessage header payload outchan =
       ^ "\n hash " ^ hex_of_string hash 
       ^ "\n version " ^ string_of_int version 
       ^ "\n inputsCount " ^ string_of_int inputsCount 
-
-      ^ "\ntxins" ^ ( formatInputs inputs )
+      ^ "\n inputs" ^ ( formatInputs inputs )
 
       ^ "\n outputsCount " ^ string_of_int outputsCount
-
+      ^ "\n outputs" ^ ( formatOutputs outputs )
     )
 
 
