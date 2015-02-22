@@ -178,10 +178,11 @@ let decodeInvItem s pos =
   pos, (inv_type, hash)
 
 let decodeInv s pos =
-  (* TODO this is a varInt *)
+  (* TODO this is a varInt 
+    returns a list, should wrap in a record ? 
+  *)
   let pos, count = decodeInteger8 s pos in
   decodeNItems s pos decodeInvItem count
-
 
 
 
@@ -381,18 +382,6 @@ let handleMessage header payload outchan =
   | "inv"  -> 
     (* ok, we need an inventory data structure, and decode function *)
 
-    (* decode item count let x = if count < 0xfd then count  *)
-(*
-    let pos = 0 in
-    let pos, count = decodeInteger8 payload pos in
-
-    (* decode inv item *)
-    let decodeInvItem s pos =
-      let pos, inv_type = decodeInteger32 s pos in
-      let pos, hash = decs_ s pos 32 in
-      pos, (inv_type, hash)
-    in
-*)
     let result = decodeInv payload 0 in
 
     let j = String.concat "" @@ List.map (
