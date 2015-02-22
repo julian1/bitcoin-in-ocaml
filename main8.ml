@@ -162,10 +162,11 @@ let decodeVersion s pos =
 - can do it with a fold? 
 *)
 
-let decodeNItems f pos count =
+(* f is decode function, at pos, count items *)
+let decodeNItems s pos f count =
   let rec fff pos acc count =
     if count == 0 then acc
-    else let pos, x = f pos in
+    else let pos, x = f s pos in
       fff pos (x::acc) (count-1) 
   in fff pos [] count 
 
@@ -372,13 +373,13 @@ let handleMessage header payload outchan =
     let pos, count = decodeInteger8 payload pos in
 
     (* decode inv item *)
-    let decodeInvItem pos =
-      let pos, inv_type = decodeInteger32 payload pos in
-      let pos, hash = decs_ payload pos 32 in
+    let decodeInvItem s pos =
+      let pos, inv_type = decodeInteger32 s pos in
+      let pos, hash = decs_ s pos 32 in
       pos, (inv_type, hash)
     in
 
-    let result = decodeNItems decodeInvItem pos count in
+    let result = decodeNItems payload pos decodeInvItem count in
 
     let j = String.concat "" @@ List.map (
 	    fun (inv_type, hash ) -> 
