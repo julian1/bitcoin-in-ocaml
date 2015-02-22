@@ -156,6 +156,22 @@ let decodeVersion s pos =
   relay = relay;
   }
 
+
+(* decode items - this should be generalized decodeItems 
+  - don't pass f through the recursion and shield the rec function
+- can do it with a fold? 
+*)
+
+let decodeNItems f pos count =
+  let rec fff pos acc count =
+    if count == 0 then acc
+    else let pos, x = f pos in
+      fff pos (x::acc) (count-1) 
+  in fff pos [] count 
+
+
+
+
 let enc bytes value =
   String.init bytes (fun i ->
     let h = 0xff land (value lsr (i * 8)) in
@@ -351,33 +367,18 @@ let handleMessage header payload outchan =
 
   | "inv"  -> 
 
-    (* ok we need a recursive function 
-        so we can expand count and map...
-        or use a recursive function with count
-    *)  
-
-    (*let x = if count < 0xfd then count  *)
+    (* decode item count let x = if count < 0xfd then count  *)
     let pos = 0 in
     let pos, count = decodeInteger8 payload pos in
 
     (* decode inv item *)
-    let f pos =
+    let decodeInvItem pos =
       let pos, inv_type = decodeInteger32 payload pos in
       let pos, hash = decs_ payload pos 32 in
       pos, (inv_type, hash)
     in
 
-    (* decode items - this should be generalized decodeItems 
-      - and shield the inner rec function
-		- can do it with a fold? 
-    *)
-    let rec takeNItems f pos acc count =
-      if count == 0 then acc
-      else let pos, x = f pos in
-        takeNItems f pos (x::acc) (count-1) 
-    in
-
-    let result = takeNItems f pos [] count in
+    let result = decodeNItems decodeInvItem pos count in
 
     let j = String.concat "" @@ List.map (
 	    fun (inv_type, hash ) -> 
@@ -385,15 +386,12 @@ let handleMessage header payload outchan =
 	    	^ "hash " ^ hex_of_string (strrev hash )
 	  ) result in 
 
-(*    let _, (inv_type, hash) = f pos in  *)
-
     Lwt_io.write_line Lwt_io.stdout ( 
       "* got inv - "
       ^ "\n payload length " ^ string_of_int header.length
       ^ "\n count " ^ string_of_int count
       ^ "\n count " ^ string_of_int (List.length result)
-      ^ j (* "\n inv_type " ^ string_of_int inv_type  
-      ^ "\n hash " ^ hex_of_string (strrev hash  ) *)
+      ^ j 
     )
 
   | _ -> 
