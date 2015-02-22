@@ -374,23 +374,28 @@ let handleMessage header payload outchan =
     - we may want to do async database actions here. so keep the io
   *)
   match header.command with
-  | "version"  -> 
+  | "version" -> 
     let version = decodeVersion payload 0 in
     Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
     >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
     >>= fun _ -> Lwt_io.write outchan z
 
-
-  | "verack"  -> 
+  | "verack" -> 
     Lwt_io.write_line Lwt_io.stdout ("* got veack" )
 
-  | "inv"  -> 
-    (* ok, we need an inventory data structure, and decode function *)
+  | "inv" -> 
     let inv = decodeInv payload 0 in
-
     Lwt_io.write_line Lwt_io.stdout ("* whoot got inv\n" ^ formatInv inv )
+    >>=  fun _ -> 
+      let header = encodeHeader {
+        magic = 0xd9b4bef9;
+        command = "getdata";
+        length = strlen payload;
+        checksum = checksum payload;
+      } in 
+      Lwt_io.write outchan (header ^ payload )
 
-
+    (* now we want to be able to encode a getdata function using inventory structure *)
 
   | _ -> 
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
