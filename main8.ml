@@ -310,7 +310,7 @@ let formatInv h =
       ^ ", hash " ^ hex_of_string hash 
     )h  
 
-(* not sure if we want to enclose this scope *)
+(* not sure if we want to enclose this scope, in the format tx action *)
 let formatTxInput txIn = String.concat "" [
   "\n previous: " ^ hex_of_string txIn.previous 
   ^ "\n index: " ^ string_of_int txIn.index 
@@ -318,9 +318,8 @@ let formatTxInput txIn = String.concat "" [
   ^ "\n sequence: " ^ string_of_int txIn.sequence
 ] 
 
-let formatTxInputs inputs = String.concat "" @@ List.map formatTxInput inputs
-
-
+let formatTxInputs inputs = 
+  String.concat "\n" @@ List.map formatTxInput inputs
 
 
 
@@ -449,7 +448,7 @@ let handleMessage header payload outchan =
     let hash = sha256d payload |> strrev in
     let pos = 0 in
     let pos, version = decodeInteger32 payload pos in 
-    let pos, txInCount = decodeVarInt payload pos in
+    let pos, inputsCount = decodeVarInt payload pos in
 
     let decodeTxIn s pos = 
       let pos, previous = decodeHash32 s pos in
@@ -461,22 +460,24 @@ let handleMessage header payload outchan =
     in
 
     (* should we be reversing the list, when running decodeTxIn ?  *)
-    let pos, txInputs = decodeNItems payload pos decodeTxIn txInCount in
+    let decodeTxInputs s pos n = decodeNItems s pos decodeTxIn n in
+    let pos, inputs = decodeTxInputs payload pos inputsCount in
 
+    let pos, outputsCount = decodeVarInt payload pos in
+
+    let pos, value = decodeInteger64 payload pos in
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
       ^ "\n hash " ^ hex_of_string hash 
       ^ "\n version " ^ string_of_int version 
-      ^ "\n txInCount " ^ string_of_int txInCount 
+      ^ "\n inputsCount " ^ string_of_int inputsCount 
 
-      ^ "\ntxins" ^ ( formatTxInputs txInputs )
+      ^ "\ntxins" ^ ( formatTxInputs inputs )
 
-(*      ^ "\n  previous " ^ hex_of_string txin.previous 
-      ^ "\n  index " ^ string_of_int txin.index 
-      ^ "\n  script " ^ hex_of_string txin.signatureScript 
-      ^ "\n  sequence " ^ string_of_int txin.sequence
-*)
+      ^ "\n outputsCount " ^ string_of_int outputsCount
+      ^ "\n value " ^ Int64.to_string value
+
     )
 
 
