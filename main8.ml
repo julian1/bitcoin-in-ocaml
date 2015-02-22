@@ -85,6 +85,7 @@ let dec s start bytes =
 
 (* with new position in string - change name decodeInteger *)
 let dec_ s pos n = n+pos, dec s pos n
+
 let decodeInteger8 s pos = dec_ s pos 1
 let decodeInteger32 s pos = dec_ s pos 4
 
@@ -111,6 +112,21 @@ let decs_ s pos n = n+pos, strsub s pos n
 let sha256 s = s |> Sha256.string |> Sha256.to_bin
 let sha256d s = s |> sha256 |> sha256
 let checksum s = s |> sha256d |> fun x -> dec x 0 4
+
+
+(* decode items - this should be generalized decodeItems 
+  - don't pass f through the recursion and shield the rec function
+- can do it with a fold? 
+*)
+
+(* f is decode function, at pos, count items *)
+let decodeNItems s pos f count =
+  let rec fff pos acc count =
+    if count == 0 then acc
+    else let pos, x = f s pos in
+      fff pos (x::acc) (count-1) 
+  in fff pos [] count 
+
 
 let decodeString s pos =
   let pos, len = decodeInteger8 s pos in
@@ -156,19 +172,15 @@ let decodeVersion s pos =
   relay = relay;
   }
 
+let decodeInvItem s pos =
+  let pos, inv_type = decodeInteger32 s pos in
+  let pos, hash = decs_ s pos 32 in
+  pos, (inv_type, hash)
 
-(* decode items - this should be generalized decodeItems 
-  - don't pass f through the recursion and shield the rec function
-- can do it with a fold? 
-*)
-
-(* f is decode function, at pos, count items *)
-let decodeNItems s pos f count =
-  let rec fff pos acc count =
-    if count == 0 then acc
-    else let pos, x = f s pos in
-      fff pos (x::acc) (count-1) 
-  in fff pos [] count 
+let decodeInv s pos =
+  (* TODO this is a varInt *)
+  let pos, count = decodeInteger8 s pos in
+  decodeNItems s pos decodeInvItem count
 
 
 
@@ -367,8 +379,10 @@ let handleMessage header payload outchan =
     Lwt_io.write_line Lwt_io.stdout ("* got veack" )
 
   | "inv"  -> 
+    (* ok, we need an inventory data structure, and decode function *)
 
     (* decode item count let x = if count < 0xfd then count  *)
+(*
     let pos = 0 in
     let pos, count = decodeInteger8 payload pos in
 
@@ -378,8 +392,8 @@ let handleMessage header payload outchan =
       let pos, hash = decs_ s pos 32 in
       pos, (inv_type, hash)
     in
-
-    let result = decodeNItems payload pos decodeInvItem count in
+*)
+    let result = decodeInv payload 0 in
 
     let j = String.concat "" @@ List.map (
 	    fun (inv_type, hash ) -> 
@@ -389,8 +403,7 @@ let handleMessage header payload outchan =
 
     Lwt_io.write_line Lwt_io.stdout ( 
       "* got inv - "
-      ^ "\n count " ^ string_of_int count
-      (* ^ "\n count " ^ string_of_int (List.length result) *)
+      ^ "\n count " ^ string_of_int (List.length result) 
       ^ j 
     )
 
