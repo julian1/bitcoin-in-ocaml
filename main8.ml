@@ -415,9 +415,13 @@ let mainLoop inchan outchan =
   let rec loop () =
     (* read header *)
     Lwt_io.read ~count:24 inchan
-    (* read payload *)
+
+    (* log details before we read payload *)
     >>= fun s -> let header = decodeHeader s 0 in
-      Lwt_io.read ~count: header.length inchan
+      Lwt_io.write_line Lwt_io.stdout ("* command '" ^ header.command ^ "' length " ^ string_of_int header.length  )
+
+    (* read payload *)
+    >>= fun _ -> Lwt_io.read ~count: header.length inchan
     (* handle  *)
     >>= fun s -> handleMessage header s outchan
     (* repeat *)
