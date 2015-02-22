@@ -62,6 +62,13 @@ let hex_of_string s =
 let hex_of_int =
   Printf.sprintf "%x"
 
+(* string manipulation *)
+let strsub = String.sub
+let strlen = String.length
+let strrev = Core.Core_string.rev
+let zeros n = String.init n (fun _ -> char_of_int 0)
+
+
 
 (* decode byte in s at pos *)
 let dec1 s pos = int_of_char @@ String.get s pos
@@ -90,6 +97,10 @@ let decodeInteger8 s pos = dec_ s pos 1
 let decodeInteger16 s pos = dec_ s pos 2
 let decodeInteger32 s pos = dec_ s pos 4
 
+
+
+(*dec_ s pos 4 let pos, hash = decs_ s pos 32 in *)
+
 (* decode integer value of string s at position using n bytes *)
 let dec64_ s start bytes =
   let rec dec_ pos acc =
@@ -100,14 +111,13 @@ let dec64_ s start bytes =
 
 let decodeInteger64 s pos = 8+pos, dec64_ s pos 8
 
-(* string manipulation *)
-let strsub = String.sub
-let strlen = String.length
-let strrev = Core.Core_string.rev
-let zeros n = String.init n (fun _ -> char_of_int 0)
-
-(* returning position *)
+(* returning position - should obsolete *)
 let decs_ s pos n = n+pos, strsub s pos n
+
+(* need to reverse the hash *)
+let decodeHash32 s pos = 
+  let (a,b) = decs_ s pos 32 in
+  a, strrev b
 
 (* hashing *)
 let sha256 s = s |> Sha256.string |> Sha256.to_bin
@@ -175,18 +185,18 @@ let decodeVersion s pos =
 
 let decodeInvItem s pos =
   let pos, inv_type = decodeInteger32 s pos in
-  let pos, hash = decs_ s pos 32 in
+  let pos, hash = decodeHash32 s pos in
   pos, (inv_type, hash)
 
 
 let decodeVarInt s pos = 
   let pos, first = decodeInteger8 s pos in
   match first with
-      | 0xfd -> decodeInteger16 s pos
-      | 0xfe -> decodeInteger32 s pos 
-      | 0xff -> (pos, first) (* TODO uggh... this will need a 64 bit int return type *)
-      | _ -> (pos, first)
-      
+    | 0xfd -> decodeInteger16 s pos
+    | 0xfe -> decodeInteger32 s pos 
+    | 0xff -> (pos, first) (* TODO uggh... this will need a 64 bit int return type *)
+    | _ -> (pos, first)
+    
 
 let decodeInv s pos =
   (* TODO this is a varInt 
@@ -289,7 +299,7 @@ let formatInv h =
   String.concat "" @@ List.map (
     fun (inv_type, hash ) -> 
       "\n inv_type " ^ string_of_int inv_type 
-      ^ ", hash " ^ hex_of_string (strrev hash )
+      ^ ", hash " ^ hex_of_string hash 
     )h  
 
 let mytest1 () =
@@ -418,6 +428,10 @@ let handleMessage header payload outchan =
     let pos = 0 in
     let pos, version = decodeInteger32 payload pos in 
     let pos, tx_in_count = decodeVarInt payload pos in
+
+    let pos, tx_in_count = decodeVarInt payload pos in
+
+
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
