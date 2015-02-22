@@ -351,18 +351,37 @@ let handleMessage header payload outchan =
 
   | "inv"  -> 
 
-
+    (* ok we need a recursive function 
+        so we can expand count and map...
+        or use a recursive function with count
+    *)  
 
     (*let x = if count < 0xfd then count  *)
     let pos = 0 in
     let pos, count = decodeInteger8 payload pos in
-    let pos, inv_type = decodeInteger32 payload pos in
-    let pos, hash = decs_ payload pos 32 in
+
+    let f pos =
+      let pos, inv_type = decodeInteger32 payload pos in
+      let pos, hash = decs_ payload pos 32 in
+      pos, inv_type, hash
+    in
+
+    let rec f2 pos acc count =
+      if count == 0 then acc
+      else 
+        let pos, inv_type, hash = f pos in
+        f2 pos (( inv_type, hash) :: acc) (count-1) 
+    in
+
+    let result = f2 pos [] count in
+
+    let pos, inv_type, hash = f pos in 
 
     Lwt_io.write_line Lwt_io.stdout ( 
       "* got inv - "
       ^ "\n payload length " ^ string_of_int header.length
       ^ "\n count " ^ string_of_int count
+      ^ "\n count " ^ string_of_int (List.length result)
       ^ "\n inv_type " ^ string_of_int inv_type 
       ^ "\n hash " ^ hex_of_string (strrev hash )
     )
