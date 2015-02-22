@@ -142,7 +142,7 @@ let checksum s = s |> sha256d |> fun x -> dec x 0 4
 (* f is decode function, at pos, count items *)
 let decodeNItems s pos f count =
   let rec fff pos acc count =
-    if count == 0 then acc
+    if count == 0 then pos, acc
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1) 
   in fff pos [] count 
@@ -170,7 +170,6 @@ let decodeHeader s pos =
   let pos, command = decs_ s pos 12 in
   let pos, length = decodeInteger32 s pos in
   let _, checksum = decodeInteger32 s pos in
-
   let x = match ( Core.Std.String.index_from command 0 '\x00' ) with
     | Some n -> strsub command 0 n 
     | None -> command
@@ -414,7 +413,7 @@ let handleMessage header payload outchan =
     Lwt_io.write_line Lwt_io.stdout ("* got veack" )
 
   | "inv" -> 
-    let inv = decodeInv payload 0 in
+    let _, inv = decodeInv payload 0 in
     Lwt_io.write_line Lwt_io.stdout ("* whoot got inv" ^ formatInv inv )
     (* request inventory item *)
     >>=  fun _ -> 
@@ -448,7 +447,7 @@ let handleMessage header payload outchan =
     in
 
     (* decodeNItems isn't returning the pos *)
-    let txInputs = decodeNItems payload pos decodeTxIn txInCount in
+    let _, txInputs = decodeNItems payload pos decodeTxIn txInCount in
 
     let formatTxInput txIn = String.concat "" [
       "\n previous: " ^ hex_of_string txIn.previous 
