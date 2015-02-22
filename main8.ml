@@ -455,9 +455,8 @@ let handleMessage header payload outchan =
     let hash = sha256d payload |> strrev in
     let pos = 0 in
     let pos, version = decodeInteger32 payload pos in 
-    let pos, inputsCount = decodeVarInt payload pos in
 
-    let decodeTxIn s pos = 
+    let decodeInput s pos = 
       let pos, previous = decodeHash32 s pos in
       let pos, index = decodeInteger32 s pos in
       let pos, scriptLen = decodeVarInt s pos in
@@ -465,19 +464,22 @@ let handleMessage header payload outchan =
       let pos, sequence = decodeInteger32 s pos in
       pos, { previous = previous; index = index; signatureScript = signatureScript ; sequence = sequence; }
     in
+    let decodeInputs s pos n = decodeNItems s pos decodeInput n in
+    (* should we be reversing the list, when running decodeInput ?  *)
+    let pos, inputsCount = decodeVarInt payload pos in
+    let pos, inputs = decodeInputs payload pos inputsCount in
 
-    (* should we be reversing the list, when running decodeTxIn ?  *)
-    let decodeTxInputs s pos n = decodeNItems s pos decodeTxIn n in
-    let pos, inputs = decodeTxInputs payload pos inputsCount in
 
-    let pos, outputsCount = decodeVarInt payload pos in
-
-    let decodeOutputs s pos =
+    let decodeOutput s pos =
       let pos, value = decodeInteger64 payload pos in
       let pos, scriptLen = decodeVarInt s pos in
       let pos, pkScript = decs_ s pos scriptLen in
       pos, { value = value; pkScript = pkScript; }  
-	in
+	  in
+    let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
+
+    let pos, outputsCount = decodeVarInt payload pos in
+    let pos, outputs = decodeOutputs payload pos outputsCount in
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
