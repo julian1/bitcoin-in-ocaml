@@ -349,7 +349,20 @@ let handleMessage header payload outchan =
     Lwt_io.write_line Lwt_io.stdout ("* got veack" )
 
   | "inv"  -> 
-    Lwt_io.write_line Lwt_io.stdout ("* got inv" )
+
+    (*let x = if first < 0xfd then first  *)
+    let pos = 0 in
+    let pos, first = decodeInteger8 payload pos in
+    let pos, inv_type = decodeInteger32 payload pos in
+    let pos, hash = decs_ payload pos 32 in
+
+    Lwt_io.write_line Lwt_io.stdout ( 
+      "* got inv - "
+      ^ "\n payload length " ^ string_of_int header.length
+      ^ "\n first " ^ string_of_int first
+      ^ "\n inv_type " ^ string_of_int inv_type 
+      ^ "\n hash " ^ hex_of_string (strrev hash )
+    )
 
   | _ -> 
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
