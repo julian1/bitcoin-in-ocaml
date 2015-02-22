@@ -51,6 +51,15 @@ type tx_out =
   pkScript : string;
 }
 
+type tx = 
+{ 
+  hash: string; 
+  version: int; 
+  inputs: tx_in list ; 
+  outputs: tx_out list; 
+  lockTime : int  
+}
+
 
 let printf = Printf.printf
 
@@ -219,6 +228,45 @@ let decodeInv s pos =
   *)
   let pos, count = decodeVarInt s pos in
   decodeNItems s pos decodeInvItem count
+
+
+let decodeTx s pos =
+  let hash = sha256d s |> strrev in
+  let pos = 0 in
+  let pos, version = decodeInteger32 s pos in 
+
+  let decodeInput s pos = 
+    let pos, previous = decodeHash32 s pos in
+    let pos, index = decodeInteger32 s pos in
+    let pos, scriptLen = decodeVarInt s pos in
+    let pos, signatureScript = decs_ s pos scriptLen in
+    let pos, sequence = decodeInteger32 s pos in
+    pos, { previous = previous; index = index; signatureScript = signatureScript ; sequence = sequence; }
+  in
+  let decodeInputs s pos n = decodeNItems s pos decodeInput n in
+  (* should we be reversing the list, when running decodeInput ?  *)
+  let pos, inputsCount = decodeVarInt s pos in
+  let pos, inputs = decodeInputs s pos inputsCount in
+
+
+  let decodeOutput s pos =
+    let pos, value = decodeInteger64 s pos in
+    let pos, scriptLen = decodeVarInt s pos in
+    let pos, pkScript = decs_ s pos scriptLen in
+    pos, { value = value; pkScript = pkScript; }  
+  in
+  let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
+
+  let pos, outputsCount = decodeVarInt s pos in
+  let pos, outputs = decodeOutputs s pos outputsCount in
+
+  let pos, lockTime = decodeInteger32 s pos in
+
+  pos, { hash = hash; version = version; inputs = inputs; outputs = outputs; lockTime }
+
+
+
+
 
 
 
@@ -461,44 +509,18 @@ let handleMessage header payload outchan =
     *)
 
   | "tx" -> 
-    let hash = sha256d payload |> strrev in
-    let pos = 0 in
-    let pos, version = decodeInteger32 payload pos in 
 
-    let decodeInput s pos = 
-      let pos, previous = decodeHash32 s pos in
-      let pos, index = decodeInteger32 s pos in
-      let pos, scriptLen = decodeVarInt s pos in
-      let pos, signatureScript = decs_ s pos scriptLen in
-      let pos, sequence = decodeInteger32 s pos in
-      pos, { previous = previous; index = index; signatureScript = signatureScript ; sequence = sequence; }
-    in
-    let decodeInputs s pos n = decodeNItems s pos decodeInput n in
-    (* should we be reversing the list, when running decodeInput ?  *)
-    let pos, inputsCount = decodeVarInt payload pos in
-    let pos, inputs = decodeInputs payload pos inputsCount in
+      let _, tx = decodeTx payload 0 in 
 
-
-    let decodeOutput s pos =
-      let pos, value = decodeInteger64 payload pos in
-      let pos, scriptLen = decodeVarInt s pos in
-      let pos, pkScript = decs_ s pos scriptLen in
-      pos, { value = value; pkScript = pkScript; }  
-	  in
-    let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
-
-    let pos, outputsCount = decodeVarInt payload pos in
-    let pos, outputs = decodeOutputs payload pos outputsCount in
-
-    Lwt_io.write_line Lwt_io.stdout (
-      "* got tx!!!" 
-      ^ "\n hash " ^ hex_of_string hash 
-      ^ "\n version " ^ string_of_int version 
-      ^ "\n inputsCount " ^ string_of_int inputsCount 
-      ^ "\n inputs" ^ ( formatInputs inputs )
-
-      ^ "\n outputsCount " ^ string_of_int outputsCount
-      ^ "\n outputs" ^ ( formatOutputs outputs )
+      Lwt_io.write_line Lwt_io.stdout (
+        "* got tx!!!" 
+        ^ "\n hash " ^ hex_of_string tx.hash 
+        ^ "\n version " ^ string_of_int tx.version 
+        ^ "\n inputsCount " ^ (string_of_int @@ List.length tx.inputs)
+        ^ "\n inputs" ^ ( formatInputs tx.inputs )
+        ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
+        ^ "\n outputs" ^ ( formatOutputs tx.outputs )
+        ^ "\n lockTime " ^ string_of_int tx.lockTime
     )
 
 
