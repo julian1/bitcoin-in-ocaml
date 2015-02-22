@@ -336,6 +336,7 @@ let z =
 let handleMessage header payload outchan =
   (* we kind of want to be able to write to stdout here 
     and return a value...
+    - we may want to do async database actions here. so keep the io
   *)
   match header.command with
   | "version"  -> 
@@ -350,16 +351,18 @@ let handleMessage header payload outchan =
 
   | "inv"  -> 
 
-    (*let x = if first < 0xfd then first  *)
+
+
+    (*let x = if count < 0xfd then count  *)
     let pos = 0 in
-    let pos, first = decodeInteger8 payload pos in
+    let pos, count = decodeInteger8 payload pos in
     let pos, inv_type = decodeInteger32 payload pos in
     let pos, hash = decs_ payload pos 32 in
 
     Lwt_io.write_line Lwt_io.stdout ( 
       "* got inv - "
       ^ "\n payload length " ^ string_of_int header.length
-      ^ "\n first " ^ string_of_int first
+      ^ "\n count " ^ string_of_int count
       ^ "\n inv_type " ^ string_of_int inv_type 
       ^ "\n hash " ^ hex_of_string (strrev hash )
     )
@@ -373,8 +376,7 @@ let mainLoop inchan outchan =
     (* read header *)
     Lwt_io.read ~count:24 inchan
     (* read payload *)
-    >>= fun s -> 
-      let header = decodeHeader s 0 in
+    >>= fun s -> let header = decodeHeader s 0 in
       Lwt_io.read ~count: header.length inchan
     (* handle  *)
     >>= fun s -> handleMessage header s outchan
