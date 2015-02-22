@@ -36,6 +36,15 @@ type version =
   relay : int;
 }
 
+type tx_in=
+{
+    previous : string ;
+    index : int ; 
+    signatureScript : string; 
+    sequence : int ; 
+}
+
+
 let printf = Printf.printf
 
 let hex_of_char c =
@@ -114,7 +123,7 @@ let decodeInteger64 s pos = 8+pos, dec64_ s pos 8
 (* returning position - should obsolete *)
 let decs_ s pos n = n+pos, strsub s pos n
 
-(* need to reverse the hash *)
+(* 256 bit hash *)
 let decodeHash32 s pos = 
   let (a,b) = decs_ s pos 32 in
   a, strrev b
@@ -166,7 +175,7 @@ let decodeHeader s pos =
     | Some n -> strsub command 0 n 
     | None -> command
   in
-  { magic = magic; command = x; length = length; checksum = checksum; }
+  pos, { magic = magic; command = x; length = length; checksum = checksum; }
 
 let decodeVersion s pos =
   let pos, protocol = decodeInteger32 s pos in
@@ -178,10 +187,10 @@ let decodeVersion s pos =
   let pos, agent = decodeString s pos in
   let pos, height = decodeInteger32 s pos in
   let _, relay = decodeInteger8 s pos in
-  { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
-  from = from; to_ = to_; nonce  = nonce; agent = agent; height = height;
-  relay = relay;
-  }
+  pos, { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
+    from = from; to_ = to_; nonce  = nonce; agent = agent; height = height;
+    relay = relay;
+  } 
 
 let decodeInvItem s pos =
   let pos, inv_type = decodeInteger32 s pos in
@@ -312,16 +321,16 @@ let mytest1 () =
     let () = close_in in_channel in
     h
 in
-  let header = decodeHeader h 0 in
+  let _, header = decodeHeader h 0 in
   let payload = strsub h 24 header.length in
-  let version = decodeVersion payload 0 in
+  let _, version = decodeVersion payload 0 in
   let () = printf "%s" @@ formatHeader header in
   let () = printf "\n" in
   let () = printf "%s" @@ formatVersion version in
   let () = printf "checksum is %x \n" ( checksum payload ) in
   let () = printf "----------\n" in
   let u = encodeVersion version in
-  let () = printf "%s" @@ formatVersion ( decodeVersion u 0 ) in
+(*  let () = printf "%s" @@ formatVersion ( decodeVersion u 0 ) in *)
   let () = printf "checksum is %x\n" ( checksum u ) in
   printf "----------\n"
 
@@ -347,7 +356,7 @@ let mytest2 () =
     checksum = checksum u;
   } in
   let eheader = encodeHeader header in
-  let dheader = decodeHeader eheader 0 in
+  let _, dheader = decodeHeader eheader 0 in
   let () = printf "**** here\n" in
   let () = printf "%s" @@ formatHeader dheader in
   ()
@@ -396,7 +405,7 @@ let handleMessage header payload outchan =
   *)
   match header.command with
   | "version" -> 
-    let version = decodeVersion payload 0 in
+    let _, version = decodeVersion payload 0 in
     Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
     >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
     >>= fun _ -> Lwt_io.write outchan z
@@ -427,24 +436,43 @@ let handleMessage header payload outchan =
     let hash = sha256d payload |> strrev in
     let pos = 0 in
     let pos, version = decodeInteger32 payload pos in 
-    let pos, tx_in_count = decodeVarInt payload pos in
+    let pos, txInCount = decodeVarInt payload pos in
 
-    let pos, previous = decodeHash32 payload pos in
-    let pos, index = decodeInteger32 payload pos in
-    let pos, scriptLen = decodeVarInt payload pos in
-    let pos, signatureScript = decs_ payload pos scriptLen in
-    let pos, sequence = decodeInteger32 payload pos in
+    let decodeTxIn s pos = 
+      let pos, previous = decodeHash32 s pos in
+      let pos, index = decodeInteger32 s pos in
+      let pos, scriptLen = decodeVarInt s pos in
+      let pos, signatureScript = decs_ s pos scriptLen in
+      let pos, sequence = decodeInteger32 s pos in
+      pos, { previous = previous; index = index; signatureScript = signatureScript ; sequence = sequence; }
+    in
+
+    (* decodeNItems isn't returning the pos *)
+    let txInputs = decodeNItems payload pos decodeTxIn txInCount in
+
+    let formatTxInput txIn = String.concat "" [
+      "\n previous: " ^ hex_of_string txIn.previous 
+      ^ "\n index: " ^ string_of_int txIn.index 
+      ^ "\n script: " ^ hex_of_string txIn.signatureScript 
+      ^ "\n sequence: " ^ string_of_int txIn.sequence
+    ] in
+
+    let formatTxInputs inputs = String.concat "" @@ List.map formatTxInput inputs
+    in
 
     Lwt_io.write_line Lwt_io.stdout (
       "* got tx!!!" 
       ^ "\n hash " ^ hex_of_string hash 
       ^ "\n version " ^ string_of_int version 
-      ^ "\n tx_in_count " ^ string_of_int tx_in_count 
-      ^ "\n  previous " ^ hex_of_string previous 
-      ^ "\n  index " ^ string_of_int index 
-      ^ "\n  script_len " ^ string_of_int scriptLen
-      ^ "\n  script " ^ hex_of_string signatureScript 
-      ^ "\n  sequence " ^ string_of_int sequence
+      ^ "\n txInCount " ^ string_of_int txInCount 
+
+      ^ "\ntxins" ^ ( formatTxInputs txInputs )
+
+(*      ^ "\n  previous " ^ hex_of_string txin.previous 
+      ^ "\n  index " ^ string_of_int txin.index 
+      ^ "\n  script " ^ hex_of_string txin.signatureScript 
+      ^ "\n  sequence " ^ string_of_int txin.sequence
+*)
     )
 
 
@@ -472,7 +500,7 @@ let mainLoop inchan outchan =
     *)
     (* read payload *)
     >>= fun s -> 
-      let header = decodeHeader s 0 in
+      let _, header = decodeHeader s 0 in
       readChannel inchan header.length 
     (* handle  *)
     >>= fun s -> handleMessage header s outchan
