@@ -88,7 +88,8 @@ let handleMessage header payload outchan =
 
 
 
-(* change name to readn or something? *) 
+(* read exactly n bytes from channel, returning a string 
+	- change name to readn or something? *) 
 let readChannel inchan length   =
   let buf = Bytes.create length in 
   Lwt_io.read_into_exactly inchan buf 0 length 
