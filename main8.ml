@@ -517,15 +517,16 @@ let handleMessage header payload outchan =
 
       >>= fun _ -> 
         let filename =  "./dumps/" ^ (hex_of_string tx.hash) in
-        Lwt_unix.openfile filename [O_WRONLY;O_CREAT]  0o644 
+        Lwt_unix.openfile filename [O_WRONLY;O_CREAT;O_TRUNC] 0o644
       >>= fun fd ->  
-        Lwt_io.write_line Lwt_io.stdout ( "* opened file  !!!\n" )
+        Lwt_io.write_line Lwt_io.stdout ( "* opened file !!!" )
       >>= fun _ ->  
         Lwt_unix.write fd payload 0 header.length
       >>= fun bytes_written ->  
         Lwt_unix.close fd
       >>= fun _ ->  
-        Lwt_io.write_line Lwt_io.stdout ( Printf.sprintf "* closed file %d of %d written"  bytes_written header.length )
+        let result = Printf.sprintf "* closed file %d of %d written"  bytes_written header.length in
+        Lwt_io.write_line Lwt_io.stdout result 
 
 
 
