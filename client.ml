@@ -1,4 +1,9 @@
 
+(* TODO, we need a ping/pong response, to ensure we stay connected 
+
+	first bit of script is almost certainly length.
+*)
+
 open Message
 open Lwt (* for >>= *)
 
