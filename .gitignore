@@ -3,4 +3,4 @@
 *.swn
 _build
 *.byte
-out*
+dumps
