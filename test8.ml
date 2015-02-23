@@ -7,7 +7,14 @@ let s = Core.In_channel.input_all in_channel in
 let () = close_in in_channel in
 
 let _, tx = decodeTx s 0 in 
-Printf.printf "* got tx!!!\n%s\n" (formatTx tx )
+
+
+let output1 :: tail = tx.outputs in
+
+let () = Printf.printf "* got tx!!!\n%s\n" (formatTx tx ) in
+
+
+Printf.printf "* output %s\n" @@ hex_of_string output1.pkScript 
 
 
 
