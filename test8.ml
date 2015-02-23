@@ -7,9 +7,7 @@ let s = Core.In_channel.input_all in_channel in
 let () = close_in in_channel in
 
 let _, tx = decodeTx s 0 in 
-let s2 = formatTx tx in
- 
-Printf.printf "* got tx!!!\n  %s"  s2 
+Printf.printf "* got tx!!!\n%s\n" (formatTx tx )
 
 
 
