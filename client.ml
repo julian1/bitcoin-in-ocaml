@@ -1,6 +1,6 @@
 
 open Message
-open Lwt 
+open Lwt (* for >>= *)
 
 (* initial version message to send *)
 let y =
@@ -148,13 +148,7 @@ let run () =
   )
 
 
-
 let () = run ()
 
-(*
-  TODO
-  - need to hex functions - to easily compare the data .
-    can only use printf %x with integers
-*)
 
 

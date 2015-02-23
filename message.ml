@@ -1,16 +1,10 @@
-
 (*
-	corebuild  -package sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax main8.byte
+  TODO
 
-
-  get rid of caml case for function. eg int_of_string not intOfString.
-
-   *)
-
-(* open Core   *)
-(*open Sha256 *)
-
-(* open Lwt*) (* for >>= *)
+-	get rid of caml case for function. eg int_of_string not intOfString.
+  - need to hex functions - to easily compare the data .
+   -  can only use printf %x with integers
+*)
 
 type header =
 {
@@ -64,9 +58,6 @@ type tx =
   lockTime : int  
 }
 
-
-let printf = Printf.printf
-
 let hex_of_char c =
   let hexa = "0123456789abcdef" in
   let x = Char.code c in
@@ -87,7 +78,7 @@ let hex_of_string s =
   done;
   Buffer.contents buf
 
-(* horrible *)
+(* TODO horrible *)
 let hex_of_int =
   Printf.sprintf "%x"
 
@@ -97,12 +88,10 @@ let strlen = String.length
 let strrev = Core.Core_string.rev
 let zeros n = String.init n (fun _ -> char_of_int 0)
 
-
-
 (* decode byte in s at pos *)
 let dec1 s pos = int_of_char @@ String.get s pos
 
-(* other endiness form
+(* for big-endian 
 let dec s pos bytes =
 let rec dec_ s pos bytes acc =
 	let value = (acc lsl 8) + (dec1 s pos) in
@@ -267,10 +256,6 @@ let decodeTx s pos =
 
 
 
-
-
-
-
 let enc bytes value =
   String.init bytes (fun i ->
     let h = 0xff land (value lsr (i * 8)) in
@@ -325,10 +310,12 @@ let encodeHeader (h : header) =
 
 
 (* dump the string - not pure *)
+(*
 let rec printRaw s a b =
 	let () = printf "magic %d - '%c' %d %d %d\n" a s.[a] (int_of_char s.[a]) (dec s a 4) (dec s a 8) in
   if a > b then ()
   else printRaw s (a+1) b
+*)
 
 
 let formatHeader (h : header) =
@@ -393,6 +380,5 @@ let formatTx tx =
   ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
   ^ "\n" ^ formatOutputs tx.outputs
   ^ "\n lockTime " ^ string_of_int tx.lockTime
-
 
 
