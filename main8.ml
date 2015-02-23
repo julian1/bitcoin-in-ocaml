@@ -1,6 +1,10 @@
 
 (*
 	corebuild  -package sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax main8.byte
+
+
+  get rid of caml case for function. eg int_of_string not intOfString.
+
    *)
 
 (* open Core   *)
@@ -510,6 +514,20 @@ let handleMessage header payload outchan =
   | "tx" -> 
       let _, tx = decodeTx payload 0 in 
       Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx tx )
+
+      >>= fun _ -> 
+        let filename =  "./dumps/" ^ (hex_of_string tx.hash) in
+        Lwt_unix.openfile filename [O_WRONLY;O_CREAT]  0o644 
+      >>= fun fd ->  
+        Lwt_io.write_line Lwt_io.stdout ( "* opened file  !!!\n" )
+      >>= fun _ ->  
+        Lwt_unix.write fd payload 0 header.length
+      >>= fun bytes_written ->  
+        Lwt_unix.close fd
+      >>= fun _ ->  
+        Lwt_io.write_line Lwt_io.stdout ( Printf.sprintf "* closed file %d of %d written"  bytes_written header.length )
+
+
 
   | _ -> 
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "'" )
