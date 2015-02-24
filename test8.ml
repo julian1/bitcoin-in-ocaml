@@ -34,11 +34,15 @@ type t =
 
 let ff s =
   let rec f (pos: int) acc =
-    let pos, c = decodeInteger8 s pos in
-    let x = match c with 
-      118 -> OP_DUP
-      | _ -> Unknown c
-    in pos, x:: acc
+
+    if pos < strlen s then
+      let pos, c = decodeInteger8 s pos in
+      let x = match c with 
+        118 -> OP_DUP
+        | _ -> Unknown c
+      in pos, x::acc
+    else acc
+
   in let _, result = f 0 []
   in result
 
