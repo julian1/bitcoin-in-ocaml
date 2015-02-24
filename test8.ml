@@ -53,6 +53,14 @@ let format_token x =
   | Bytes c -> "Bytes " ^ hex_of_string c
   | Unknown c -> "Unknown " ^ string_of_int c
 
+let format_script tokens = 
+  let l = List.map format_token tokens  
+  in String.concat "" l
+
+(* 
+  String.concat "" (fun x -> (format_token x)) tokens 
+*) 
+
 
 (* TODO should have a string concat to string here *)
 
@@ -72,11 +80,9 @@ let inputs, outputs = get_outputs ()
 
 let f (script: string ) = 
   let tokens = decode_script script in
-  let () = List.iter (fun x -> Printf.printf "%s " (format_token x)) tokens in
-  Printf.printf "\n"
+  Printf.printf "%s\n" (format_script tokens )
   
 
-(* let () = List.iter (fun x ->  f x.pkScript) inputs  *)
 let () = List.iter (fun x ->  f (x : tx_in ).script ) inputs 
 let () = List.iter (fun x ->  f (x : tx_out ).script ) outputs 
 
