@@ -69,7 +69,7 @@ let f x =
     Printf.printf " - %s\n" u
 
 
-
+(* should use map and string.concat to format the script sig *)
 let () = List.iter f fuck
 
 
