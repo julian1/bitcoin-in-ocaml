@@ -37,20 +37,27 @@ type t =
 
 let ff s =
   let rec f (pos: int) acc =
-
     if pos < strlen s then
       let pos, c = decodeInteger8 s pos in
       (* let () = Printf.printf "whoot pos %d\n" pos in *)
-      let x = 
+
       if ( c > 0 && c < 76) then
-        Unknown c
-      else match c with
+        
+        let len = c in
+        let () = Printf.printf "len %d\n" len in 
+        let pos, arg = decs_ s pos len in 
+       (* let uuu = Unknown 123  in
+        in f pos (uuu::acc)
+    *)  f pos (Unknown 123 ::acc)
+
+      else 
+        let x = match c with
         | 118 -> OP_DUP
         | 169 -> OP_HASH160
         | 136 -> OP_EQUALVERIFY
         | 172 -> OP_CHECKSIG
         | _ -> Unknown c
-      in f pos (x::acc)
+        in f pos (x::acc)
     else pos, acc
 
   in let _, result = f 0 []
