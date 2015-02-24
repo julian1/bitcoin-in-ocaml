@@ -53,9 +53,9 @@ let format_token x =
   | Bytes c -> "Bytes " ^ hex_of_string c
   | Unknown c -> "Unknown " ^ string_of_int c
 
+
 let format_script tokens = 
-  let l = List.map format_token tokens  
-  in String.concat "" l
+  String.concat " " @@ List.map format_token tokens  
 
 (* 
   String.concat "" (fun x -> (format_token x)) tokens 
