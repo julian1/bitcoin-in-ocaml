@@ -40,8 +40,8 @@ let ff s =
       let x = match c with 
         118 -> OP_DUP
         | _ -> Unknown c
-      in pos, x::acc
-    else acc
+      in f (pos+1) (x::acc)
+    else pos, acc
 
   in let _, result = f 0 []
   in result
