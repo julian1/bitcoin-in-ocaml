@@ -42,7 +42,7 @@ let ff s =
       let pos, c = decodeInteger8 s pos in
       (* let () = Printf.printf "whoot pos %d\n" pos in *)
       let x = match c with
-        118 -> OP_DUP
+        | 118 -> OP_DUP
         | 169 -> OP_HASH160
         | 136 -> OP_EQUALVERIFY
         | 172 -> OP_CHECKSIG
@@ -64,7 +64,7 @@ let f x =
   | OP_HASH160 -> "OP_HASH160"
   | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
   | OP_CHECKSIG -> "OP_CHECKSIG"
-  | Unknown c -> "Unknown %d" ^ string_of_int c
+  | Unknown c -> "Unknown " ^ string_of_int c
   in  
     Printf.printf " - %s\n" u
 
