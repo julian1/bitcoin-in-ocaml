@@ -5,6 +5,8 @@
 *)
 
 open Message
+open Script
+
 open Lwt (* for >>= *)
 
 (* initial version message to send *)
@@ -71,7 +73,7 @@ let handleMessage header payload outchan =
 
   | "tx" -> 
       let _, tx = decodeTx payload 0 in 
-      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx tx )
+      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx2 tx )
 
       >>= fun _ -> 
         let filename =  "./dumps/" ^ (hex_of_string tx.hash) in

@@ -8,6 +8,7 @@ type t =
   | Bytes of string
   | Unknown of int
   | OP_DUP
+  | OP_EQUAL
   | OP_EQUALVERIFY
   | OP_HASH160
   | OP_CHECKSIG
@@ -34,6 +35,7 @@ let decode_script s =
       else
         let op = match c with
         | 118 -> OP_DUP
+        | 135 -> OP_EQUAL 
         | 136 -> OP_EQUALVERIFY
         | 169 -> OP_HASH160
         | 172 -> OP_CHECKSIG
@@ -47,6 +49,7 @@ let decode_script s =
 let format_token x =
   match x with
   | OP_DUP -> "OP_DUP"
+  | OP_EQUAL -> "OP_EQUAL"
   | OP_HASH160 -> "OP_HASH160"
   | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
   | OP_CHECKSIG -> "OP_CHECKSIG"
@@ -91,21 +94,27 @@ let () = List.iter (fun x ->  f (x : tx_out ).script ) outputs
 
 let formatTx2 tx = 
 
-  let script_inputs = List.map (fun x -> (x:tx_in).script) tx.inputs in
-  let formatted_inputs = List.map (fun x -> x |> decode_script |> format_script ) script_inputs in
-  let inputs = String.concat "\n"  formatted_inputs in
- 
+  let format_scripts script_inputs = 
+    let formatted_inputs = List.map (fun x -> x |> decode_script |> format_script ) script_inputs in
+    String.concat "\n"  formatted_inputs in
+
+    let script_inputs = List.map (fun x -> (x:tx_in).script) tx.inputs in
+    let script_outputs = List.map (fun x -> (x:tx_out).script) tx.outputs in
+
+   let inputs = format_scripts script_inputs in 
+   let outpus = format_scripts script_outputs in 
 
   " hash " ^ hex_of_string tx.hash 
   ^ "\n version " ^ string_of_int tx.version 
   ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
-  ^ "\n" ^ inputs (* formatInputs tx.inputs *)
+  ^ "\n " ^ inputs (* formatInputs tx.inputs *)
   ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
-  ^ "\n" ^ formatOutputs tx.outputs
+  ^ "\n " ^ outpus (* formatOutputs tx.outputs *)
   ^ "\n lockTime " ^ string_of_int tx.lockTime
 
+(*
 let () = Printf.printf "%s\n" @@ formatTx2 tx
-
+*)
 
 (*
 let tokens = List.rev @@ decode_script output.pkScript
