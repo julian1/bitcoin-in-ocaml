@@ -27,6 +27,7 @@ type t =
   | OP_DUP
   | OP_EQUALVERIFY
   | OP_CHECKSIG 
+  | Bytes of string
   | Unknown of int
 ;;
 
@@ -48,7 +49,7 @@ let ff s =
         let pos, arg = decs_ s pos len in 
        (* let uuu = Unknown 123  in
         in f pos (uuu::acc)
-    *)  f pos (Unknown 123 ::acc)
+    *)  f pos (Bytes arg ::acc)
 
       else 
         let x = match c with
@@ -74,6 +75,7 @@ let f x =
   | OP_HASH160 -> "OP_HASH160"
   | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
   | OP_CHECKSIG -> "OP_CHECKSIG"
+  | Bytes c -> "Bytes " ^ hex_of_string c
   | Unknown c -> "Unknown " ^ string_of_int c
   in  
     Printf.printf " - %s\n" u
