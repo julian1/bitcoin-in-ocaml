@@ -59,12 +59,15 @@ let fuck = List.rev ( ff output.pkScript )
 let () = Printf.printf "length %d\n" (List.length fuck)
 
 let f x =
-  match x with
-  | OP_DUP -> Printf.printf "OP_DUP\n"
-  | OP_HASH160 -> Printf.printf "OP_HASH160\n"
-  | OP_EQUALVERIFY-> Printf.printf "OP_EQUALVERIFY\n"
-  | OP_CHECKSIG -> Printf.printf "OP_CHECKSIG\n"
-  | Unknown c -> Printf.printf "unknown %d\n" c
+  let u = match x with
+  | OP_DUP -> "OP_DUP"
+  | OP_HASH160 -> "OP_HASH160"
+  | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
+  | OP_CHECKSIG -> "OP_CHECKSIG"
+  | Unknown c -> "Unknown %d" ^ string_of_int c
+  in  
+    Printf.printf " - %s\n" u
+
 
 
 let () = List.iter f fuck
