@@ -7,9 +7,9 @@ open Message
 type t =
   | Bytes of string
   | Unknown of int
-  | OP_HASH160
   | OP_DUP
   | OP_EQUALVERIFY
+  | OP_HASH160
   | OP_CHECKSIG
 ;;
 
@@ -34,8 +34,8 @@ let decode_script s =
       else
         let op = match c with
         | 118 -> OP_DUP
-        | 169 -> OP_HASH160
         | 136 -> OP_EQUALVERIFY
+        | 169 -> OP_HASH160
         | 172 -> OP_CHECKSIG
         | _ -> Unknown c
         in f pos (op::acc)
@@ -66,25 +66,46 @@ let format_script tokens =
 
 (* should we be decoding the script, in the tx decoding entirely? *)  
 
-let get_outputs () =
+let tx  =
   let in_channel = open_in "dumps/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
   let s = Core.In_channel.input_all in_channel in
   let () = close_in in_channel in
   let _, tx = decodeTx s 0 in
+  tx
+(*
   tx.inputs, 
   tx.outputs 
+*)
 
-
+(*
 let inputs, outputs = get_outputs ()
-
 
 let f (script: string ) = 
   let tokens = decode_script script in
   Printf.printf "%s\n" (format_script tokens )
-  
 
 let () = List.iter (fun x ->  f (x : tx_in ).script ) inputs 
 let () = List.iter (fun x ->  f (x : tx_out ).script ) outputs 
+*)
+
+
+let formatTx2 tx = 
+
+  let script_inputs = List.map (fun x -> (x:tx_in).script) tx.inputs in
+  let formatted_inputs = List.map (fun x -> x |> decode_script |> format_script ) script_inputs in
+  let inputs = String.concat "\n"  formatted_inputs in
+ 
+
+  " hash " ^ hex_of_string tx.hash 
+  ^ "\n version " ^ string_of_int tx.version 
+  ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
+  ^ "\n" ^ inputs (* formatInputs tx.inputs *)
+  ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
+  ^ "\n" ^ formatOutputs tx.outputs
+  ^ "\n lockTime " ^ string_of_int tx.lockTime
+
+let () = Printf.printf "%s\n" @@ formatTx2 tx
+
 
 (*
 let tokens = List.rev @@ decode_script output.pkScript
