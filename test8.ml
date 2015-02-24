@@ -77,7 +77,8 @@ let f (script: string ) =
   
 
 (* let () = List.iter (fun x ->  f x.pkScript) inputs  *)
-let () = List.iter (fun x ->  f x.signatureScript ) inputs 
+let () = List.iter (fun x ->  f (x : tx_in ).script ) inputs 
+let () = List.iter (fun x ->  f (x : tx_out ).script ) outputs 
 
 (*
 let tokens = List.rev @@ decode_script output.pkScript
