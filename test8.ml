@@ -39,7 +39,9 @@ let ff s =
       let pos, c = decodeInteger8 s pos in
       let x = match c with 
         118 -> OP_DUP
-        | _ -> Unknown c
+        | _ -> 
+          let () = printf "whoot" in
+          Unknown c
       in f (pos+1) (x::acc)
     else pos, acc
 
@@ -59,7 +61,6 @@ in
 *)
 
 let fuck = ff output.pkScript 
-
 
 
 
