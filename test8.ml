@@ -27,16 +27,36 @@ type t =
   | Unknown of int
 ;;
 
-let pos = 0 in
+(* might just about use the takeN recursive function  
+  or just while pos is not at the end...
+  it's not a fold ... 
+*)
+
+let ff s =
+  let rec f (pos: int) acc =
+    let pos, c = decodeInteger8 s pos in
+    let x = match c with 
+      118 -> OP_DUP
+      | _ -> Unknown c
+    in pos, x:: acc
+  in let _, result = f 0 []
+  in result
+
+(*  
+  in
+  let _, result = f 0 [] in
+  123 
+
 let s = output.pkScript in
-let pos, c = decodeInteger8 s pos in
-
-let x = match c with 
-  118 -> OP_DUP
-  | _ -> Unknown 123
 in
+  let format_ x = match x with 
+    | OP_DUP -> "OP_DUP"
+    | Unknown v -> "Unknown " ^ string_of_int v
+*)
 
-Printf.printf "* output %d\n" c
+let fuck = ff output.pkScript 
+
+
 
 
 
