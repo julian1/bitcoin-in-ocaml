@@ -38,7 +38,7 @@ type tx_in=
 {
   previous : string ;
   index : int ; 
-  signatureScript : string; 
+  script : string; 
   sequence : int ; 
 }
 
@@ -46,7 +46,7 @@ type tx_in=
 type tx_out =
 {
   value : Int64.t ;	
-  pkScript : string;
+  script : string;
 }
 
 type tx = 
@@ -232,9 +232,9 @@ let decodeTx s pos =
     let pos, previous = decodeHash32 s pos in
     let pos, index = decodeInteger32 s pos in
     let pos, scriptLen = decodeVarInt s pos in
-    let pos, signatureScript = decs_ s pos scriptLen in
+    let pos, script = decs_ s pos scriptLen in
     let pos, sequence = decodeInteger32 s pos in
-    pos, { previous = previous; index = index; signatureScript = signatureScript ; sequence = sequence; }
+    pos, { previous = previous; index = index; script = script ; sequence = sequence; }
   in
   let decodeInputs s pos n = decodeNItems s pos decodeInput n in
   (* should we be reversing the list, when running decodeInput ?  *)
@@ -244,8 +244,8 @@ let decodeTx s pos =
   let decodeOutput s pos =
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
-    let pos, pkScript = decs_ s pos scriptLen in
-    pos, { value = value; pkScript = pkScript; }  
+    let pos, script = decs_ s pos scriptLen in
+    pos, { value = value; script = script; }  
   in
   let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
   let pos, outputsCount = decodeVarInt s pos in
@@ -357,7 +357,7 @@ let formatInv h =
 let formatInput input = String.concat "" [
   "  previous: " ^ hex_of_string input.previous 
   ^ "\n  index: " ^ string_of_int input.index 
-  ^ "\n  script: " ^ hex_of_string input.signatureScript 
+  ^ "\n  script: " ^ hex_of_string input.script 
   ^ "\n  sequence: " ^ string_of_int input.sequence
 ] 
 
@@ -366,7 +366,7 @@ let formatInputs inputs =
 
 let formatOutput output = String.concat "" [
   "  value: " ^ Int64.to_string output.value
-  ^ "\n  pkScript: " ^ hex_of_string output.pkScript
+  ^ "\n  script: " ^ hex_of_string output.script
 ] 
 
 let formatOutputs outputs = 
