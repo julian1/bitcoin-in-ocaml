@@ -37,12 +37,11 @@ let ff s =
 
     if pos < strlen s then
       let pos, c = decodeInteger8 s pos in
+      let () = Printf.printf "whoot pos %d\n" pos in
       let x = match c with 
-        118 -> OP_DUP
-        | _ -> 
-          let () = printf "whoot" in
-          Unknown c
-      in f (pos+1) (x::acc)
+        118 -> OP_DUP 
+        | _ -> Unknown c
+      in f pos (x::acc)
     else pos, acc
 
   in let _, result = f 0 []
@@ -62,9 +61,15 @@ in
 
 let fuck = ff output.pkScript 
 
+let () = Printf.printf "length %d\n" (List.length fuck)
+
+let f x = 
+  match x with 
+  | OP_DUP -> Printf.printf "OP_DUP\n" 
+  | Unknown c -> Printf.printf "unknown %d\n" c
 
 
-
+let () = List.iter f fuck
 
 
 
