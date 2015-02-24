@@ -41,7 +41,10 @@ let ff s =
     if pos < strlen s then
       let pos, c = decodeInteger8 s pos in
       (* let () = Printf.printf "whoot pos %d\n" pos in *)
-      let x = match c with
+      let x = 
+      if ( c > 0 && c < 76) then
+        Unknown c
+      else match c with
         | 118 -> OP_DUP
         | 169 -> OP_HASH160
         | 136 -> OP_EQUALVERIFY
