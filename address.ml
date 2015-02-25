@@ -1,7 +1,10 @@
 
 (* corebuild  -package zarith,sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
 
-
+(* - this function probably ought to take a string as input 
+to encapsulate all teh Z handling internally 
+  - and the list concat is horrible
+*)
 let encode_base58 (value: Z.t) =
   let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
   let rec f div acc =
