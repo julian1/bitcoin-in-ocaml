@@ -22,27 +22,25 @@ fold can wo
 
 *)
 
-let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" 
-
-
-let u = Z.of_int 58 
+let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"  
+let _58 = Z.of_int 58 
 let zero = Z.zero
-let div  = Z.of_string "0xc1a235aafbb6fa1e954a68b872d19611da0c7dc9"   
 
 
 let f div = 
-	let div1, rem = Z.div_rem div u in
+	let div1, rem = Z.div_rem div _58 in
 	div1, code_string.[ Z.to_int rem]
 
 let rec ff div acc =
   if Z.gt div zero then
     let div, c = f div in
-    ff div (c :: acc) 
+    ff div (c::acc) 
   else
     acc
 
 
-let result = ff div [] in
+let x = Z.of_string "0xc1a235aafbb6fa1e954a68b872d19611da0c7dc9"   
+let result = ff x [] in
 let result2 = Core.Std.String.of_char_list result in
 
 Printf.printf "whoot %s\n" result2
