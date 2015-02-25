@@ -143,6 +143,9 @@ let sha256 s = s |> Sha256.string |> Sha256.to_bin
 let sha256d s = s |> sha256 |> sha256
 let checksum s = s |> sha256d |> fun x -> dec x 0 4
 
+(* hmmmn we don't always want to decode to integer *)
+let checksum2 s = s |> sha256d |> (fun x -> String.sub x 0 4 ) 
+
 
 (* decode items - this should be generalized decodeItems 
   - don't pass f through the recursion and shield the rec function

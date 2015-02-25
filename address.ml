@@ -52,14 +52,19 @@ let string_of_hex s =
 let x = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in 
 let () = Printf.printf "original string %s\n" x in
 let y = string_of_hex x in 
+let y = "\x00" ^ y in
+let y = y ^ ( Message.checksum2 y ) in
 let () = Printf.printf "hex_of_string   %s\n" (Message.hex_of_string y) in
 let z = Z.of_bits (Core.Core_string.rev y) in
+
+let result = encode_base58 z  in
+
+Printf.printf "z is %s\n"  result
 
 (*
 let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
 *)
 
-Printf.printf "z is %s\n" (Z.format "x" z) 
 
 (*
 let s = Z.to_bits x in
