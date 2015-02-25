@@ -41,15 +41,32 @@ let encode_base58 value =
   This cannot be done, with a numerical interpretation. so we have to use the
   buffer.
 
-  string |> hex_of_string |> Z.of_string     (which is bad)
+  string |> hex_of_string |> Z.of_string_base 16 (which isn't great)
 
   string_of_bighex ...   we want this. 
   
   should be easy though... it's just scanning the bytes, and setting them.
   unless Z can already do it.
+
+  Ok, we should be able to load a bin string just with left shifts ok.
+ 
+  Ok, so we can convert between hex string representations
+  but not binary representations.
+  - ok, there are functions to_bits and of_bits ... which are guaranteed little endian 
+
+  - it's byte ordered... 
 *)
 
-let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9"
+let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
+
+let () = Printf.printf "y is %s\n" (Z.format "x" x) in
+
+let s = Z.to_bits x in
+
+let ds = Message.hex_of_string (Message.strrev s) in 
+ 
+let () = Printf.printf "ds is %s\n" ds in
+
 let result = encode_base58 x  in
 (*let result2 = Core.Std.String.of_char_list result in *)
 
