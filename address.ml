@@ -1,29 +1,8 @@
 
 (* corebuild  -package zarith,sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
 
-(*
-   code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-   x = convert_bytes_to_big_integer(hash_result)
-   output_string = ""
-   while(x > 0)
-       {
-           (x, remainder) = divide(x, 58)
-           output_string.append(code_string[remainder])
-       }
-let s = Z.to_string u in
-Printf.printf "%s\n" s
 
-it would be nice to be able to write this stuff...
-with folds rather than recursive functions...
-
-fold can wo
-- actually it's not a fold over the data it's a fold while a condition is true
-- and it needs the value and acc and boolean
-
-  should we do more core hoisting - eg. zero and value of 58 here?
-*)
-
-let encode_base58 value =
+let encode_base58 (value: Z.t) =
   let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
   let rec f div acc =
     if Z.gt div Z.zero then
@@ -34,44 +13,65 @@ let encode_base58 value =
   in
   Core.Std.String.of_char_list (f value [])
 
-(* ok if it's a hex string how do we convert back to a string buffer??? 
-    It's easy to tack on "\x0\x0" to the front.
-  it would be better
-
-  This cannot be done, with a numerical interpretation. so we have to use the
-  buffer.
-
-  string |> hex_of_string |> Z.of_string_base 16 (which isn't great)
-
-  string_of_bighex ...   we want this. 
+(* we only need the Z thing for the division/remainder action
+  and we might be able to implement it ourselves.  otherwise we need
+  to write conversion actions.
   
-  should be easy though... it's just scanning the bytes, and setting them.
-  unless Z can already do it.
 
-  Ok, we should be able to load a bin string just with left shifts ok.
- 
-  Ok, so we can convert between hex string representations
-  but not binary representations.
-  - ok, there are functions to_bits and of_bits ... which are guaranteed little endian 
-
-  - it's byte ordered... 
+  we've already got the sha stuff, but we need hex_to_binary to be able
+  to work a bit more easily. 
 *)
 
-let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
-
-let () = Printf.printf "y is %s\n" (Z.format "x" x) in
-
-let s = Z.to_bits x in
-
-let ds = Message.hex_of_string (Message.strrev s) in 
+let f x = 
+  (* straight pattern match might be simpler/faster *)
+  if x >= int_of_char '0' && x <= int_of_char '9' then
+    x - (int_of_char '0') 
+  else if x >= int_of_char 'a' && x <= int_of_char 'f' then
+    x - (int_of_char 'a') + 10 
+  else
+    12345
  
+
+(* TODO change name hex_of_binary *)
+let string_of_hex s =
+  let n = String.length s in
+  let buf = Buffer.create (n/2) in
+  for i = 0 to n/2-1 do
+    let i2 = i * 2 in
+    let x = f (int_of_char s.[i2]) in
+    let y = f (int_of_char s.[i2+1]) in
+    (*
+    let () = Printf.printf "x %d, y %d\n" x y in
+    let () = Printf.printf "here %d\n" ( x lsl 4 + y)  in
+    *)
+    (* let x, y = hex_of_char s.[i] in *)
+    Buffer.add_char buf @@ char_of_int (x lsl 4 + y) ;
+  done;
+  Buffer.contents buf
+
+
+let x = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in 
+let () = Printf.printf "original string %s\n" x in
+let y = string_of_hex x in 
+let () = Printf.printf "hex_of_string   %s\n" (Message.hex_of_string y) in
+let z = Z.of_bits (Message.strrev y) in
+
+(*
+let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
+*)
+
+Printf.printf "z is %s\n" (Z.format "x" z) 
+
+(*
+let s = Z.to_bits x in
+let ds = Message.hex_of_string (Message.strrev s) in 
 let () = Printf.printf "ds is %s\n" ds in
-
 let result = encode_base58 x  in
-(*let result2 = Core.Std.String.of_char_list result in *)
-
 Printf.printf "whoot %s\n" result
+*)
 
+
+(*let result2 = Core.Std.String.of_char_list result in *)
 (* rather than constructing a list we should be generating a string *)
 
 
