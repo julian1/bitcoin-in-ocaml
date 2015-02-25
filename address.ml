@@ -44,7 +44,6 @@ let string_of_hex s =
     let () = Printf.printf "x %d, y %d\n" x y in
     let () = Printf.printf "here %d\n" ( x lsl 4 + y)  in
     *)
-    (* let x, y = hex_of_char s.[i] in *)
     Buffer.add_char buf @@ char_of_int (x lsl 4 + y) ;
   done;
   Buffer.contents buf
@@ -54,7 +53,7 @@ let x = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
 let () = Printf.printf "original string %s\n" x in
 let y = string_of_hex x in 
 let () = Printf.printf "hex_of_string   %s\n" (Message.hex_of_string y) in
-let z = Z.of_bits (Message.strrev y) in
+let z = Z.of_bits (Core.Core_string.rev y) in
 
 (*
 let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
