@@ -1,11 +1,11 @@
 
-(* corebuild  -package zarith,sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *) 
+(* corebuild  -package zarith,sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
 
 (*
    code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
    x = convert_bytes_to_big_integer(hash_result)
    output_string = ""
-   while(x > 0) 
+   while(x > 0)
        {
            (x, remainder) = divide(x, 58)
            output_string.append(code_string[remainder])
@@ -20,30 +20,40 @@ fold can wo
 - actually it's not a fold over the data it's a fold while a condition is true
 - and it needs the value and acc and boolean
 
+  should we do more core hoisting - eg. zero and value of 58 here?
 *)
 
-let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"  
-let _58 = Z.of_int 58 
-let zero = Z.zero
+let encode_base58 value =
+  let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
+  let rec f div acc =
+    if Z.gt div Z.zero then
+      let div1, rem = Z.div_rem div (Z.of_int 58) in
+      f div1 (code_string.[Z.to_int rem]::acc)
+    else
+      acc
+  in
+  Core.Std.String.of_char_list (f value [])
 
+(* ok if it's a hex string how do we convert back to a string buffer??? 
+    It's easy to tack on "\x0\x0" to the front.
+  it would be better
 
-let f div = 
-	let div1, rem = Z.div_rem div _58 in
-	div1, code_string.[ Z.to_int rem]
+  This cannot be done, with a numerical interpretation. so we have to use the
+  buffer.
 
-let rec ff div acc =
-  if Z.gt div zero then
-    let div, c = f div in
-    ff div (c::acc) 
-  else
-    acc
+  string |> hex_of_string |> Z.of_string     (which is bad)
 
+  string_of_bighex ...   we want this. 
+  
+  should be easy though... it's just scanning the bytes, and setting them.
+  unless Z can already do it.
+*)
 
-let x = Z.of_string "0xc1a235aafbb6fa1e954a68b872d19611da0c7dc9"   
-let result = ff x [] in
-let result2 = Core.Std.String.of_char_list result in
+let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9"
+let result = encode_base58 x  in
+(*let result2 = Core.Std.String.of_char_list result in *)
 
-Printf.printf "whoot %s\n" result2
+Printf.printf "whoot %s\n" result
 
 (* rather than constructing a list we should be generating a string *)
 
@@ -58,8 +68,8 @@ Printf.printf "whoot\n"
 in
 
 let () = Printf.printf "whoot %c\n" c in
-let div, c = f div in 
-Printf.printf "whoot %c\n" c 
+let div, c = f div in
+Printf.printf "whoot %c\n" c
 
 *)
 
