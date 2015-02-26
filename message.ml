@@ -139,7 +139,10 @@ let decodeHash32 s pos =
   a, strrev b
 
 (* hashing *)
-let sha256 s = s |> Sha256.string |> Sha256.to_bin
+(* let sha256 s = s |> Sha256.string |> Sha256.to_bin *)
+let sha256 (s:string) = Cryptokit.hash_string (Cryptokit.Hash.sha256 ()) s
+let ripemd160 (s:string) = Cryptokit.hash_string (Cryptokit.Hash.ripemd160()) s
+
 let sha256d s = s |> sha256 |> sha256
 let checksum s = s |> sha256d |> fun x -> dec x 0 4
 
