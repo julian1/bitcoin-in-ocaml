@@ -8,7 +8,7 @@
 *)
 
 
-let encode_base58 (value: string ) =
+let base58_of_string (value: string ) =
   (* TODO maybe replace list concat with Buffer for speed. 
   - we only need the Z type for arbitrary precision division/remainder
   might be able to implement ourselves in base 256. *)
@@ -20,17 +20,16 @@ let encode_base58 (value: string ) =
     else
       acc
   in
-  let rec zero_pad pos value acc =
-    if value.[pos] == char_of_int 0 then
-      zero_pad (pos+1) value (code_string.[0]::acc ) 
+  let rec zero_pad pos s acc =
+    if s.[pos] == char_of_int 0 then
+      zero_pad (pos+1) s (code_string.[0]::acc) 
     else
       acc
   in
-
-  let z = Z.of_bits (Core.Core_string.rev value) in 
-  let lst = f z [] in
-  let lst = zero_pad 0 value lst in
-  Core.Std.String.of_char_list lst 
+  Z.of_bits (Core.Core_string.rev value) 
+    |> (fun z -> f z []) 
+    |> zero_pad 0 value 
+    |> Core.Std.String.of_char_list 
 
 
 let int_of_hex (c : char) =
@@ -57,21 +56,15 @@ let string_of_hex (s: string) =
 
 
 let btc_address_of_hash160 (a: string) =
-  (*let x = "\x00" ^ a in 
-    we add a zero to the front ...
-  *)
-
-  let () = Printf.printf "size %d\n" (Message.strlen a) in
   let a = "\x00" ^ a in 
-  let () = Printf.printf "size %d\n" (Message.strlen a) in
   let checksum = Message.checksum2 a in
-  encode_base58 (a ^ checksum)
+  base58_of_string (a ^ checksum)
 
 
 (* do we want a utils module with some of this stuff ? 
   ok, but we haven't got a one at the front of either of them...
 
-  would seem to be a bug with the encode_base58 thing...
+  would seem to be a bug with the base58_of_string thing...
 *)
 
 let s = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
