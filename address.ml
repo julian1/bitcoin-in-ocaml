@@ -60,5 +60,15 @@ let () = Printf.printf "string %s\n" s in
 let s1 = string_of_hex s in
 Printf.printf "encoded %s\n" @@ btc_address_of_hash160 s1
 
+let s = "30440220552e5d7a1ba2d3717f99ceea8a8b4f0caa99cd22a78cd66742a4bb25ede3e9bf02202bc116fb6d8169980b0a87b593f8b59b6430726f3ee85686ddf868c4a3c01a0001" in
+let s = "030b7b19a00036b102336b53d473ab2c5e516bb5e7e668ceed799a711a3095fd97" in
+let s = string_of_hex s in
+let s = Message.sha256 s in 
+let s = Message.ripemd160 s in 
+let s = btc_address_of_hash160 s in
+Printf.printf "encoded %s\n" s 
+
+
+
 
 
