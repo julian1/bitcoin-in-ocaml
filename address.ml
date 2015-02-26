@@ -20,8 +20,17 @@ let encode_base58 (value: string ) =
     else
       acc
   in
-  let value = Z.of_bits (Core.Core_string.rev value) in
-  Core.Std.String.of_char_list (f value [])
+  let rec zero_pad pos value acc =
+    if value.[pos] == char_of_int 0 then
+      zero_pad (pos+1) value (code_string.[0]::acc ) 
+    else
+      acc
+  in
+
+  let z = Z.of_bits (Core.Core_string.rev value) in 
+  let lst = f z [] in
+  let lst = zero_pad 0 value lst in
+  Core.Std.String.of_char_list lst 
 
 
 let int_of_hex (c : char) =
@@ -48,28 +57,33 @@ let string_of_hex (s: string) =
 
 
 let btc_address_of_hash160 (a: string) =
-  let x = "\x00" ^ a in
-  let checksum = Message.checksum2 x in
-  encode_base58 (x ^ checksum)
+  (*let x = "\x00" ^ a in 
+    we add a zero to the front ...
+  *)
+
+  let () = Printf.printf "size %d\n" (Message.strlen a) in
+  let a = "\x00" ^ a in 
+  let () = Printf.printf "size %d\n" (Message.strlen a) in
+  let checksum = Message.checksum2 a in
+  encode_base58 (a ^ checksum)
 
 
 (* do we want a utils module with some of this stuff ? 
-
   ok, but we haven't got a one at the front of either of them...
+
+  would seem to be a bug with the encode_base58 thing...
 *)
 
 let s = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
-let () = Printf.printf "string %s\n" s in
-let s1 = string_of_hex s in
-Printf.printf "encoded %s\n" @@ btc_address_of_hash160 s1
+let s = string_of_hex s in
+Printf.printf "encoded %s\n" @@ btc_address_of_hash160 s
 
-let s = "30440220552e5d7a1ba2d3717f99ceea8a8b4f0caa99cd22a78cd66742a4bb25ede3e9bf02202bc116fb6d8169980b0a87b593f8b59b6430726f3ee85686ddf868c4a3c01a0001" in
 let s = "030b7b19a00036b102336b53d473ab2c5e516bb5e7e668ceed799a711a3095fd97" in
 let s = string_of_hex s in
 let s = Message.sha256 s in 
 let s = Message.ripemd160 s in 
 let s = btc_address_of_hash160 s in
-Printf.printf "encoded %s\n" s 
+Printf.printf "encoded %s %d\n" s (Message.strlen s)
 
 
 
