@@ -10,12 +10,8 @@
 *)
 
 
-(* - this function probably ought to take a string as input
-to encapsulate all teh Z handling internally
-  - and the list concat is horrible
-*)
 let encode_base58 (value: string ) =
-  let value = Z.of_bits (Core.Core_string.rev value) in
+  (* TODO maybe replace list concat with Buffer for speed *)
   let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
   let rec f div acc =
     if Z.gt div Z.zero then
@@ -24,6 +20,7 @@ let encode_base58 (value: string ) =
     else
       acc
   in
+  let value = Z.of_bits (Core.Core_string.rev value) in
   Core.Std.String.of_char_list (f value [])
 
 
@@ -37,8 +34,8 @@ let int_of_hex (c : char) =
     10 + c1 - (int_of_char 'a')
 
 
-(* TODO change name hex_of_binary *)
-let string_of_hex s =
+let string_of_hex (s: string) =
+  (* TODO perhaps rename binary_of_hex *)
   let n = String.length s in
   let buf = Buffer.create (n/2) in
   for i = 0 to n/2-1 do
@@ -49,53 +46,19 @@ let string_of_hex s =
   done;
   Buffer.contents buf
 
-let encode_bitcoin_address (x: string) =
-  let y = "\x00" ^ x in
-  let checksum = Message.checksum2 y in
-  let result = encode_base58 (y ^ checksum) in
+
+let encode_bitcoin_address (a: string) =
+  let x = "\x00" ^ a in
+  let checksum = Message.checksum2 x in
+  let result = encode_base58 (x ^ checksum) in
   result
 
-
+(* do we want a utils module with some of this stuff ? *)
 
 let s = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
 let () = Printf.printf "string %s\n" s in
 let s1 = string_of_hex s in
-Printf.printf "z is %s\n" @@ encode_bitcoin_address s1
-
-
-
-(*
-let x = Z.of_string_base 16 "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
-*)
-
-
-(*
-let s = Z.to_bits x in
-let ds = Message.hex_of_string (Message.strrev s) in
-let () = Printf.printf "ds is %s\n" ds in
-let result = encode_base58 x  in
-Printf.printf "whoot %s\n" result
-*)
-
-
-(*let result2 = Core.Std.String.of_char_list result in *)
-(* rather than constructing a list we should be generating a string *)
-
-
-(*
-Printf.printf "whoot\n"
-*)
-
-
-(*
-
-in
-
-let () = Printf.printf "whoot %c\n" c in
-let div, c = f div in
-Printf.printf "whoot %c\n" c
-
-*)
+Printf.printf "encoded %s\n" @@ encode_bitcoin_address s1
 
 
 
