@@ -1,9 +1,10 @@
 
-(* corebuild  -package zarith,sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
+(* corebuild  -package cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
 
 (* 
   what's next?
     - encode the public key... to show all tx inputs and outputs for pay to script. if bytes length is correct.
+    - should change the format tx 
     - then do script engine.
 *)
 
@@ -67,18 +68,18 @@ let btc_address_of_hash160 (a: string) =
   would seem to be a bug with the base58_of_string thing...
 *)
 
+
+(* this should be held in a test *)
+
 let s = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
 let s = string_of_hex s in
 Printf.printf "encoded %s\n" @@ btc_address_of_hash160 s
 
-let s = "030b7b19a00036b102336b53d473ab2c5e516bb5e7e668ceed799a711a3095fd97" in
-let s = string_of_hex s in
-let s = Message.sha256 s in 
-let s = Message.ripemd160 s in 
-let s = btc_address_of_hash160 s in
+let s = "030b7b19a00036b102336b53d473ab2c5e516bb5e7e668ceed799a711a3095fd97" 
+  |> string_of_hex 
+  |> Message.sha256 
+  |> Message.ripemd160 
+  |> btc_address_of_hash160 in
 Printf.printf "encoded %s %d\n" s (Message.strlen s)
-
-
-
 
 
