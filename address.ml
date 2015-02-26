@@ -50,8 +50,8 @@ let string_of_hex (s: string) =
 let encode_bitcoin_address (a: string) =
   let x = "\x00" ^ a in
   let checksum = Message.checksum2 x in
-  let result = encode_base58 (x ^ checksum) in
-  result
+  encode_base58 (x ^ checksum)
+
 
 (* do we want a utils module with some of this stuff ? *)
 
