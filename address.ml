@@ -1,17 +1,17 @@
 
 (* corebuild  -package zarith,sha,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
 
-(* we only need the Z thing for the division/remainder action
-  and we might be able to implement it ourselves.  otherwise we need
-  to write conversion actions.
-
-  we've already got the sha stuff, but we need hex_to_binary to be able
-  to work a bit more easily.
+(* 
+  what's next?
+    - encode the public key... to show all tx inputs and outputs for pay to script. if bytes length is correct.
+    - then do script engine.
 *)
 
 
 let encode_base58 (value: string ) =
-  (* TODO maybe replace list concat with Buffer for speed *)
+  (* TODO maybe replace list concat with Buffer for speed. 
+  - we only need the Z type for arbitrary precision division/remainder
+  might be able to implement ourselves in base 256. *)
   let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
   let rec f div acc =
     if Z.gt div Z.zero then
@@ -47,7 +47,7 @@ let string_of_hex (s: string) =
   Buffer.contents buf
 
 
-let encode_bitcoin_address (a: string) =
+let btc_address_of_hash160 (a: string) =
   let x = "\x00" ^ a in
   let checksum = Message.checksum2 x in
   encode_base58 (x ^ checksum)
@@ -58,7 +58,7 @@ let encode_bitcoin_address (a: string) =
 let s = "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
 let () = Printf.printf "string %s\n" s in
 let s1 = string_of_hex s in
-Printf.printf "encoded %s\n" @@ encode_bitcoin_address s1
+Printf.printf "encoded %s\n" @@ btc_address_of_hash160 s1
 
 
 
