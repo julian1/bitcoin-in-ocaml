@@ -130,10 +130,10 @@ let dec64_ s start bytes =
 
 let decodeInteger64 s pos = 8+pos, dec64_ s pos 8
 
-(* returning position - should obsolete *)
+(* for strings returning position - should obsolete *)
 let decs_ s pos n = n+pos, strsub s pos n
 
-(* 256 bit hash *)
+(* 256 bit hash - should make general purpose *)
 let decodeHash32 s pos = 
   let (a,b) = decs_ s pos 32 in
   a, strrev b

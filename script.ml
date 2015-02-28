@@ -112,9 +112,9 @@ let formatTx2 tx =
   ^ "\n " ^ outpus (* formatOutputs tx.outputs *)
   ^ "\n lockTime " ^ string_of_int tx.lockTime
 
-(*
+
 let () = Printf.printf "%s\n" @@ formatTx2 tx
-*)
+
 
 (*
 let tokens = List.rev @@ decode_script output.pkScript
@@ -122,8 +122,6 @@ let () = Printf.printf "length %d\n" (List.length tokens)
 let () = List.iter (fun x -> Printf.printf "%s " (format_token x)) tokens
 let () = Printf.printf "\n"
 *)
-
-
 
 
 
