@@ -1,4 +1,10 @@
 
+(* ok, to verify the block, we have to be able to compute the hash, and 
+	check it's deep enough.	
+	and traces from genesis
+*)
+
+
 let decodeBlock (s:string) pos = 
 
 	let pos, version = Message.decodeInteger32 s pos in 
@@ -13,7 +19,10 @@ let decodeBlock (s:string) pos =
 	let pos, tx = Message.decodeTx s pos in 
 	let pos, tx2 = Message.decodeTx s pos in 
 
- 
+	
+
+	let () = Printf.printf "hash %s\n" (Message.strsub s 0 80 |> Message.sha256d  |> Message.strrev |> Message.hex_of_string ) in
+
 	let () = Printf.printf "version  %x\n" version in
 	let () = Printf.printf "previous %s\n" (Message.hex_of_string previous) in
 	let () = Printf.printf "merkle   %s\n" (Message.hex_of_string merkle) in
