@@ -3,9 +3,12 @@
 
 (* 
   what's next?
+	- decode blocks, leveldb interface 
     - encode the public key... to show all tx inputs and outputs for pay to script. if bytes length is correct.
     - should change the format tx 
-    - then do script engine.
+
+    - do script engine.
+    - need secp256k1 in eec. or somewhere.  
 *)
 
 
