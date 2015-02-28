@@ -21,7 +21,7 @@ let decodeBlock (s:string) pos =
 
 	
 
-	let () = Printf.printf "hash %s\n" (Message.strsub s 0 80 |> Message.sha256d  |> Message.strrev |> Message.hex_of_string ) in
+	let () = Printf.printf "hash     %s\n" (Message.strsub s 0 80 |> Message.sha256d  |> Message.strrev |> Message.hex_of_string ) in
 
 	let () = Printf.printf "version  %x\n" version in
 	let () = Printf.printf "previous %s\n" (Message.hex_of_string previous) in
@@ -40,7 +40,7 @@ let decodeBlock (s:string) pos =
 
 
 let block =
-  let in_channel = open_in "blocks/8771ea1a82adb1b775ee80d50d44aa2a21b1056bd9ddc0553f4c629c1ca78f77" in
+  let in_channel = open_in "blocks/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in
   let s = Core.In_channel.input_all in_channel in
   let () = close_in in_channel in
   let _, block = decodeBlock s 0 in

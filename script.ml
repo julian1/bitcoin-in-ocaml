@@ -104,8 +104,8 @@ let formatTx2 tx =
    let inputs = format_scripts script_inputs in 
    let outpus = format_scripts script_outputs in 
 
-  " hash " ^ hex_of_string tx.hash 
-  ^ "\n version " ^ string_of_int tx.version 
+  (* " hash " ^ hex_of_string tx.hash  *)
+  "\n version " ^ string_of_int tx.version 
   ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
   ^ "\n " ^ inputs (* formatInputs tx.inputs *)
   ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )

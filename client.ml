@@ -91,7 +91,8 @@ let handleMessage header payload outchan =
 
 
   | "block" -> 
-        let hash = Message.sha256d payload |> strrev |> hex_of_string in
+        (* let hash = Message.sha256d payload |> strrev |> hex_of_string in *)
+	      let hash = (Message.strsub payload 0 80 |> Message.sha256d  |> Message.strrev |> Message.hex_of_string) in
         Lwt_io.write_line Lwt_io.stdout ( "* got block " ^ hash ^ "\n" )
       >>= fun _ -> 
         let filename =  "./blocks/" ^ hash in
