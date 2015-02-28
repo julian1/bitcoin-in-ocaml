@@ -10,6 +10,9 @@ let decodeBlock (s:string) pos =
 
 	let pos, tx_count = Message.decodeVarInt s pos in 
  
+	let pos, tx = Message.decodeTx s pos in 
+	let pos, tx2 = Message.decodeTx s pos in 
+
  
 	let () = Printf.printf "version  %x\n" version in
 	let () = Printf.printf "previous %s\n" (Message.hex_of_string previous) in
@@ -19,6 +22,10 @@ let decodeBlock (s:string) pos =
 	let () = Printf.printf "nonce    %d\n" nonce in
 	
 	let () = Printf.printf "tx_count %d\n" tx_count in
+	
+	let () = Printf.printf "tx %s \n" ( Message.formatTx tx )in
+	let () = Printf.printf "tx2 %s \n" ( Message.formatTx tx2 )in
+
 
 	pos, ()
 

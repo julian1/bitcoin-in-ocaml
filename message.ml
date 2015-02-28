@@ -51,7 +51,7 @@ type tx_out =
 
 type tx = 
 { 
-  hash: string; 
+  (* hash: string; - hash is calculated not embedded *)
   version: int; 
   inputs: tx_in list ; 
   outputs: tx_out list; 
@@ -231,8 +231,11 @@ let decodeInv s pos =
 
 
 let decodeTx s pos =
-  let hash = sha256d s |> strrev in
-  let pos = 0 in
+	(* we can't do the hash here cause we don't know the tx length, when
+    it's embedded in a block
+   *)
+(*  let hash = sha256d s |> strrev in
+  let pos = 0 in *)
   let pos, version = decodeInteger32 s pos in 
 
   let decodeInput s pos = 
@@ -259,7 +262,7 @@ let decodeTx s pos =
   let pos, outputs = decodeOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { hash = hash; version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, { version = version; inputs = inputs; outputs = outputs; lockTime }
 
 
 
@@ -380,8 +383,8 @@ let formatOutputs outputs =
   String.concat "\n" @@ List.map formatOutput outputs
 
 let formatTx tx = 
-  " hash " ^ hex_of_string tx.hash 
-  ^ "\n version " ^ string_of_int tx.version 
+  (* " hash " ^ hex_of_string tx.hash  *)
+  "\n version " ^ string_of_int tx.version 
   ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
   ^ "\n" ^ formatInputs tx.inputs
   ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
