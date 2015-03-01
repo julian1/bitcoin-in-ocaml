@@ -30,8 +30,8 @@ let decode_der_signature s =
 	let () = Printf.printf "s_length %d\n" s_length in
 	let pos, s_ = Message.decs_ s pos s_length in 
 	let () = Printf.printf "s_ %s\n" (Message.hex_of_string s_) in
-	let pos, unknown = Message.decodeInteger8 s pos in 
-	let () = Printf.printf "unknown %d\n" unknown in 
+	let pos, sigType = Message.decodeInteger8 s pos in 
+	let () = Printf.printf "sigType %d\n" sigType in 
 	r ^ s_
 
 		
@@ -39,8 +39,11 @@ let signature = decode_der_signature signature
 
 (* is this der encoded ?? *)
 let public_key1 = Address.string_of_hex "030b7b19a00036b102336b53d473ab2c5e516bb5e7e668ceed799a711a3095fd97"  
+let () = Printf.printf "public_key length %d\n" (Message.strlen public_key1 )
+
 
 let public_key = Microecc.decompress public_key1 
+let () = Printf.printf "decompressed public_key length %d\n" (Message.strlen public_key )
 
 (* let () = print_endline ("decompressed " ^ Message.hex_of_string public_key ) *)
 
