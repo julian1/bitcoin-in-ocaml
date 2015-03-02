@@ -48,7 +48,7 @@ type script_token =
 ;;
 
 
-type tx_in=
+type tx_in =
 {
   previous : string ;
   index : int ; 

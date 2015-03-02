@@ -74,6 +74,7 @@ let pubkey    = match tx.inputs with { script } ::_ -> match List.nth script 1 w
 let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
 let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey 
 
+(* set input scripts to empty *)
 let tx_copy (tx: Message.tx )  = 
 	let clear_input_script input = 
 		{ (input : Message.tx_in) with
