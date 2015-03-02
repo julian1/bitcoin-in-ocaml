@@ -65,8 +65,6 @@ let _ = match result with
   | true -> print_endline "PASSED"; true
   | false -> print_endline "FAILED: Signature verification failed"; false
 
-
-
 let tx  =
   let in_channel = open_in "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
   let s = Core.In_channel.input_all in_channel in
@@ -74,11 +72,20 @@ let tx  =
   let _, tx = Message.decodeTx s 0 in
   tx
 
-
 let () = Printf.printf "%s\n" @@ Message.formatTx tx
 
+(* descructuring is hard
+let signature = List.hd @@ (List.hd tx.inputs ) .script  
+*)
+let signature = match tx.inputs with 
+	{ script } ::_ -> match List.hd script with Bytes s -> s
+
+let pubkey = match tx.inputs with 
+	{ script } ::_ -> match List.nth script 1 with Bytes s -> s
 
 
+let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
+let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey 
 
 
 
