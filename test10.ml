@@ -61,9 +61,24 @@ let hash = (String.make 31 '\x00') ^ "\x01";;
 let result = Microecc.verify public_key hash signature  
 
 
-match result with
+let _ = match result with
   | true -> print_endline "PASSED"; true
   | false -> print_endline "FAILED: Signature verification failed"; false
-;
+
+
+
+let tx  =
+  let in_channel = open_in "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
+  let s = Core.In_channel.input_all in_channel in
+  let () = close_in in_channel in
+  let _, tx = Message.decodeTx s 0 in
+  tx
+
+
+let () = Printf.printf "%s\n" @@ Message.formatTx tx
+
+
+
+
 
 

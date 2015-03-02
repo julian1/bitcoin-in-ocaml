@@ -73,7 +73,7 @@ let handleMessage header payload outchan =
 
   | "tx" -> ( 
       let _, tx = decodeTx payload 0 in 
-      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx2 tx )
+      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx tx )
       (* >>= fun _ -> 
         let filename =  "./dumps/" ^ (hex_of_string tx.hash) in
         Lwt_unix.openfile filename [O_WRONLY;O_CREAT;O_TRUNC] 0o644
@@ -153,10 +153,10 @@ let addr ~host ~port =
 
 let run () =  
   Lwt_main.run (
-   (*  addr ~host: "50.68.44.128" ~port: 8333   was good, no more *)
+     addr ~host: "50.68.44.128" ~port: 8333   (* was good, no more *)
     (*    149.210.187.10  *)
-     (* addr ~host: "173.69.49.106" ~port: 8333   no good *)
-     addr ~host: "198.52.212.235" ~port: 8333  (* good, not anymore *)
+      (* addr ~host: "173.69.49.106" ~port: 8333 *) (* no good *)
+     (* addr ~host: "198.52.212.235" ~port: 8333 *) (* good, not anymore *)
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
     (* connect *)
