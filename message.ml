@@ -1,6 +1,8 @@
 (*
   TODO
 
+  This is really not the right file...
+
 -	get rid of caml case for function. eg int_of_string not intOfString.
   - need to hex functions - to easily compare the data .
    -  can only use printf %x with integers

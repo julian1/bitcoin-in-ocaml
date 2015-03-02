@@ -40,7 +40,7 @@ let decodeBlock (s:string) pos =
 
 
 let block =
-  let in_channel = open_in "blocks/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in
+  let in_channel = open_in "test_data/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in
   let s = Core.In_channel.input_all in_channel in
   let () = close_in in_channel in
   let _, block = decodeBlock s 0 in

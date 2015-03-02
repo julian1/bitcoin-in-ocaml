@@ -3,7 +3,6 @@ open Core
 open Message
 
 
-
 type t =
   | Bytes of string
   | Unknown of int
@@ -70,40 +69,27 @@ let format_script tokens =
 (* should we be decoding the script, in the tx decoding entirely? *)  
 
 let tx  =
-  let in_channel = open_in "dumps/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
+  let in_channel = open_in "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
   let s = Core.In_channel.input_all in_channel in
   let () = close_in in_channel in
+
+  (* Decoding the tx ought to decode the script as well 
+    - perhaps not, should we also decode the signature der as well... 
+      Do we do it all at once?
+  *)
   let _, tx = decodeTx s 0 in
   tx
-(*
-  tx.inputs, 
-  tx.outputs 
-*)
 
-(*
-let inputs, outputs = get_outputs ()
-
-let f (script: string ) = 
-  let tokens = decode_script script in
-  Printf.printf "%s\n" (format_script tokens )
-
-let () = List.iter (fun x ->  f (x : tx_in ).script ) inputs 
-let () = List.iter (fun x ->  f (x : tx_out ).script ) outputs 
-*)
 
 
 let formatTx2 tx = 
-
   let format_scripts script_inputs = 
     let formatted_inputs = List.map (fun x -> x |> decode_script |> format_script ) script_inputs in
     String.concat "\n"  formatted_inputs in
-
-    let script_inputs = List.map (fun x -> (x:tx_in).script) tx.inputs in
-    let script_outputs = List.map (fun x -> (x:tx_out).script) tx.outputs in
-
-   let inputs = format_scripts script_inputs in 
-   let outpus = format_scripts script_outputs in 
-
+	let script_inputs = List.map (fun x -> (x:tx_in).script) tx.inputs in
+  let script_outputs = List.map (fun x -> (x:tx_out).script) tx.outputs in
+  let inputs = format_scripts script_inputs in 
+  let outpus = format_scripts script_outputs in 
   (* " hash " ^ hex_of_string tx.hash  *)
   "\n version " ^ string_of_int tx.version 
   ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
@@ -123,6 +109,22 @@ let () = List.iter (fun x -> Printf.printf "%s " (format_token x)) tokens
 let () = Printf.printf "\n"
 *)
 
+
+(*
+  tx.inputs, 
+  tx.outputs 
+*)
+
+(*
+let inputs, outputs = get_outputs ()
+
+let f (script: string ) = 
+  let tokens = decode_script script in
+  Printf.printf "%s\n" (format_script tokens )
+
+let () = List.iter (fun x ->  f (x : tx_in ).script ) inputs 
+let () = List.iter (fun x ->  f (x : tx_out ).script ) outputs 
+*)
 
 
 

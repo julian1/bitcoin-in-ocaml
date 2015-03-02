@@ -1,6 +1,5 @@
 
 (* corebuild  -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax test10.byte
-  
   do we need to tell it the curve? 
  *) 
 
@@ -34,7 +33,12 @@ let decode_der_signature s =
 	let () = Printf.printf "sigType %d\n" sigType in 
 	r ^ s_
 
-		
+	
+(* so we need to decode the real transaction 
+	and then recode it...
+*)
+
+	
 let signature = decode_der_signature signature
 
 (* is this der encoded ?? *)
@@ -61,3 +65,5 @@ match result with
   | true -> print_endline "PASSED"; true
   | false -> print_endline "FAILED: Signature verification failed"; false
 ;
+
+
