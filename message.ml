@@ -40,6 +40,7 @@ type tx_in=
 {
   previous : string ;
   index : int ; 
+  (* should be a variant either a string ... or a decoded list of tokens? *)
   script : string; 
   sequence : int ; 
 }
@@ -245,6 +246,8 @@ let decodeTx s pos =
     let pos, index = decodeInteger32 s pos in
     let pos, scriptLen = decodeVarInt s pos in
     let pos, script = decs_ s pos scriptLen in
+    (* should we decode the script here as well? *)
+
     let pos, sequence = decodeInteger32 s pos in
     pos, { previous = previous; index = index; script = script ; sequence = sequence; }
   in
