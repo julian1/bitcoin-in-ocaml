@@ -62,7 +62,8 @@ type tx_in=
 type tx_out =
 {
   value : Int64.t ;	
-  script : string;
+  script: script_token list ; 
+  (* script : string; *)
 }
 
 type tx = 
@@ -322,7 +323,7 @@ let decodeTx s pos =
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
     let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = script; }  
+    pos, { value = value; script = decode_script script; }  
   in
   let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
   let pos, outputsCount = decodeVarInt s pos in
@@ -443,7 +444,7 @@ let formatInputs inputs =
 
 let formatOutput output = String.concat "" [
   "  value: " ^ Int64.to_string output.value
-  ^ "\n  script: " ^ hex_of_string output.script
+  ^ "\n  script: " ^ format_script output.script 
 ] 
 
 let formatOutputs outputs = 
