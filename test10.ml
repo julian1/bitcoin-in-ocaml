@@ -38,32 +38,26 @@ let decode_der_signature s =
 	and then recode it...
 *)
 
-	
+(*	
 let signature = decode_der_signature signature
 
 (* is this der encoded ?? *)
 let public_key1 = Address.string_of_hex "030b7b19a00036b102336b53d473ab2c5e516bb5e7e668ceed799a711a3095fd97"  
 let () = Printf.printf "public_key length %d\n" (Message.strlen public_key1 )
 
-
 let public_key = Microecc.decompress public_key1 
 let () = Printf.printf "decompressed public_key length %d\n" (Message.strlen public_key )
 
 (* let () = print_endline ("decompressed " ^ Message.hex_of_string public_key ) *)
 
-(*
-(* perhaps the hash is the tx *)
-let hash = Address.string_of_hex "d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" (* "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" *)
-*)
-
 let hash = (String.make 31 '\x00') ^ "\x01";;
 
 let result = Microecc.verify public_key hash signature  
 
-
 let _ = match result with
   | true -> print_endline "PASSED"; true
   | false -> print_endline "FAILED: Signature verification failed"; false
+*)
 
 let tx  =
   let in_channel = open_in "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
