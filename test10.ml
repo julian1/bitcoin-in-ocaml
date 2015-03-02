@@ -9,8 +9,8 @@
   02 20 2bc116fb6d8169980b0a87b593f8b59b6430726f3ee85686ddf868c4a3c01a0001
 *)
 
-let signature = Address.string_of_hex "30440220552e5d7a1ba2d3717f99ceea8a8b4f0caa99cd22a78cd66742a4bb25ede3e9bf02202bc116fb6d8169980b0a87b593f8b59b6430726f3ee85686ddf868c4a3c01a0001"
-
+(* let signature = Address.string_of_hex "30440220552e5d7a1ba2d3717f99ceea8a8b4f0caa99cd22a78cd66742a4bb25ede3e9bf02202bc116fb6d8169980b0a87b593f8b59b6430726f3ee85686ddf868c4a3c01a0001"
+*)
 let decode_der_signature s =
 	let () = Printf.printf "real length %d \n" (Message.strlen s) in
 	let pos = 0 in
@@ -68,18 +68,33 @@ let tx  =
 
 let () = Printf.printf "%s\n" @@ Message.formatTx tx
 
-(* descructuring is hard
-let signature = List.hd @@ (List.hd tx.inputs ) .script  
-*)
-let signature = match tx.inputs with 
-	{ script } ::_ -> match List.hd script with Bytes s -> s
-
-let pubkey = match tx.inputs with 
-	{ script } ::_ -> match List.nth script 1 with Bytes s -> s
-
+let signature = match tx.inputs with { script } ::_ -> match List.hd script with Bytes s -> s
+let pubkey    = match tx.inputs with { script } ::_ -> match List.nth script 1 with Bytes s -> s
 
 let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
 let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey 
 
+let tx_copy (tx: Message.tx )  = 
+	let clear_input_script input = 
+		{ (input : Message.tx_in) with
+			script = []	
+		} in
+	{ tx with inputs = List.map clear_input_script tx.inputs }
+
+
+
+let () = Printf.printf "%s\n" @@ Message.formatTx (tx_copy tx )
+
+(*
+	{ tx with 
+	(* inputs is a list so this won't work, think we want to map tx.inputs *)
+	inputs = { tx.inputs with
+	  previous = : string ;
+	  index : int ; 
+	  script: script_token list ; 
+	  sequence : int ; 
+	}
+} 	
+*)
 
 
