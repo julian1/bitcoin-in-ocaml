@@ -366,6 +366,20 @@ let enc bytes value =
     char_of_int h
   )
 
+
+(* all right our encoding functions don't return a position 
+  which is odd. options are,
+  - use a list... and concat ... not as efficient as writing
+  a buffer. with pos in a monad.
+ 
+  we will have to evaluate substrings - in order to know size to encode them...
+  this makes it more complicated,
+  
+  this also means we can't just encode in a completely linear sequence with
+  a byte buffer.
+*)
+
+
 let encodeInteger8 value = enc 1 value
 let encodeInteger16 value = enc 2 value
 let encodeInteger32 value = enc 4 value
@@ -378,7 +392,17 @@ let enc64 bytes value =
 
 let encodeInteger64 value = enc64 8 value
 
+(* should do reverse if necessary *)
 let encodeString (h : string) = enc 1 (strlen h) ^ h
+
+
+let encodeTx (tx : tx ) =  
+  String.concat ""
+  [ encodeInteger32 tx.version ]
+
+
+
+
 
 (* should use a concat function, for string building *)
 let encodeAddress (h : ip_address) =

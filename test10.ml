@@ -39,6 +39,15 @@ let read_from_file filename =
 let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
 let _,tx = Message.decodeTx tx_s 0 
 
+let () = Printf.printf "org %s\n" @@ Message.hex_of_string tx_s
+
+let s = Message.encodeTx tx
+
+let () = Printf.printf "enc %s\n" @@ Message.hex_of_string s
+
+let () = exit 0
+
+
 
 let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" 
 let _, txprev = Message.decodeTx txprev_s 0 
@@ -84,8 +93,8 @@ let tx =
 
 let () = Printf.printf "%s\n" @@ Message.formatTx (tx )
 
+(* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
 
 
-
-
+let decoded_sig = decode_der_signature signature
 
