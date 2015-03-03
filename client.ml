@@ -71,11 +71,10 @@ let handleMessage header payload outchan =
       } in 
       Lwt_io.write outchan (header ^ payload )
 
-  | "tx" -> 
+  | "tx" -> ( 
       let _, tx = decodeTx payload 0 in 
-      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx2 tx )
-
-      >>= fun _ -> 
+      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n" ^ formatTx tx )
+      (* >>= fun _ -> 
         let filename =  "./dumps/" ^ (hex_of_string tx.hash) in
         Lwt_unix.openfile filename [O_WRONLY;O_CREAT;O_TRUNC] 0o644
       >>= fun fd ->  
@@ -87,7 +86,26 @@ let handleMessage header payload outchan =
       >>= fun _ ->  
         let result = Printf.sprintf "* closed file %d of %d written"  bytes_written header.length in
         Lwt_io.write_line Lwt_io.stdout result 
+	    *)	
+    )
 
+
+  | "block" -> 
+        (* let hash = Message.sha256d payload |> strrev |> hex_of_string in *)
+	      let hash = (Message.strsub payload 0 80 |> Message.sha256d  |> Message.strrev |> Message.hex_of_string) in
+        Lwt_io.write_line Lwt_io.stdout ( "* got block " ^ hash ^ "\n" )
+      >>= fun _ -> 
+        let filename =  "./blocks/" ^ hash in
+        Lwt_unix.openfile filename [O_WRONLY;O_CREAT;O_TRUNC] 0o644
+      >>= fun fd ->  
+        Lwt_io.write_line Lwt_io.stdout ( "* opening file '" ^ filename ^ "'" )
+      >>= fun _ ->  
+        Lwt_unix.write fd payload 0 header.length
+      >>= fun bytes_written ->  
+        Lwt_unix.close fd
+      >>= fun _ ->  
+        let result = Printf.sprintf "* %d of %d written, closing"  bytes_written header.length in
+        Lwt_io.write_line Lwt_io.stdout result 
 
 
   | _ -> 
@@ -135,10 +153,10 @@ let addr ~host ~port =
 
 let run () =  
   Lwt_main.run (
-     addr ~host: "50.68.44.128" ~port: 8333  
+     addr ~host: "50.68.44.128" ~port: 8333   (* was good, no more *)
     (*    149.210.187.10  *)
-     (* addr ~host: "173.69.49.106" ~port: 8333   no good *)
-    (* addr ~host: "198.52.212.235" ~port: 8333 *) (* good, not anymore *)
+      (* addr ~host: "173.69.49.106" ~port: 8333 *) (* no good *)
+     (* addr ~host: "198.52.212.235" ~port: 8333 *) (* good, not anymore *)
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
     (* connect *)
