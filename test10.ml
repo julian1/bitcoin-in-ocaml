@@ -59,8 +59,26 @@ let _ = match result with
   | false -> print_endline "FAILED: Signature verification failed"; false
 *)
 
+(*
+let s = Message.string_of_hex "01000000018342ce0075dc2691041e6ba1112f4eb5f9aba7d0686f360a6acfeabe2eb65070050000006b483045022100b2e60c33f327b84c6a5b706d29e4b50f66d78a314c4eb220856470a9e77cce36022038b5840c95771ab21d0f78203d9500a51cb398d166e6c440766926611924ab6d0121039533563a43f842e3654d47aa40e5b51a3c2f09ea4ddcafa3d9ec17b1d1f637bdffffffff02a3e24800000000001976a914616682f38955e166f392b378e85399abc366dacd88ac565eaf00000000001976a914a66d37c07cb676c164d6568c4c37567586d746dc88ac00000000"
+
+
+let hash = s |> Message.sha256d  |> Message.strrev |> Message.hex_of_string  in
+ Printf.printf "hash %s" hash
+
+let out_channel = open_out "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" in 
+let _ = Core.Out_channel.output_string out_channel s in  
+close_out out_channel 
+
+let _, tx = Message.decodeTx s 0 
+*)
+
+
+
+
 let tx  =
-  let in_channel = open_in "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
+  let in_channel = open_in "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" in
+(*  let in_channel = open_in "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in *)
   let s = Core.In_channel.input_all in_channel in
   let () = close_in in_channel in
   let _, tx = Message.decodeTx s 0 in
@@ -76,15 +94,25 @@ let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey
 
 (* set input scripts to empty *)
 let tx_copy (tx: Message.tx )  = 
-	let clear_input_script (input : Message.tx_in)= 
-		{ input  with
-			script = []	
-		} in
+	let clear_input_script (input : Message.tx_in) = 
+	{ input  with
+		script = []	
+	} in
 	{ tx with inputs = List.map clear_input_script tx.inputs }
 
 
 
 let () = Printf.printf "%s\n" @@ Message.formatTx (tx_copy tx )
+
+(* ok, hang on there are 3 outputs and 2 inputs 
+	i think we have to copy the output of txprev as the subscript.
+	something's wrong...
+
+	We do validation of txnew.
+	meaning that txnew (with it's outputs) is being signed.
+
+	the subscript comes from txprev
+*)
 
 (*
 	{ tx with 
