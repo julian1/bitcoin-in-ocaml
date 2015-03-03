@@ -76,31 +76,28 @@ let _, tx = Message.decodeTx s 0
 
 
 
-let load_tx filename =
-(*  let in_channel = open_in "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" in *)
-(*  let in_channel = open_in "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in *)
+let read_from_file filename =
 	let in_channel = open_in filename in
   let s = Core.In_channel.input_all in_channel in
   let () = close_in in_channel in
   s
-  (*let _, tx = Message.decodeTx s 0 in
-  tx *)
 
 
-let tx_s = load_tx "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
+let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
 let _,tx = Message.decodeTx tx_s 0 
 
 
-let txprev_s = load_tx "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" 
+let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" 
 let _,txprev = Message.decodeTx txprev_s 0 
 
 
 
+(* let () = Printf.printf "%s\n" @@ Message.formatTx tx *)
 
+(* must be an easier way to do this *)
+let signature1 =  match (List.hd tx.inputs ) with { script } -> match List.hd script with Bytes s -> s
 
-let () = Printf.printf "%s\n" @@ Message.formatTx tx
-
-let signature = match tx.inputs with { script } ::_ -> match List.hd script with Bytes s -> s
+let signature = match tx.inputs with { script } ::_ -> match List.hd script with Bytes s -> s 
 let pubkey    = match tx.inputs with { script } ::_ -> match List.nth script 1 with Bytes s -> s
 
 let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
