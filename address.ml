@@ -36,28 +36,6 @@ let base58_of_string (value: string ) =
     |> Core.Std.String.of_char_list 
 
 
-let int_of_hex (c : char) =
-  (* change name int_of_hex_char ? *)
-  (* straight pattern match might be simpler/faster *)
-  let c1 = int_of_char c in
-  if c >= '0' && c <= '9' then
-    c1 - (int_of_char '0')
-  else
-    10 + c1 - (int_of_char 'a')
-
-
-let string_of_hex (s: string) =
-  (* TODO perhaps rename binary_of_hex *)
-  let n = String.length s in
-  let buf = Buffer.create (n/2) in
-  for i = 0 to n/2-1 do
-    let i2 = i * 2 in
-    let x = int_of_hex s.[i2] in
-    let y = int_of_hex s.[i2+1] in
-    Buffer.add_char buf @@ char_of_int (x lsl 4 + y)
-  done;
-  Buffer.contents buf
-
 
 let btc_address_of_hash160 (a: string) =
   let a = "\x00" ^ a in 

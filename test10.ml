@@ -94,14 +94,16 @@ let _,txprev = Message.decodeTx txprev_s 0
 
 (* let () = Printf.printf "%s\n" @@ Message.formatTx tx *)
 
-(* must be an easier way to do this *)
-let signature1 =  match (List.hd tx.inputs ) with { script } -> match List.hd script with Bytes s -> s
+(* must be an easier way to drill down into the scripts that we want *)
+let subscript = (List.hd txprev.outputs).script 
 
 let signature = match tx.inputs with { script } ::_ -> match List.hd script with Bytes s -> s 
 let pubkey    = match tx.inputs with { script } ::_ -> match List.nth script 1 with Bytes s -> s
 
 let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
 let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey 
+let () = Printf.printf "subscript %s\n" @@ Message.format_script subscript
+
 
 (* set input scripts to empty *)
 let tx_copy (tx: Message.tx )  = 
@@ -112,8 +114,19 @@ let tx_copy (tx: Message.tx )  =
 	{ tx with inputs = List.map clear_input_script tx.inputs }
 
 
+(* should be able to use mapi if we have it *)
 
-let () = Printf.printf "%s\n" @@ Message.formatTx (tx_copy tx )
+let tx = tx_copy tx
+
+let tx = 
+	let f index (value: Message.tx_in ) = 
+		if index == 0 then  { value with script = subscript; }  
+		else value 
+	in
+	{ tx with inputs = List.mapi f tx.inputs }  
+
+
+let () = Printf.printf "%s\n" @@ Message.formatTx (tx )
 
 (* ok, hang on there are 3 outputs and 2 inputs 
 	i think we have to copy the output of txprev as the subscript.
