@@ -60,7 +60,7 @@ let () = Printf.printf "subscript %s\n" @@ Message.format_script subscript
 
 
 (* set input scripts to empty *)
-let tx_copy (tx: Message.tx )  = 
+let tx_clear_inputs (tx: Message.tx ) = 
 	let clear_input_script (input : Message.tx_in) = 
 	{ input  with
 		script = []	
@@ -70,7 +70,9 @@ let tx_copy (tx: Message.tx )  =
 
 (* should be able to use mapi if we have it *)
 
-let tx = tx_copy tx
+let tx = tx_clear_inputs tx
+
+
 (* substitute input script, and clear others *)
 let tx = 
 	let f index (input: Message.tx_in ) = 
