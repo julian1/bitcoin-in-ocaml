@@ -48,6 +48,7 @@ type script_token =
 ;;
 
 
+(* change name tx_input *)
 type tx_in =
 {
   previous : string; (* 32 byte tx hash *)
@@ -291,7 +292,6 @@ let decode_script s =
           in
         let pos, bytes = decs_ s pos len in
         f pos (Bytes bytes::acc)
-
       else
         let op = match c with
         | 118 -> OP_DUP
@@ -304,6 +304,41 @@ let decode_script s =
     else pos, acc
   in let _, result = f 0 []
   in List.rev result
+
+
+
+(*
+  let rec f pos acc =
+    if pos < strlen s then
+      let pos, c = decodeInteger8 s pos in
+      (* let () = Printf.printf "whoot pos %d\n" pos in *)
+
+      if ( c >= 1 && c <= 78) then
+        let pos, len =
+          match c with
+            | 76 -> decodeInteger8 s pos
+            | 77 -> decodeInteger16 s pos
+            | 78 -> decodeInteger32 s pos
+            | _ -> pos, c
+          in
+        let pos, bytes = decs_ s pos len in
+        f pos (Bytes bytes::acc)
+      else
+        let op = match c with
+        | 118 -> OP_DUP
+        | 135 -> OP_EQUAL
+        | 136 -> OP_EQUALVERIFY
+        | 169 -> OP_HASH160
+        | 172 -> OP_CHECKSIG
+        | _ -> Unknown c
+        in f pos (op::acc)
+    else pos, acc
+  in let _, result = f 0 []
+  in List.rev result
+*)
+
+
+
 
 let format_token x =
   match x with
@@ -367,14 +402,14 @@ let enc bytes value =
   )
 
 
-(* all right our encoding functions don't return a position 
+(* all right our encoding functions don't return a position
   which is odd. options are,
   - use a list... and concat ... not as efficient as writing
   a buffer. with pos in a monad.
- 
+
   we will have to evaluate substrings - in order to know size to encode them...
   this makes it more complicated,
-  
+
   this also means we can't just encode in a completely linear sequence with
   a byte buffer.
 *)
@@ -392,13 +427,65 @@ let enc64 bytes value =
 
 let encodeInteger64 value = enc64 8 value
 
-(* should do reverse if necessary *)
+(* should do string reverse if necessary *)
 let encodeString (h : string) = enc 1 (strlen h) ^ h
 
+(* change name to encode hash32 and do a sanity chekc ? *)
+let encodeHash32 (h : string) = strrev h
 
-let encodeTx (tx : tx ) =  
+
+(* TODO FIXME!! *)
+let encodeVarInt = encodeInteger8
+
+(*
+type tx_in =
+{
+  previous : string; (* 32 byte tx hash *)
+  index : int;
+  (* should be a variant either a string ... or a decoded list of tokens? *)
+  script: script_token list;
+  (* script : string;  *)
+  sequence : int;
+    let pos, previous = decodeHash32 s pos in
+    let pos, index = decodeInteger32 s pos in
+    let pos, scriptLen = decodeVarInt s pos in
+    let pos, script = decs_ s pos scriptLen in
+
+}
+*)
+
+let encode_script tokens =
+  let f op = match op with
+    | OP_DUP -> encodeInteger8 118
+    | OP_EQUAL -> encodeInteger8 135
+    | OP_EQUALVERIFY -> encodeInteger8 136
+    | OP_HASH160 -> encodeInteger8 169
+    | OP_CHECKSIG -> encodeInteger8 172
+
+                (* FIXME length *)
+    | Bytes s -> (encodeInteger8 (strlen s)) ^ s
+
+  in List.map f tokens |> String.concat ""
+
+
+let encodeInput (input : tx_in ) =
   String.concat ""
-  [ encodeInteger32 tx.version ]
+  [ encodeHash32 input.previous;
+    encodeInteger32 input.index ;
+    (let s = encode_script input.script in
+    let len = strlen s in
+    (encodeInteger8 len) ^ s );  (* FIXME *) 
+    encodeInteger32 input.sequence
+  ]
+
+
+
+let encodeTx (tx : tx ) =
+  String.concat ""
+  [ encodeInteger32 tx.version;
+    encodeVarInt @@ List.length tx.inputs;
+    List.map encodeInput tx.inputs |> String.concat "" 
+  ]
 
 
 
@@ -425,7 +512,7 @@ let encodeVersion (h : version) =
   ^ encodeAddress h.from
   ^ encodeAddress h.to_
   ^ encodeInteger64 h.nonce
-  ^ encodeString h.agent
+  ^ encodeString  h.agent
   ^ encodeInteger32 h.height
   ^ encodeInteger8 h.relay
 
