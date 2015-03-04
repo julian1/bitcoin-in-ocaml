@@ -468,19 +468,17 @@ let encode_script tokens =
   in List.map f tokens |> String.concat ""
 
 
-let encodeInput (input : tx_in ) =
-  String.concat ""
+let encodeInput (input : tx_in) =
   [ encodeHash32 input.previous;
     encodeInteger32 input.index ;
     (let s = encode_script input.script in
     let len = strlen s in
     (encodeInteger8 len) ^ s );  (* FIXME *) 
     encodeInteger32 input.sequence
-  ]
+  ] |> String.concat ""
 
 
-
-let encodeTx (tx : tx ) =
+let encodeTx (tx : tx) =
   String.concat ""
   [ encodeInteger32 tx.version;
     encodeVarInt @@ List.length tx.inputs;
