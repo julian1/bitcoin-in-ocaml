@@ -506,6 +506,9 @@ let encodeTx (tx : tx) =
    encodeVarInt @@ List.length tx.outputs;
 
     List.map encodeOutput tx.outputs |> String.concat ""; 
+
+	encodeInteger32 tx.lockTime 
+
   ]
 
 
