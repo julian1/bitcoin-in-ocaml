@@ -44,13 +44,12 @@ let () = Printf.printf "org %s\n" @@ Message.hex_of_string tx_s
 let () = Printf.printf "hash %s\n" ( tx_s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
 (*  let hash = sha256d s |> strrev in *)
 
+(*
 let s = Message.encodeTx tx
-
 let () = Printf.printf "enc %s\n" @@ Message.hex_of_string s
-
 let () = Printf.printf "hash %s\n" ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
-
 let () = exit 0
+*)
 
 
 
@@ -99,7 +98,20 @@ let tx =
 let () = Printf.printf "%s\n" @@ Message.formatTx (tx )
 
 (* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
+let s = Message.encodeTx tx
+let () = Printf.printf "length now %d\n" @@ Message.strlen s 
+
+let s = s ^ "\x01"  (* should be single byte not string - adding hash type *)
+let () = Printf.printf "length now %d\n" @@ Message.strlen s 
+
+(* let hash = ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string)  *)
+let hash = ( s |> Message.sha256d ) 
 
 
 let decoded_sig = decode_der_signature signature
 
+(*    match Microecc.verify public_key hash signature with *)
+    match Microecc.verify pubkey hash decoded_sig with 
+    | true -> print_endline "PASSED"; true
+    | false -> print_endline "FAILED: Signature verification failed"; false
+;
