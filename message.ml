@@ -473,16 +473,39 @@ let encodeInput (input : tx_in) =
     encodeInteger32 input.index ;
     (let s = encode_script input.script in
     let len = strlen s in
-    (encodeInteger8 len) ^ s );  (* FIXME *) 
+    (encodeInteger8 len) ^ s );  (* FIXME *)  (* and get rid of the ^ *)
     encodeInteger32 input.sequence
   ] |> String.concat ""
+
+
+let encodeOutput (output : tx_out) =
+  [ 
+	encodeInteger64 output.value ;
+
+    (let s = encode_script output.script in
+    let len = strlen s in
+    (encodeInteger8 len) ^ s );  (* FIXME *)  (* and get rid of the ^ *)
+
+	(* encodeHash32 output.previous;
+    encodeInteger32 output.index ;
+    (let s = encode_script output.script in
+    let len = strlen s in
+    (encodeInteger8 len) ^ s );  (* FIXME *) 
+    encodeInteger32 output.sequence
+*)  ] |> String.concat ""
+
+
 
 
 let encodeTx (tx : tx) =
   String.concat ""
   [ encodeInteger32 tx.version;
     encodeVarInt @@ List.length tx.inputs;
-    List.map encodeInput tx.inputs |> String.concat "" 
+    List.map encodeInput tx.inputs |> String.concat ""; 
+
+   encodeVarInt @@ List.length tx.outputs;
+
+    List.map encodeOutput tx.outputs |> String.concat ""; 
   ]
 
 
