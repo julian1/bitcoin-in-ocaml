@@ -41,9 +41,14 @@ let _,tx = Message.decodeTx tx_s 0
 
 let () = Printf.printf "org %s\n" @@ Message.hex_of_string tx_s
 
+let () = Printf.printf "hash %s\n" ( tx_s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
+(*  let hash = sha256d s |> strrev in *)
+
 let s = Message.encodeTx tx
 
 let () = Printf.printf "enc %s\n" @@ Message.hex_of_string s
+
+let () = Printf.printf "hash %s\n" ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
 
 let () = exit 0
 
