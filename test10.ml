@@ -23,7 +23,8 @@ let decode_der_signature s =
 	let () = Printf.printf "s_ %s\n" (Message.hex_of_string s_) in
 	let pos, sigType = Message.decodeInteger8 s pos in 
 	let () = Printf.printf "sigType %d\n" sigType in 
-	r ^ s_
+	(* (Message.strrev r) ^ (Message.strrev s_ ) *)
+	r ^  s_ 
 
 
 
@@ -64,8 +65,18 @@ let _, txprev = Message.decodeTx txprev_s 0
 let subscript = (List.hd txprev.outputs).script 
 
 let tx_input_script = (List.hd tx.inputs).script 
+
+(* do these need to be reversed ?? 
+	eg. reverse sig and then 
+	Not according to blockchain info
+*)
+
 let signature = match List.hd tx_input_script with Bytes s -> s 
 let pubkey    = match List.nth tx_input_script 1 with Bytes s -> s
+
+let pubkey = Microecc.decompress pubkey 
+
+
 
 let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
 let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey 
@@ -102,7 +113,7 @@ let s = Message.encodeTx tx
 let s = s ^ "\x01"  (* should be single byte not string - adding hash type *)
 
 (* let hash = ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string)  *)
-let hash = ( s |> Message.sha256d ) 
+let hash = ( s |> Message.sha256d (*|> Message.strrev *) ) 
 
 
 let decoded_sig = decode_der_signature signature
