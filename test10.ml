@@ -99,10 +99,7 @@ let () = Printf.printf "%s\n" @@ Message.formatTx (tx )
 
 (* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
 let s = Message.encodeTx tx
-let () = Printf.printf "length now %d\n" @@ Message.strlen s 
-
 let s = s ^ "\x01"  (* should be single byte not string - adding hash type *)
-let () = Printf.printf "length now %d\n" @@ Message.strlen s 
 
 (* let hash = ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string)  *)
 let hash = ( s |> Message.sha256d ) 
@@ -115,3 +112,8 @@ let decoded_sig = decode_der_signature signature
     | true -> print_endline "PASSED"; true
     | false -> print_endline "FAILED: Signature verification failed"; false
 ;
+
+(* Ok, i think we actually need to use real values to debug this behavior *)
+
+
+
