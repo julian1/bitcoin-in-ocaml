@@ -1,8 +1,10 @@
 
 
-
+```
 corebuild    -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax -I src tests/test_runner.byte
 
+corebuild    -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client.byte
+```
 
 # single path
 ./test_runner.byte -only-test 'suite:1'
