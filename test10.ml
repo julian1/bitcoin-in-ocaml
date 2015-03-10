@@ -1,6 +1,12 @@
 
+open OUnit2;;
+
+
+
 (* corebuild  -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax test10.byte
   do we need to tell it the curve? 
+
+	 corebuild -install-bin-dir   tests -no-links  -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax tests/test10.byte
  *) 
 
 let decode_der_signature s =
@@ -119,12 +125,28 @@ let hash = ( s |> Message.sha256d (*|> Message.strrev *) )
 let decoded_sig = decode_der_signature signature
 
 (*    match Microecc.verify public_key hash signature with *)
+let x =Microecc.verify pubkey hash decoded_sig 
+(*
     match Microecc.verify pubkey hash decoded_sig with 
     | true -> print_endline "PASSED"; true
     | false -> print_endline "FAILED: Signature verification failed"; false
-;
+*)
+
 
 (* Ok, i think we actually need to use real values to debug this behavior *)
+
+
+let test1 test_ctxt = assert_equal x true 
+
+let tests =
+(* "test10">::: *)
+ ["test1">:: test1; (* "test2">:: test2 *) ]
+;;
+
+
+
+
+
 
 
 

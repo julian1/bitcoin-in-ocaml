@@ -1,4 +1,6 @@
 
+open OUnit2;;
+
 open Message 
 
 
@@ -24,8 +26,8 @@ let mytest2 () =
   } in
   let eheader = encodeHeader header in
   let _, dheader = decodeHeader eheader 0 in
-  let () = printf "**** here\n" in
-  let () = printf "%s" @@ formatHeader dheader in
+  let () = Printf.printf "**** here\n" in
+  let () = Printf.printf "%s" @@ formatHeader dheader in
   ()
 
 
@@ -43,17 +45,29 @@ in
   let _, header = decodeHeader h 0 in
   let payload = strsub h 24 header.length in
   let _, version = decodeVersion payload 0 in
-  let () = printf "%s" @@ formatHeader header in
-  let () = printf "\n" in
-  let () = printf "%s" @@ formatVersion version in
-  let () = printf "checksum is %x \n" ( checksum payload ) in
-  let () = printf "----------\n" in
+  let () = Printf.printf "%s" @@ formatHeader header in
+  let () = Printf.printf "\n" in
+  let () = Printf.printf "%s" @@ formatVersion version in
+  let () = Printf.printf "checksum is %x \n" ( checksum payload ) in
+  let () = Printf.printf "----------\n" in
   let u = encodeVersion version in
 (*  let () = printf "%s" @@ formatVersion ( decodeVersion u 0 ) in *)
-  let () = printf "checksum is %x\n" ( checksum u ) in
-  printf "----------\n"
+  let () = Printf.printf "checksum is %x\n" ( checksum u ) in
+  let () = Printf.printf "----------\n" in
+	checksum payload
 
 
+let test1 test_ctxt = assert_equal (mytest1 ()) 0xd094ffe8  
+
+let tests =
+(*"test9">::: *)
+ ["test1">:: test1; (* "test2">:: test2 *) ]
+;;
 
 
-let () = mytest1 ()
+(*
+let result = (mytest1 ==  0xd094ffe ) in
+()
+*)
+
+
