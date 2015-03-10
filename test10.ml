@@ -110,7 +110,7 @@ let () = Printf.printf "%s\n" @@ Message.formatTx (tx )
 
 (* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
 let s = Message.encodeTx tx
-let s = s ^ "\x01"  (* should be single byte not string - adding hash type *)
+let s = s ^ Message.encodeInteger32 1 (* "\x01" *)  (* should be single byte not string - adding hash type *)
 
 (* let hash = ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string)  *)
 let hash = ( s |> Message.sha256d (*|> Message.strrev *) ) 
