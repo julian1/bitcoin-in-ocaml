@@ -1,4 +1,16 @@
 
+
+
+corebuild    -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax -I src tests/test_runner.byte
+
+
+# single path
+./test_runner.byte -only-test 'suite:1'
+
+important - think it's possible to nest as much as we like
+
+-----
+
 - ok, i think we need the ability to encode a tx, in order to create the tx_copy from the tx_new. 
 - alternatively, we have to change the decoder to give us the positions of the script so we can do the 
 	edit for signature verification. 

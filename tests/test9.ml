@@ -61,7 +61,7 @@ let test1 test_ctxt = assert_equal (mytest1 ()) 0xd094ffe8
 
 let tests =
 (*"test9">::: *)
- ["test1">:: test1; (* "test2">:: test2 *) ]
+ ["test9">:: test1; (* "test2">:: test2 *) ]
 ;;
 
 

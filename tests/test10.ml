@@ -46,16 +46,9 @@ let read_from_file filename =
 let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
 let _,tx = Message.decodeTx tx_s 0 
 
-let () = Printf.printf "org %s\n" @@ Message.hex_of_string tx_s
-
-let () = Printf.printf "hash %s\n" ( tx_s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
-(*  let hash = sha256d s |> strrev in *)
-
 (*
-let s = Message.encodeTx tx
-let () = Printf.printf "enc %s\n" @@ Message.hex_of_string s
-let () = Printf.printf "hash %s\n" ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
-let () = exit 0
+let () = Printf.printf "org %s\n" @@ Message.hex_of_string tx_s
+let () = Printf.printf "hash %s\n" ( tx_s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
 *)
 
 
@@ -83,10 +76,11 @@ let pubkey    = match List.nth tx_input_script 1 with Bytes s -> s
 let pubkey = Microecc.decompress pubkey 
 
 
-
+(*
 let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
 let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey 
 let () = Printf.printf "subscript %s\n" @@ Message.format_script subscript
+*)
 
 
 (* set input scripts to empty *)
@@ -112,7 +106,9 @@ let tx =
 	{ tx with inputs = List.mapi f tx.inputs }  
 
 
+(*
 let () = Printf.printf "%s\n" @@ Message.formatTx (tx )
+*)
 
 (* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
 let s = Message.encodeTx tx
@@ -122,25 +118,19 @@ let s = s ^ Message.encodeInteger32 1 (* "\x01" *)  (* should be single byte not
 let hash = ( s |> Message.sha256d (*|> Message.strrev *) ) 
 
 
-let decoded_sig = decode_der_signature signature
-
-(*    match Microecc.verify public_key hash signature with *)
-let x =Microecc.verify pubkey hash decoded_sig 
-(*
-    match Microecc.verify pubkey hash decoded_sig with 
-    | true -> print_endline "PASSED"; true
-    | false -> print_endline "FAILED: Signature verification failed"; false
-*)
-
-
 (* Ok, i think we actually need to use real values to debug this behavior *)
 
 
-let test1 test_ctxt = assert_equal x true 
+let test1 test_ctxt = 
+	let decoded_sig = decode_der_signature signature in
+	let x = Microecc.verify pubkey hash decoded_sig in
+	assert_equal x true 
 
 let tests =
-(* "test10">::: *)
- ["test1">:: test1; (* "test2">:: test2 *) ]
+ ["test10">::: 
+	 ["test1">:: test1; 
+		"test2">:: test1; ]
+	]
 ;;
 
 
