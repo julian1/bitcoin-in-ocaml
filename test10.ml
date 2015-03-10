@@ -23,7 +23,8 @@ let decode_der_signature s =
 	let () = Printf.printf "s_ %s\n" (Message.hex_of_string s_) in
 	let pos, sigType = Message.decodeInteger8 s pos in 
 	let () = Printf.printf "sigType %d\n" sigType in 
-	r ^ s_
+	(* (Message.strrev r) ^ (Message.strrev s_ ) *)
+	r ^  s_ 
 
 
 
@@ -41,11 +42,15 @@ let _,tx = Message.decodeTx tx_s 0
 
 let () = Printf.printf "org %s\n" @@ Message.hex_of_string tx_s
 
+let () = Printf.printf "hash %s\n" ( tx_s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
+(*  let hash = sha256d s |> strrev in *)
+
+(*
 let s = Message.encodeTx tx
-
 let () = Printf.printf "enc %s\n" @@ Message.hex_of_string s
-
+let () = Printf.printf "hash %s\n" ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string) 
 let () = exit 0
+*)
 
 
 
@@ -60,8 +65,18 @@ let _, txprev = Message.decodeTx txprev_s 0
 let subscript = (List.hd txprev.outputs).script 
 
 let tx_input_script = (List.hd tx.inputs).script 
+
+(* do these need to be reversed ?? 
+	eg. reverse sig and then 
+	Not according to blockchain info
+*)
+
 let signature = match List.hd tx_input_script with Bytes s -> s 
 let pubkey    = match List.nth tx_input_script 1 with Bytes s -> s
+
+let pubkey = Microecc.decompress pubkey 
+
+
 
 let () = Printf.printf "sig %s\n" @@ Message.hex_of_string signature
 let () = Printf.printf "key %s\n" @@ Message.hex_of_string pubkey 
@@ -94,7 +109,22 @@ let tx =
 let () = Printf.printf "%s\n" @@ Message.formatTx (tx )
 
 (* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
+let s = Message.encodeTx tx
+let s = s ^ Message.encodeInteger32 1 (* "\x01" *)  (* should be single byte not string - adding hash type *)
+
+(* let hash = ( s |> Message.sha256d |> Message.strrev |> Message.hex_of_string)  *)
+let hash = ( s |> Message.sha256d (*|> Message.strrev *) ) 
 
 
 let decoded_sig = decode_der_signature signature
+
+(*    match Microecc.verify public_key hash signature with *)
+    match Microecc.verify pubkey hash decoded_sig with 
+    | true -> print_endline "PASSED"; true
+    | false -> print_endline "FAILED: Signature verification failed"; false
+;
+
+(* Ok, i think we actually need to use real values to debug this behavior *)
+
+
 
