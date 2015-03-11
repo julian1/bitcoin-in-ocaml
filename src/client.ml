@@ -15,8 +15,8 @@ open Lwt (* for >>= *)
 	litecoin magic_head: "\xfb\xc0\xb6\xdb",
 *)
 
-let m = 0xd9b4bef9
-let m = 0xdbb6c0fb 
+let m = 0xd9b4bef9  (* bitcoin *)
+let m = 0xdbb6c0fb  (* litecoin *) 
 
 (* initial version message to send *)
 let y =
@@ -136,10 +136,11 @@ let mainLoop inchan outchan =
     (* read header *)
     readChannel inchan 24 
     (* log *)
-     >>= fun s -> 
+  (*   >>= fun s -> 
       let _, header = decodeHeader s 0 in
         let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in 
 		return s
+	*)
     
     (* read payload *)
     >>= fun s -> 
@@ -169,7 +170,7 @@ let run () =
   (*    addr ~host: "198.52.212.235" ~port: 8333  *) (* good, not anymore, good *)
 
 
-      addr ~host: "dnsseed.litecointools.com" ~port: 9333  (* good, not anymore *)
+      addr ~host: "dnsseed.litecointools.com" ~port: 9333  (* litecoin *)
 
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
