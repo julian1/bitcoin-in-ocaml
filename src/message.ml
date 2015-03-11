@@ -251,6 +251,24 @@ let decodeVersion s pos =
     relay = relay;
   }
 
+
+let decodeVersionLtc s pos =
+  let pos, protocol = decodeInteger32 s pos in
+  let pos, nlocalServices = decodeInteger64 s pos in
+  let pos, nTime = decodeInteger64 s pos in
+  let pos, from = decodeAddress s pos in
+  let pos, to_ = decodeAddress s pos in
+  let pos, nonce = decodeInteger64 s pos in
+  let pos, agent = decodeString s pos in
+  let pos, height = decodeInteger32 s pos in
+(*  let _, relay = decodeInteger8 s pos in *) 
+  pos, { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
+    from = from; to_ = to_; 
+	nonce  = nonce; agent = agent; height = height; relay = 0; 
+  }
+
+
+
 let decodeInvItem s pos =
   let pos, inv_type = decodeInteger32 s pos in
   let pos, hash = decodeHash32 s pos in
@@ -582,6 +600,7 @@ let formatVersion (h : version) =
     "\nto:               "; formatAddress h.to_;
     "\nnonce:            "; Int64.to_string h.nonce;
     "\nagent:            "; h.agent;
+    "\nheight:            "; string_of_int h.height;
     "\nrelay:            "; string_of_int h.relay
   ]
 

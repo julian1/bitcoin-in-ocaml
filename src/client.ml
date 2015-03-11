@@ -9,6 +9,15 @@ open Script
 
 open Lwt (* for >>= *)
 
+(*  bitcoin magic_head: "\xF9\xBE\xB4\xD9", 
+	testnet magic_head: "\xFA\xBF\xB5\xDA",
+
+	litecoin magic_head: "\xfb\xc0\xb6\xdb",
+*)
+
+let m = 0xd9b4bef9
+let m = 0xdbb6c0fb 
+
 (* initial version message to send *)
 let y =
   let payload = encodeVersion {
@@ -24,7 +33,7 @@ let y =
       relay = 0xff;
   } in
   let header = encodeHeader {
-    magic = 0xd9b4bef9;
+    magic = m ;
     command = "version";
     length = strlen payload;
     checksum = checksum payload;
@@ -35,7 +44,7 @@ let y =
 (* verack to send *)
 let z =
   encodeHeader {
-    magic = 0xd9b4bef9;
+    magic = m ;
     command = "verack";
     length = 0;
     (* clients seem to use e2e0f65d - hash of first part of header? *)
@@ -50,13 +59,13 @@ let handleMessage header payload outchan =
   *)
   match header.command with
   | "version" -> 
-    let _, version = decodeVersion payload 0 in
+    let _, version = decodeVersionLtc payload 0 in
     Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
     >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
     >>= fun _ -> Lwt_io.write outchan z
 
   | "verack" -> 
-    Lwt_io.write_line Lwt_io.stdout ("* got veack" )
+    Lwt_io.write_line Lwt_io.stdout ("* got verack" )
 
   | "inv" -> 
     let _, inv = decodeInv payload 0 in
@@ -64,7 +73,7 @@ let handleMessage header payload outchan =
     (* request inventory item *)
     >>=  fun _ -> 
       let header = encodeHeader {
-        magic = 0xd9b4bef9;
+        magic = m ;
         command = "getdata";
         length = strlen payload;
         checksum = checksum payload;
@@ -127,10 +136,11 @@ let mainLoop inchan outchan =
     (* read header *)
     readChannel inchan 24 
     (* log *)
-    (* >>= fun s -> 
-      let header = decodeHeader s 0 in
-      Lwt_io.write_line Lwt_io.stdout ("----\n" ^ hex_of_string s ^ "\n" ^ formatHeader header ^ "\n") 
-    *)
+     >>= fun s -> 
+      let _, header = decodeHeader s 0 in
+        let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in 
+		return s
+    
     (* read payload *)
     >>= fun s -> 
       let _, header = decodeHeader s 0 in
@@ -156,7 +166,11 @@ let run () =
  (*    addr ~host: "50.68.44.128" ~port: 8333 *)  (* was good, no more *)
     (*    149.210.187.10  *)
       (* addr ~host: "173.69.49.106" ~port: 8333 *) (* no good *)
-      addr ~host: "198.52.212.235" ~port: 8333  (* good, not anymore *)
+  (*    addr ~host: "198.52.212.235" ~port: 8333  *) (* good, not anymore, good *)
+
+
+      addr ~host: "dnsseed.litecointools.com" ~port: 9333  (* good, not anymore *)
+
 
     >>= fun ip -> Lwt_io.write_line Lwt_io.stdout "decoded address "
     (* connect *)
