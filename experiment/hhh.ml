@@ -1,6 +1,7 @@
 
 
 let (>>=) = Lwt.bind
+let return = Lwt.return 
 
 
 let debug = ref false
@@ -73,14 +74,49 @@ let load path =
     )
 
 
+let close handle =
+  let on_exn e = `Error ( Printexc.to_string e) in
+  in_posix_thread ~on_exn begin fun () ->
+    let rec loop = function
+    | 0 -> failwith "failed to close (busy many times)"
+    | n ->
+      if Sqlite3.db_close handle then () else (
+        Sqlite3.sleep 100 |> ignore;
+        loop (n - 1)
+      )
+    in
+    loop 5
+  end
+
+
+
+
 let _ = Lwt_main.run (
+
 	load "jjj"
 	(* >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "starting" *)
-	
+(*
 	>>= fun x -> match x with 
 		| `Ok handle -> let _ = exec_unit_exn handle "create table mytable(one varchar(10), two smallint)" 
-			in Lwt.return () 
-	
+			in Lwt.return x 
 
+	>>= fun x -> match x with 
+		| `Ok handle -> let _ = close handle  
+			in Lwt.return x 
+*)
+	
+	
+	>>= fun x -> match x with 
+		| `Ok handle -> ( let _ = exec_unit_exn handle "insert into mytable values('hello!', 'whoot')" 
+			in Lwt.return x 
+	
+	
+	>>= fun x -> let _ = Lwt_io.write_line Lwt_io.stdout "done inserting" in return x
+
+	>>= fun x -> match x with 
+		| `Ok handle -> let _ = exec_unit_exn handle "select * from mytable" 
+			in Lwt.return () 
+	)
+	
 )	
 
