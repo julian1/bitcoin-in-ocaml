@@ -103,7 +103,7 @@ let initial_getheaders =
 
 
 
-let handleMessage header payload outchan =
+let handleMessage state header payload outchan =
   (* we kind of want to be able to write to stdout here 
     and return a value...
     - we may want to do async database actions here. so keep the io
@@ -114,6 +114,7 @@ let handleMessage header payload outchan =
     Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
     >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
     >>= fun _ -> Lwt_io.write outchan initial_verack
+    >>= fun _ -> return state
 
   | "verack" -> 
     Lwt_io.write_line Lwt_io.stdout ("* got verack" )
@@ -122,14 +123,12 @@ let handleMessage header payload outchan =
 
     >>= fun _ -> Lwt_io.write outchan initial_getaddr (* slowish to respond? *)
 (*    >>= fun _ -> Lwt_io.write outchan initial_getheaders  *)
-
-
-
+    >>= fun _ -> return state
 
 
   | "inv" -> 
     let _, inv = decodeInv payload 0 in
-    Lwt_io.write_line Lwt_io.stdout ("* whoot got inv" ^ formatInv inv )
+    Lwt_io.write_line Lwt_io.stdout ("* whoot got inv" ^ formatInv inv ^ " state " ^ string_of_int state  )
     (* request inventory item 
 		Ok, we don't want to request all inventory items 
 	*)
@@ -143,21 +142,26 @@ let handleMessage header payload outchan =
       } in 
       Lwt_io.write outchan (header ^ payload )
 	*)
+    >>= fun _ -> return (state + 1)
 
   | "addr" -> ( 
       let _, count = decodeVarInt payload 0 in 
       Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
+      >>= fun _ -> return state
     )
 
   | "tx" -> ( 
       let _, tx = decodeTx payload 0 in 
       Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n"  )
+      >>= fun _ -> return state
     )
 
   | "block" -> 
         (* let hash = Message.sha256d payload |> strrev |> hex_of_string in *)
 	      let hash = (Message.strsub payload 0 80 |> Message.sha256d  |> Message.strrev |> Message.hex_of_string) in
         Lwt_io.write_line Lwt_io.stdout ( "* got block " ^ hash ^ "\n" )
+
+      >>= fun _ -> return state
 (*
       >>= fun _ -> 
         let filename =  "./blocks/" ^ hash in
@@ -176,6 +180,8 @@ let handleMessage header payload outchan =
   | _ -> 
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "' " ^ " length " ^ string_of_int header.length )
 
+      >>= fun _ -> return state
+
 
 
 (* read exactly n bytes from channel, returning a string 
@@ -188,7 +194,7 @@ let readChannel inchan length   =
 
 
 let mainLoop inchan outchan =
-  let rec loop () =
+  let rec loop state =
     (* read header *)
     readChannel inchan 24 
     (* log *)
@@ -203,11 +209,12 @@ let mainLoop inchan outchan =
       let _, header = decodeHeader s 0 in
       readChannel inchan header.length 
     (* handle  *)
-    >>= fun s -> handleMessage header s outchan
+    >>= fun s -> handleMessage state header s outchan
     (* repeat *)
-    >>= fun _ -> loop ()
+    >>= fun state  -> loop state 
   in
-    loop()
+  let starting_state = 1 in 
+    loop starting_state 
 
 
 let addr ~host ~port =
