@@ -145,13 +145,18 @@ let _ = Lwt_main.run (
 	  let on_exn e = `Error (Printexc.to_string e) in
 
 	(* we want a fucking fold here *)
-	  let lister row headers =
-          Printf.printf "    %s : '%s'\n" headers.(0) row.(0);
+	  let lister row headers = 
+		
+           Printf.printf "    %s \n" headers.(0) ;
+			match row.(0) with
+				Some s -> Printf.printf "    %s \n" s ;
+		(*
           Printf.printf "    %s : '%s'\n" headers.(1) row.(1)
+			*)
       in
 
 	  in_posix_thread ~on_exn (fun () ->
-		  Sqlite3.exec_not_null handle ~cb:lister "select * from mytable"
+		  Sqlite3.exec handle ~cb:lister "select * from mytable"
 		)
 
 (*
@@ -161,8 +166,6 @@ let _ = Lwt_main.run (
 		  exec_option_exn handle "select * from mytable"
 		)
 *)
-
-
 	)
 	
 )	
