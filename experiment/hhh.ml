@@ -34,6 +34,31 @@ let with_executed_statement handle statement f =
 
 
 
+let get_row_exn prep =
+  match Sqlite3.step prep with
+  | Sqlite3.Rc.ROW -> Sqlite3.column prep 0, true
+  | Sqlite3.Rc.DONE -> Sqlite3.column prep 0, false
+  | rc -> failwith (Printf.sprintf "not a row: %s" (Sqlite3.Rc.to_string rc))
+
+let string_option_data_exn data =
+  let open Sqlite3.Data in
+  begin match data with
+  | NONE  -> failwith "string_option_data_exn: none"
+  | NULL  -> None
+  | INT _ -> failwith "string_option_data_exn: int"
+  | FLOAT _ -> failwith "string_option_data_exn: float"
+  | TEXT s
+  | BLOB s -> Some s
+  end
+ 
+
+let exec_option_exn handle statement =
+  with_executed_statement handle statement (fun prep ->
+      let first, (_ : bool) = get_row_exn prep in
+      string_option_data_exn first)
+
+
+
 let is_ok_or_done_exn handle (rc: Sqlite3.Rc.t) =
   let open Sqlite3.Rc in
   match rc with
@@ -111,9 +136,32 @@ let _ = Lwt_main.run (
 			let _ = exec_unit_exn handle "insert into mytable values('hello!', 'whoot')" 
 			in Lwt.return () 
 	
-	>>= fun _ -> Lwt_io.write_line Lwt_io.stdout "done inserting" 
+		>>= fun _ -> Lwt_io.write_line Lwt_io.stdout "done inserting" 
 
-	>>= fun _ -> let _ = exec_unit_exn handle "select * from mytable"  in return ()
+(*		>>= fun _ -> let _ = exec_unit_exn handle "select * from mytable"  in return ()
+*)
+
+	>>= fun _ ->
+	  let on_exn e = `Error (Printexc.to_string e) in
+
+	(* we want a fucking fold here *)
+	  let lister row headers =
+          Printf.printf "    %s : '%s'\n" headers.(0) row.(0);
+          Printf.printf "    %s : '%s'\n" headers.(1) row.(1)
+      in
+
+	  in_posix_thread ~on_exn (fun () ->
+		  Sqlite3.exec_not_null handle ~cb:lister "select * from mytable"
+		)
+
+(*
+	>>= fun _ ->
+	  let on_exn e = `Error (Printexc.to_string e) in
+	  in_posix_thread ~on_exn (fun () ->
+		  exec_option_exn handle "select * from mytable"
+		)
+*)
+
 
 	)
 	
