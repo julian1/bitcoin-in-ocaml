@@ -52,6 +52,19 @@ let initial_verack =
   } in 
 	header
 
+
+let initial_getaddr =
+  let header = encodeHeader {
+    magic = m ;
+    command = "getaddr";
+    length = 0;
+    (* clients seem to use e2e0f65d - hash of first part of header? *)
+    checksum = 0;
+  } in 
+	header
+
+
+
 let initial_getblocks =
   let genesis = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in
   let payload = 
@@ -68,6 +81,23 @@ let initial_getblocks =
   } in
 	header ^ payload
 	
+let initial_getheaders =
+  let genesis = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in
+  let payload = 
+    encodeInteger32 1 
+    ^ encodeVarInt 1 
+    ^ encodeHash32 genesis 
+    ^ encodeInteger32 0
+	in
+  let header = encodeHeader {
+    magic = m ;
+    command = "getheaders";
+    length = strlen payload;
+    checksum = checksum payload;
+  } in
+	header ^ payload
+	
+
 
 
 
@@ -89,7 +119,9 @@ let handleMessage header payload outchan =
     Lwt_io.write_line Lwt_io.stdout ("* got verack" )
 	(* ok, this is the point to send our real request *)
 
-    >>= fun _ -> Lwt_io.write outchan initial_getblocks 
+
+    >>= fun _ -> Lwt_io.write outchan initial_getaddr (* slowish to respond? *)
+(*    >>= fun _ -> Lwt_io.write outchan initial_getheaders  *)
 
 
 
@@ -112,11 +144,15 @@ let handleMessage header payload outchan =
       Lwt_io.write outchan (header ^ payload )
 	*)
 
+  | "addr" -> ( 
+      let _, count = decodeVarInt payload 0 in 
+      Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
+    )
+
   | "tx" -> ( 
       let _, tx = decodeTx payload 0 in 
       Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n"  )
     )
-
 
   | "block" -> 
         (* let hash = Message.sha256d payload |> strrev |> hex_of_string in *)
