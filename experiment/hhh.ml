@@ -115,6 +115,45 @@ let close handle =
 
 
 
+  exception E of string
+
+
+
+  let search_iterator db s =
+      (* Perform a simple search. *)
+      let str_of_rc rc =
+          match rc with
+          |    Sqlite3.Data.NONE -> "none"
+          |    Sqlite3.Data.NULL -> "null"
+          |    Sqlite3.Data.INT i -> Int64.to_string i
+          |    Sqlite3.Data.FLOAT f -> string_of_float f
+          |    Sqlite3.Data.TEXT s -> s
+          |    Sqlite3.Data.BLOB _ -> "blob"
+      in
+      let dump_output s =
+          Printf.printf "  Row   Col   ColName    Type       Value\n%!"  ;
+          let row = ref 0 in
+          while Sqlite3.step s = Sqlite3.Rc.ROW do
+              for col = 0 to Sqlite3.data_count s - 1 do
+                  let type_name = match Sqlite3.column_decltype s col with
+									Some s -> s
+					in
+                  let val_str = str_of_rc (Sqlite3.column s col) in
+                  let col_name = Sqlite3.column_name s col in
+                  Printf.printf "  %2d  %4d    %-10s %-8s   %s\n%!"
+                                 !row col col_name type_name val_str ;
+                  done ;
+              row := succ !row ;
+              done
+      in
+      print_endline "People over 25 years of age :" ;
+      let stmt = Sqlite3.prepare db s  in
+      dump_output stmt    ;
+      match Sqlite3.finalize stmt with
+      |    Sqlite3.Rc.OK -> ()
+      |    x -> raise (E (Sqlite3.Rc.to_string x))
+
+
 
 let _ = Lwt_main.run (
 
@@ -140,6 +179,13 @@ let _ = Lwt_main.run (
 
 (*		>>= fun _ -> let _ = exec_unit_exn handle "select * from mytable"  in return ()
 *)
+
+
+	>>= fun _ ->
+	  let on_exn e = `Error (Printexc.to_string e) in
+	  in_posix_thread ~on_exn (fun () -> search_iterator handle "select * from mytable" ) 
+		
+ 
 
 	>>= fun _ ->
 	  let on_exn e = `Error (Printexc.to_string e) in
