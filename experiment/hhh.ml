@@ -2,6 +2,7 @@
 
 let (>>=) = Lwt.bind
 
+
 let debug = ref false
 let dbg fmt a b = () (* ksprintf (eprintf "Trakeva_sqlite: %s\n%!") fmt *)
  
@@ -48,11 +49,9 @@ let exec_unit_exn handle statement =
       Sqlite3.step prep |> is_ok_or_done_exn handle)
 
 
-
-
-
 let load path =
-  let on_exn e = `Error (`Database (`Load path, Printexc.to_string e)) in
+  (* let on_exn e = `Error (`Database (`Load path, Printexc.to_string e)) in *)
+  let on_exn e = `Error ( Printexc.to_string e ) in
 
 	(*
   begin
@@ -69,7 +68,8 @@ let load path =
          https://www.sqlite.org/sharedcache.html *)
       let handle = Sqlite3.db_open ~mutex:`FULL ~cache:`PRIVATE path in
       (* exec_unit_exn handle (create_table default_table); *)
-       {handle; action_mutex} 
+        (* {handle; action_mutex}   *)
+		handle
     )
 
 
@@ -77,6 +77,9 @@ let _ = Lwt_main.run (
 	load "jjj"
 	(* >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "starting" *)
 	
+	>>= fun x -> match x with 
+		| `Ok handle -> let _ = exec_unit_exn handle "create table mytable(one varchar(10), two smallint)" 
+			in Lwt.return () 
 	
 
 )	
