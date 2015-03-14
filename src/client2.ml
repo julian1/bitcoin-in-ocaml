@@ -112,9 +112,9 @@ let handleMessage state header payload outchan =
   | "version" -> 
     let _, version = decodeVersion payload 0 in
     Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
-    >>= fun _ -> Lwt_io.write_line Lwt_io.stdout "* sending verack"
-    >>= fun _ -> Lwt_io.write outchan initial_verack
-    >>= fun _ -> return state
+    >> Lwt_io.write_line Lwt_io.stdout "* sending verack"
+    >> Lwt_io.write outchan initial_verack
+    >> return state
 
   | "verack" -> 
     Lwt_io.write_line Lwt_io.stdout ("* got verack" )
