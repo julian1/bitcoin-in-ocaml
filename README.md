@@ -39,6 +39,12 @@ what's next?
 
 refs
 
+http://bitcoin.stackexchange.com/questions/28168/what-are-the-keys-used-in-the-blockchain-leveldb-ie-what-are-the-keyvalue-pair
+
+https://bitcointalk.org/index.php?topic=977070.0
+
+https://bitcoin.org/en/developer-reference#op-codes
+
 https://en.bitcoin.it/wiki/Protocol_documentation
 https://en.bitcoin.it/wiki/Base58Check_encoding
 https://en.bitcoin.it/wiki/Script
