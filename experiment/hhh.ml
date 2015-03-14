@@ -107,15 +107,14 @@ let _ = Lwt_main.run (
 	
 	
 	>>= fun x -> match x with 
-		| `Ok handle -> ( let _ = exec_unit_exn handle "insert into mytable values('hello!', 'whoot')" 
-			in Lwt.return x 
-	
-	
-	>>= fun x -> let _ = Lwt_io.write_line Lwt_io.stdout "done inserting" in return x
-
-	>>= fun x -> match x with 
-		| `Ok handle -> let _ = exec_unit_exn handle "select * from mytable" 
+		| `Ok handle_ -> ( let handle = handle_ in 
+			let _ = exec_unit_exn handle "insert into mytable values('hello!', 'whoot')" 
 			in Lwt.return () 
+	
+	>>= fun _ -> Lwt_io.write_line Lwt_io.stdout "done inserting" 
+
+	>>= fun _ -> let _ = exec_unit_exn handle "select * from mytable"  in return ()
+
 	)
 	
 )	
