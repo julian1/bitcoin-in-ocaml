@@ -5,3 +5,4 @@ _build
 *.byte
 dumps
 blocks
+deps

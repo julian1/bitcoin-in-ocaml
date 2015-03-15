@@ -37,6 +37,18 @@ type version =
 }
 
 
+type block =
+{
+  version : int;
+  previous : string;
+  merkle : string;
+  nTime : int;
+  bits : int;
+  nonce : int;
+  tx_count : int;
+}
+
+
 type script_token =
   | Bytes of string
   | Unknown of int
@@ -251,6 +263,25 @@ let decodeVersion s pos =
     relay = relay;
   }
 
+
+let decodeVersionLtc s pos =
+  let pos, protocol = decodeInteger32 s pos in
+  let pos, nlocalServices = decodeInteger64 s pos in
+  let pos, nTime = decodeInteger64 s pos in
+  let pos, from = decodeAddress s pos in
+  let pos, to_ = decodeAddress s pos in
+  let pos, nonce = decodeInteger64 s pos in
+  let pos, agent = decodeString s pos in
+  let pos, height = decodeInteger32 s pos in
+(*  let _, relay = decodeInteger8 s pos in *) 
+  pos, { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
+    from = from; to_ = to_; 
+	nonce  = nonce; agent = agent; height = height; relay = 0; 
+  }
+
+
+
+
 let decodeInvItem s pos =
   let pos, inv_type = decodeInteger32 s pos in
   let pos, hash = decodeHash32 s pos in
@@ -264,6 +295,21 @@ let decodeVarInt s pos =
     | 0xfe -> decodeInteger32 s pos
     | 0xff -> (pos, first) (* TODO uggh... this will need a 64 bit int return type *)
     | _ -> (pos, first)
+
+
+
+let decodeBlock (s:string) pos = 
+	let pos, version = decodeInteger32 s pos in 
+	let pos, previous = decodeHash32 s pos in
+	let pos, merkle = decodeHash32 s pos in
+	let pos, nTime = decodeInteger32 s pos in
+	let pos, bits = decodeInteger32 s pos in
+	let pos, nonce = decodeInteger32 s pos in
+	let pos, tx_count = decodeVarInt s pos in 
+	pos, ({ version = version; previous = previous; merkle = merkle; 
+		nTime = nTime; bits = bits; nonce = nonce; tx_count = tx_count } : block) 
+
+
 
 
 let decodeInv s pos =
@@ -582,6 +628,7 @@ let formatVersion (h : version) =
     "\nto:               "; formatAddress h.to_;
     "\nnonce:            "; Int64.to_string h.nonce;
     "\nagent:            "; h.agent;
+    "\nheight:            "; string_of_int h.height;
     "\nrelay:            "; string_of_int h.relay
   ]
 
@@ -591,6 +638,22 @@ let formatInv h =
       "\n inv_type " ^ string_of_int inv_type
       ^ ", hash " ^ hex_of_string hash
     )h
+
+
+
+let formatBlock (h : block) =
+  String.concat "" [
+    "version:    "; string_of_int h.version;
+    "\nprevious: "; hex_of_string h.previous;
+    "\nmerkle:   "; hex_of_string h.merkle;
+    "\nnTime:    "; string_of_int h.nTime; 
+    "\nbits:    "; string_of_int h.bits; 
+    "\nnonce:    "; string_of_int h.nonce; 
+    "\ntx_count:    "; string_of_int h.tx_count; 
+  ]
+
+
+
 
 (* not sure if we want to enclose this scope, in the format tx action *)
 let formatInput input = String.concat "" [
@@ -619,5 +682,8 @@ let formatTx tx =
   ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
   ^ "\n" ^ formatOutputs tx.outputs
   ^ "\n lockTime " ^ string_of_int tx.lockTime
+
+
+
 
 
