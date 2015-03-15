@@ -63,7 +63,12 @@ let initial_getaddr =
   } in
 	header
 
+(*
+  i think there's something wrong with our message
 
+    - it ignores our starting hash and just gives the list from genesis 
+    - trying again, yields nothing.
+*)
 
 let initial_getblocks starting_hash =
   (* we can only request one at a time 
@@ -71,11 +76,14 @@ let initial_getblocks starting_hash =
     from the first valid block in our list
   *)
   let payload =
-    encodeInteger32 2  (* version *)
+    encodeInteger32 1  (* version *)
     ^ encodeVarInt 1
     ^ encodeHash32 starting_hash
+
+ (*   ^ encodeHash32 (string_of_hex "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"  ) *)
+(*    ^ encodeHash32 ( string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"  ) *)
                         (* this isn't right it should be a hash *)
-    ^ encodeInteger32 0  (* block to stop - we don't know should be 32 bytes *)
+    ^ zeros 32   (* block to stop - we don't know should be 32 bytes *)
 	in
   let header = encodeHeader {
     magic = m ;
@@ -155,6 +163,7 @@ type myblock =
     difficulty : int ; (* aggregated *)
     (* bool requested *)
     (* bool have *)
+
 }
 
 
@@ -165,7 +174,11 @@ type my_app_state =
   count : int;
   (* or blocks on request? *)
 
-	heads : myblock SS.t	
+	heads : myblock SS.t;	
+
+  time_of_last_received_block : float;
+
+  handshake_complete : bool ;
 
 (*
   blocks_to_get : string list;
@@ -210,35 +223,42 @@ let handleMessage (state: my_app_state) header payload outchan =
     VERY IMPORTANT - we should thread the result
     through a geneal response thing here.
   *)
+
+  let now = Unix.time () in  (* state, time is seconds, gettimeofday more precision *)
+
+  let with_return_state state =
+
+    let state = { state with count = state.count + 1;} in 
+
+    if state.handshake_complete == true 
+      && now > state.time_of_last_received_block +. 10. then 
+
+      (* we need to avoid sending request too often than once
+        as well...
+       *)
+
+      let state = { state with time_of_last_received_block = now } in 
+
+      let hash,block = SS.min_binding state.heads in
+      Lwt_io.write_line Lwt_io.stdout ("****  requesting more blocks - from " ^ hex_of_string hash )
+      >>  Lwt_io.write outchan (initial_getblocks hash) 
+      >> return state (* { state with count = state.count + 1;} *)
+    else
+      return state
+  in
+
   match header.command with
   | "version" ->
     let _, version = decodeVersion payload 0 in
     Lwt_io.write_line Lwt_io.stdout ("* whoot got version\n" ^ formatVersion version)
     >> Lwt_io.write_line Lwt_io.stdout "* sending verack"
     >> Lwt_io.write outchan initial_verack
-    >> return state
+    >> with_return_state state
 
   | "verack" ->
-    Lwt_io.write_line Lwt_io.stdout ("* got verack" )
-	(* ok, this is the point to send our real request *)
-   (*  >>= fun _ -> Lwt_io.write outchan initial_getaddr *) (* slowish to respond? *)
-(*
-    >> let getblocks = initial_getblocks state.up_to  in
-      Lwt_io.write outchan getblocks
-      (* should we clear the up_to now ?  *)
-*)
-
-    (* Ok, so issue requests for the next block for all known heads
-        - we need to potentially request multiple things here... 
-        - take one that hashn't been requested...
-     *)
-    >> let hash,block = SS.min_binding state.heads  in
-      let hash = hex_of_string hash in
-      Lwt_io.write_line Lwt_io.stdout ("* requesting next of " ^ hash )
-    >>  Lwt_io.write outchan (initial_getblocks hash) 
-
-    >> return state
-
+    Lwt_io.write_line Lwt_io.stdout ("* got verack - handshake complete"  )
+    >> let state = { state with handshake_complete = true; } in
+    with_return_state state
 
 
   | "inv" ->
@@ -249,25 +269,10 @@ let handleMessage (state: my_app_state) header payload outchan =
 	  *)
     (* TODO we calculate block_hashes but aren't explicitly requesting them *)
     >> let block_hashes = inv
-      |> List.filter (fun (inv_type,hash) -> inv_type == 2)
-      |> List.map (fun (_,hash)->hash)
+        |> List.filter (fun (inv_type,hash) -> inv_type == 2)
+        |> List.map (fun (_,hash)->hash)
       in
-    (* get rid of this and instead thread through a return function *)
-    let state = { state with  count = state.count + 1; }
-    in
-      (* request data *)
-       let header = encodeHeader {
-        magic = m ;
-        command = "getdata";
-        length = strlen payload;
-        checksum = checksum payload;
-      } in
-      Lwt_io.write outchan (header ^ payload )
-
-    (* loop and take type 2 items *)
-
-	(*
-    >>=  fun _ ->
+      (* request data - we need to encode this .... *)
       let header = encodeHeader {
         magic = m ;
         command = "getdata";
@@ -275,19 +280,18 @@ let handleMessage (state: my_app_state) header payload outchan =
         checksum = checksum payload;
       } in
       Lwt_io.write outchan (header ^ payload )
-	*)
-    >> return state
+      >> with_return_state state
 
   | "addr" -> (
       let _, count = decodeVarInt payload 0 in
       Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
-      >>= fun _ -> return state
+      >> with_return_state state
     )
 
   | "tx" -> (
       let _, tx = decodeTx payload 0 in
-      Lwt_io.write_line Lwt_io.stdout ( "* got tx!!!\n"  )
-      >>= fun _ -> return state
+      Lwt_io.write_line Lwt_io.stdout ( "* got tx!"  )
+      >> with_return_state state
     )
 
   | "block" ->
@@ -315,10 +319,14 @@ let handleMessage (state: my_app_state) header payload outchan =
         let old = SS.find header.previous state.heads in 
         let new_ = { hash = hash; previous = header.previous; height = old.height + 1 ; difficulty = 123 } in 
         let state = { 
-          state with heads = 
+          state with 
+
+          time_of_last_received_block = now;
+          heads = 
             state.heads
             |> SS.remove header.previous 
-            |> SS.add hash new_
+            |> SS.add hash new_ ;
+
         } 
         in 
           (* ugghhh and we will have to request the new block *)
@@ -328,10 +336,11 @@ let handleMessage (state: my_app_state) header payload outchan =
             ^ "\n height " ^ string_of_int new_.height 
             ^ "\n size " ^ string_of_int (strlen payload) 
             ^ "\n" )
-        >> return state
+        >> with_return_state state
       else
         Lwt_io.write_line Lwt_io.stdout ( "* got block (ignored) "  ^ string_of_int (strlen payload) ^ "\n" )
-        >> return state
+        (* should update time_of_last_received_block ? *)
+        >> with_return_state state
 
 
 (*
@@ -351,8 +360,8 @@ let handleMessage (state: my_app_state) header payload outchan =
 
   | _ ->
     Lwt_io.write_line Lwt_io.stdout ("* unknown '" ^ header.command ^ "' " ^ " length " ^ string_of_int header.length )
+    >> with_return_state state
 
-      >>= fun _ -> return state
 
 
 
@@ -387,9 +396,9 @@ let mainLoop inchan outchan =
   in
   let starting_state = {
     count = 1;
-    heads = 
+    heads = ( 
       (* as an exception - we add genesis even though it's not been downloaded it yet *)
-      let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in
+      let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
       let j = SS.empty in
       let j = SS.add genesis { 
         hash = genesis; 
@@ -397,7 +406,11 @@ let mainLoop inchan outchan =
         height = 0; 
         difficulty = 123 
       } j in
-      j
+      j );
+    time_of_last_received_block = Unix.time (); (* 0.; *)
+    handshake_complete = false;
+
+
   }
   in
     loop starting_state
