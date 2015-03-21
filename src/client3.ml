@@ -1,7 +1,7 @@
 
 (* TODO, we need a ping/pong response, to ensure we stay connected
 
-	first bit of script is almost certainly length.
+  first bit of script is almost certainly length.
 *)
 
 open Message
@@ -11,8 +11,8 @@ open Lwt (* for >>= *)
 
 
 (*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
-	testnet magic_head: "\xFA\xBF\xB5\xDA",
-	litecoin magic_head: "\xfb\xc0\xb6\xdb",
+  testnet magic_head: "\xFA\xBF\xB5\xDA",
+  litecoin magic_head: "\xfb\xc0\xb6\xdb",
 *)
 
 let m = 0xd9b4bef9  (* bitcoin *)
@@ -50,7 +50,7 @@ let initial_verack =
     (* clients seem to use e2e0f65d - hash of first part of header? *)
     checksum = 0;
   } in
-	header
+  header
 
 
 let initial_getaddr =
@@ -61,7 +61,7 @@ let initial_getaddr =
     (* clients seem to use e2e0f65d - hash of first part of header? *)
     checksum = 0;
   } in
-	header
+  header
 
 
 
@@ -73,7 +73,7 @@ type myvar =
 
 
 (* read exactly n bytes from channel, returning a string
-	- change name to readn or something? *)
+  - change name to readn or something? *)
 let readChannel inchan length   =
   let buf = Bytes.create length in
   Lwt_io.read_into_exactly inchan buf 0 length
@@ -128,8 +128,8 @@ let readMessage ic oc =
   (*   >>= fun s ->
       let _, header = decodeHeader s 0 in
         let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in
-		return s
-	*)
+    return s
+  *)
     (* read payload *)
     >>= fun s ->
       let _, header = decodeHeader s 0 in
@@ -139,11 +139,11 @@ let readMessage ic oc =
 
 (*
 let filterTerminated lst =
-	(* ok, hang on this might miss
-		because several finish - but only one gets returned
+  (* ok, hang on this might miss
+    because several finish - but only one gets returned
 
-		we need to use choosen instead.
-	*)
+    we need to use choosen instead.
+  *)
   let f t =
    match Lwt.state t with
      | Return _ -> false
@@ -157,15 +157,15 @@ let filterTerminated lst =
 (* we can also easily put a heartbeat timer *)
 
 (*
-	ok, it's not so easy...
+  ok, it's not so easy...
 
-	because the map is not going to accumulate
-	changes if there are more than one...
+  because the map is not going to accumulate
+  changes if there are more than one...
 
-	if we return the continuation then map
-	can be used...
+  if we return the continuation then map
+  can be used...
 
-	VERY IMPORTANT we can use nchoose_split and get rid of the scanning...
+  VERY IMPORTANT we can use nchoose_split and get rid of the scanning...
 *)
 
 let run () =
@@ -174,10 +174,10 @@ let run () =
     (*
       ok hang on.
         - it would be better to take a list of arrays and return a list
-		- more symetrical, and allows Nop to be []
-		- but we actually want state to be updated... 
+    - more symetrical, and allows Nop to be []
+    - but we actually want state to be updated... 
 
-		- f s e -> s
+    - f s e -> s
     *)
 
     (*
@@ -201,57 +201,44 @@ let run () =
             (Lwt_io.write_line Lwt_io.stdout "whoot got connection "
             >> Lwt_io.write oc initial_version
             >> readMessage ic oc
-			) :: lst
+          ) :: lst
 
           | GotError msg ->
             (Lwt_io.write_line Lwt_io.stdout msg
             >> return Nop
-			)
-			:: lst
+          ) :: lst
 
 
-           | Nop -> lst
+          | Nop -> lst
 
-          | GotMessage (ic, oc, header, payload) -> (
+          | GotMessage (ic, oc, header, payload) -> 
             match header.command with
               | "version" ->
-             ( Lwt_io.write_line Lwt_io.stdout "version message"
-              >> Lwt_io.write oc initial_verack
-              >> readMessage ic oc
-			  ) :: lst
+                ( Lwt_io.write_line Lwt_io.stdout "version message"
+                >> Lwt_io.write oc initial_verack
+                >> readMessage ic oc
+                ) :: lst
 
               | "inv" ->
               (let _, _ (*inv*) = decodeInv payload 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
-              >> readMessage ic oc
-			  ):: lst
+                Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
+                >> readMessage ic oc
+                ):: lst
 
               | s ->
-              (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
-              >> readMessage ic oc
-			  ):: lst
-				
-          )
+                (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
+                >> readMessage ic oc
+                ):: lst
+          
       in
-	
-	   let lst = List.fold_left f [] complete in
-    
-(*
-      (* let complete = List.filter (fun x -> match x with | Nop -> false | _ -> true ) complete in *)
-      let complete = List.filter (fun x -> x != Nop  ) complete in
-      let continuations = List.map f complete in
-      (* should filter Nop *)
-      loop (continuations @ incomplete)
-*)
-      loop (lst @ incomplete) 
-
-
+      let new_ = List.fold_left f [] complete in
+      loop (new_ @ incomplete) 
     in
 
      let lst = [
         (* getConnection "198.52.212.235"  8333; *)
 
-		getConnection "dnsseed.bluematt.me"  8333;
+      getConnection "dnsseed.bluematt.me"  8333;
 
 
     ] in
