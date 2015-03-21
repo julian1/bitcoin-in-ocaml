@@ -65,9 +65,21 @@ let initial_getaddr =
 
 
 
+type connection =
+{
+  (* addr : ip_address;
+    when checking if connecting to same node, should check ip not dns name
+    *) 
+  addr : string ; 
+  port : int;
+  fd :  Lwt_unix.file_descr ;
+  ic : Lwt_io.input Lwt_io.channel ; 
+  oc : Lwt_io.output Lwt_io.channel ; 
+}
+
 type myvar =
-   | GotConnection of Lwt_io.input Lwt_io.channel * Lwt_io.output Lwt_io.channel
-   | GotMessage of Lwt_io.input Lwt_io.channel * Lwt_io.output Lwt_io.channel * header * string
+   | GotConnection of connection
+   | GotMessage of connection  * header * string
    | GotError of string
    | Nop
 
@@ -99,6 +111,8 @@ let readChannel inchan length   =
 *)
 
 
+
+
 let getConnection host port =
   (* what is this lwt entry *)
   Lwt_unix.gethostbyname host
@@ -108,12 +122,20 @@ let getConnection host port =
     else
       Lwt.catch
         (fun  () ->
-         let a = (Unix.ADDR_INET (entry.Unix.h_addr_list.(0) , port)) in
+        let a = (Unix.ADDR_INET (entry.Unix.h_addr_list.(0) , port)) in
         let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
         let (inchan : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in
         let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
-        Lwt_unix.connect fd a
-        >> return @@ GotConnection (inchan, outchan)
+
+        let conn = {  
+            addr = host;
+            port = port;
+            fd = fd;
+            ic = inchan ;
+            oc = outchan; 
+        } in
+        Lwt_unix.connect conn.fd a
+        >> return @@ GotConnection conn 
         )
         (fun exn ->
           let s = Printexc.to_string exn in
@@ -122,8 +144,8 @@ let getConnection host port =
 
 
 
-let readMessage ic oc =
-    readChannel ic 24
+let readMessage conn =
+    readChannel conn.ic 24
     (* log *)
   (*   >>= fun s ->
       let _, header = decodeHeader s 0 in
@@ -133,9 +155,9 @@ let readMessage ic oc =
     (* read payload *)
     >>= fun s ->
       let _, header = decodeHeader s 0 in
-      readChannel ic header.length
+      readChannel conn.ic header.length
     >>= fun p ->
-      return @@ GotMessage ( ic, oc, header, p)
+      return @@ GotMessage ( conn, header, p)
 
 (*
 let filterTerminated lst =
@@ -189,6 +211,10 @@ let explode s =
   exp (String.length s - 1) []
 
 
+(* need different lists - connected and not ... *)
+
+
+
 type my_app_state =
 {
   count : int;
@@ -214,13 +240,17 @@ let run () =
 
     let add_job state job = { state with lst = job::state.lst } in
 
+    let format_addr conn = 
+      conn.addr ^ " " ^ string_of_int conn.port in 
+
+
     let f state e =
       match e with
-        | GotConnection (ic, oc) ->
+        | GotConnection conn ->
           add_job state ( 
-          Lwt_io.write_line Lwt_io.stdout "whoot got connection "
-          >> Lwt_io.write oc initial_version
-          >> readMessage ic oc
+          Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
+          >> Lwt_io.write conn.oc initial_version
+          >> readMessage conn
         )
         
         | GotError msg ->
@@ -231,21 +261,21 @@ let run () =
 
         | Nop -> state 
 
-        | GotMessage (ic, oc, header, payload) -> 
+        | GotMessage (conn, header, payload) -> 
           match header.command with
             | "version" ->
               add_job state 
               ( Lwt_io.write_line Lwt_io.stdout "version message"
-              >> Lwt_io.write oc initial_verack
-              >> readMessage ic oc
+              >> Lwt_io.write conn.oc initial_verack
+              >> readMessage conn 
               )
 
             | "inv" -> 
               add_job state
               (let _, inv = decodeInv payload 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) (* ^ formatInv inv *)
+              Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ format_addr conn  (* ^ formatInv inv *)
               (* >> Lwt_io.write oc initial_getaddr *)
-              >> readMessage ic oc
+              >> readMessage conn 
               )
 
             | "addr" -> 
@@ -269,12 +299,12 @@ let run () =
                 >> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ^ " port " ^ string_of_int addr.port ) 
                 >> getConnection (formatAddress addr) addr.port 
               ) in
-              add_job state ( readMessage ic oc )
+              add_job state ( readMessage conn )
 
             | s ->
               add_job state
               (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
-              >> readMessage ic oc
+              >> readMessage conn 
               )
     in
     let rec loop state =
@@ -289,12 +319,13 @@ let run () =
 
     in
     let lst = [
-        (* getConnection "198.52.212.235"  8333; *)
+         (* getConnection "198.52.212.235"  8333;  *)
       (* http://bitcoin.stackexchange.com/questions/3711/what-are-seednodes *)
+   (*     getConnection "24.246.66.189" 8333  *)
 
       getConnection "dnsseed.bluematt.me"  8333; 
-
-(*    getConnection "24.246.66.189" 8333 *)
+      (*  178.162.19.156 8333 *)
+      (* 178.162.19.156 port 8333 *)
     ] in
 
   let state = { count = 123 ; lst = lst; } 
