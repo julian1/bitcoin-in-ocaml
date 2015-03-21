@@ -172,7 +172,7 @@ let run () =
 
   Lwt_main.run (
     (*
-      ok hang on.
+      app state, is a fold over state and events 
       - f s e -> s
     *)
 
@@ -209,9 +209,17 @@ let run () =
 
             | "inv" ->
             (let _, _ (*inv*) = decodeInv payload 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
+              Lwt_io.write_line Lwt_io.stdout @@ "* got inv" (* ^ formatInv inv *)
               >> readMessage ic oc
               )::lst
+
+            | "addr" -> (
+                (* we sure it's not a version *)
+                let _, count = decodeVarInt payload 0 in
+                Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
+                >> readMessage ic oc
+              )::lst
+
 
             | s ->
               (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
@@ -223,15 +231,14 @@ let run () =
       Lwt.nchoose_split lst
         >>= fun (complete, incomplete) ->
           Lwt_io.write_line Lwt_io.stdout @@
-          "complete " ^ (string_of_int @@ List.length complete )
-          ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
-   (*     >> let new_ = List.fold_left f [] complete in
-          loop (new_ @ incomplete)  *)
-       >> loop @@ List.fold_left f incomplete complete 
+            "complete " ^ (string_of_int @@ List.length complete )
+            ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
+        >> loop @@ List.fold_left f incomplete complete 
 
     in
     let lst = [
         (* getConnection "198.52.212.235"  8333; *)
+      (* http://bitcoin.stackexchange.com/questions/3711/what-are-seednodes *)
       getConnection "dnsseed.bluematt.me"  8333;
     ] in
 
