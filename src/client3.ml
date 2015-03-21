@@ -223,7 +223,6 @@ let run () =
           >> readMessage ic oc
         )
         
-
         | GotError msg ->
           add_job state 
           (Lwt_io.write_line Lwt_io.stdout msg
@@ -269,16 +268,14 @@ let run () =
                 Lwt_io.write_line Lwt_io.stdout ( string_of_int x ) 
                 >> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ^ " port " ^ string_of_int addr.port ) 
                 >> getConnection (formatAddress addr) addr.port 
-                ) in
+              ) in
               add_job state ( readMessage ic oc )
 
             | s ->
-      { state with lst =
+              add_job state
               (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
               >> readMessage ic oc
-              )::state.lst
-      }
-
+              )
     in
     let rec loop state =
       Lwt.nchoose_split state.lst
