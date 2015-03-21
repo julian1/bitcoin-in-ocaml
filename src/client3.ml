@@ -65,10 +65,10 @@ let initial_getaddr =
 
 
 type myvar =
-   | GotConnection of Lwt_io.input Lwt_io.channel * Lwt_io.output Lwt_io.channel 
-   | GotMessage of Lwt_io.input Lwt_io.channel * Lwt_io.output Lwt_io.channel * header * string 
+   | GotConnection of Lwt_io.input Lwt_io.channel * Lwt_io.output Lwt_io.channel
+   | GotMessage of Lwt_io.input Lwt_io.channel * Lwt_io.output Lwt_io.channel * header * string
    | GotError of string
-   | Nop 
+   | Nop
 
 
 (* read exactly n bytes from channel, returning a string
@@ -133,104 +133,102 @@ let readMessage ic oc =
     >>= fun s ->
       let _, header = decodeHeader s 0 in
       readChannel ic header.length
-    >>= fun p -> 
+    >>= fun p ->
       return @@ GotMessage ( ic, oc, header, p)
 
 (*
 let filterTerminated lst =
 	(* ok, hang on this might miss
-		because several finish - but only one gets returned 
-	
+		because several finish - but only one gets returned
+
 		we need to use choosen instead.
 	*)
-  let f t = 
-   match Lwt.state t with 
+  let f t =
+   match Lwt.state t with
      | Return _ -> false
      | Fail _ -> false
      | _ -> true
   in
-  List.filter f lst  
+  List.filter f lst
 *)
 
 
-(* we can also easily put a heartbeat timer *) 
+(* we can also easily put a heartbeat timer *)
 
 (*
 	ok, it's not so easy...
 
-	because the map is not going to accumulate 
+	because the map is not going to accumulate
 	changes if there are more than one...
 
 	if we return the continuation then map
-	can be used...	
+	can be used...
 
 	VERY IMPORTANT we can use nchoose_split and get rid of the scanning...
 *)
 
 let run () =
+
   Lwt_main.run (
 
+    (*
+    - lst = jobs, tasks, threads, fibres
+    - within a task we can sequence as many sub tasks with >>= as much as we like
+    - we only have to thread stuff through this main function, when the app state changes
+       and we have to synchronize, 
+    - app state is effectively a fold over the network events...
+    *)
     let rec loop lst =
-      (* Lwt.choose lst *)
-      Lwt.nchoose_split lst 
-      >>= fun (complete, incomplete) -> 
-      Lwt_io.write_line Lwt_io.stdout @@ 
-        "complete length " ^ (string_of_int @@ List.length complete ) 
-        ^ " incomplete length " ^ (string_of_int @@ List.length incomplete) 
-      >>  
-      let f x = 
-        match x with
+
+      Lwt.nchoose_split lst
+      >>= fun (complete, incomplete) ->
+        Lwt_io.write_line Lwt_io.stdout @@
+        "complete length " ^ (string_of_int @@ List.length complete )
+        ^ " incomplete length " ^ (string_of_int @@ List.length incomplete)
+      >>
+        let f e =
+        match e with
           | GotConnection (ic, oc) ->
             Lwt_io.write_line Lwt_io.stdout "whoot got connection "
             >> Lwt_io.write oc initial_version
-            >> readMessage ic oc 
+            >> readMessage ic oc
 
           | GotError msg ->
-            (Lwt_io.write_line Lwt_io.stdout msg 
+            (Lwt_io.write_line Lwt_io.stdout msg
             >> return Nop
             )
-          | Nop -> return Nop (* actually impossible as we'll filter first *)
 
-    
-          | GotMessage (ic, oc, header, payload) ->
+          | GotMessage (ic, oc, header, payload) -> (
             match header.command with
-            | "version" ->
-            Lwt_io.write_line Lwt_io.stdout "version message" 
-            >> Lwt_io.write oc initial_verack
-            >> readMessage ic oc 
+              | "version" ->
+              Lwt_io.write_line Lwt_io.stdout "version message"
+              >> Lwt_io.write oc initial_verack
+              >> readMessage ic oc
 
-            | "inv" ->
-            let _, inv = decodeInv payload 0 in
-            Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" ^ formatInv inv
-            >> readMessage ic oc 
+              | "inv" ->
+              let _, inv = decodeInv payload 0 in
+              Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" ^ formatInv inv
+              >> readMessage ic oc
 
-            | s -> 
-            Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s 
-            >> readMessage ic oc 
+              | s ->
+              Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
+              >> readMessage ic oc
+          )
+
+          | Nop -> return Nop
 
       in
-
       let complete = List.filter (fun x -> match x with | Nop -> false | _ -> true ) complete in
-
       let continuations = List.map f complete in
       (* should filter Nop *)
       loop (continuations @ incomplete)
 
 
-
-(*
-(
-       | GotError msg ->
-        Lwt_io.write_line Lwt_io.stdout msg 
-        >> let lst = filterTerminated lst in 
-        loop lst
-)complete	
-*)
-       in
+    in
 
      let lst = [
         getConnection "198.52.212.235"  8333;
-        getConnection "198.52.212.235"  8333
+    (*    getConnection "198.52.212.235"  8333 *)
     ] in
 
     loop lst
