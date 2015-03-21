@@ -173,11 +173,7 @@ let run () =
   Lwt_main.run (
     (*
       ok hang on.
-        - it would be better to take a list of arrays and return a list
-    - more symetrical, and allows Nop to be []
-    - but we actually want state to be updated... 
-
-    - f s e -> s
+      - f s e -> s
     *)
 
     (*
@@ -229,8 +225,10 @@ let run () =
           Lwt_io.write_line Lwt_io.stdout @@
           "complete " ^ (string_of_int @@ List.length complete )
           ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
-        >> let new_ = List.fold_left f [] complete in
-          loop (new_ @ incomplete) 
+   (*     >> let new_ = List.fold_left f [] complete in
+          loop (new_ @ incomplete)  *)
+       >> loop @@ List.fold_left f incomplete complete 
+
     in
     let lst = [
         (* getConnection "198.52.212.235"  8333; *)
