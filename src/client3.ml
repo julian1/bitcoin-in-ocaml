@@ -9,6 +9,7 @@ open Script
 
 open Lwt (* for >>= *)
 
+
 (*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
 	testnet magic_head: "\xFA\xBF\xB5\xDA",
 	litecoin magic_head: "\xfb\xc0\xb6\xdb",
@@ -170,10 +171,18 @@ let filterTerminated lst =
 let run () =
 
   Lwt_main.run (
+    (*
+      ok hang on.
+        - it would be better to take a list of arrays and return a list
+		- more symetrical, and allows Nop to be []
+		- but we actually want state to be updated... 
+
+		- f s e -> s
+    *)
 
     (*
     - lst = jobs, tasks, threads, fibres
-    - within a task we can sequence as many sub tasks with >>= as much as we like
+    - within a task we can sequence as many sub tasks using >>= as we like
     - we only have to thread stuff through this main function, when the app state changes
        and we have to synchronize, 
     - app state is effectively a fold over the network events...
@@ -207,7 +216,7 @@ let run () =
 
               | "inv" ->
               let _, inv = decodeInv payload 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" ^ formatInv inv
+              Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
               >> readMessage ic oc
 
               | s ->
