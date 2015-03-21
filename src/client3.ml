@@ -186,10 +186,12 @@ let run () =
             >> readMessage ic oc 
 
           | GotError msg ->
-            Lwt_io.write_line Lwt_io.stdout msg 
+            (Lwt_io.write_line Lwt_io.stdout msg 
             >> return Nop
-    
+            )
+          | Nop -> return Nop (* actually impossible as we'll filter first *)
 
+    
           | GotMessage (ic, oc, header, payload) ->
             match header.command with
             | "version" ->
@@ -207,6 +209,9 @@ let run () =
             >> readMessage ic oc 
 
       in
+
+      let complete = List.filter (fun x -> match x with | Nop -> false | _ -> true ) complete in
+
       let continuations = List.map f complete in
       (* should filter Nop *)
       loop (continuations @ incomplete)
