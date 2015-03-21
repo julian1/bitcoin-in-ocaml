@@ -168,6 +168,11 @@ let filterTerminated lst =
   VERY IMPORTANT we can use nchoose_split and get rid of the scanning...
 *)
 
+let explode s =
+  let rec exp i l =
+    if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+  exp (String.length s - 1) []
+
 let run () =
 
   Lwt_main.run (
@@ -210,14 +215,34 @@ let run () =
             | "inv" ->
             (let _, _ (*inv*) = decodeInv payload 0 in
               Lwt_io.write_line Lwt_io.stdout @@ "* got inv" (* ^ formatInv inv *)
+
+              >> Lwt_io.write oc initial_getaddr
               >> readMessage ic oc
               )::lst
 
             | "addr" -> (
-                (* we sure it's not a version *)
-                let _, count = decodeVarInt payload 0 in
+                (* we sure it's not a version? 
+                  ok, we want to look a bit closer...
+					-- we actually want to read the raw bytes...
+
+					1 114 58 13 85 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255 255 31 186 250 186 32 141
+                *)
+                let pos, count = decodeVarInt payload 0 in
                 Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
-                >> readMessage ic oc
+				>>
+				let u = explode payload |> List.map Char.code |> List.map string_of_int |> String.concat " " in
+
+                Lwt_io.write_line Lwt_io.stdout u 
+				>>
+
+				let pos, x = decodeInteger32 payload pos in 
+				let _, addr = decodeAddress payload pos in 
+
+                Lwt_io.write_line Lwt_io.stdout ( string_of_int x ) 
+                >> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ) 
+ 
+				>> 
+                readMessage ic oc
               )::lst
 
 
@@ -230,16 +255,20 @@ let run () =
     let rec loop lst =
       Lwt.nchoose_split lst
         >>= fun (complete, incomplete) ->
-          Lwt_io.write_line Lwt_io.stdout @@
+        (*  Lwt_io.write_line Lwt_io.stdout @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
-        >> loop @@ List.fold_left f incomplete complete 
+        >> *) 
+          loop @@ List.fold_left f incomplete complete 
 
     in
     let lst = [
         (* getConnection "198.52.212.235"  8333; *)
       (* http://bitcoin.stackexchange.com/questions/3711/what-are-seednodes *)
-      getConnection "dnsseed.bluematt.me"  8333;
+
+(*      getConnection "dnsseed.bluematt.me"  8333; *)
+
+		getConnection "24.246.66.189" 8333
     ] in
 
     loop lst
