@@ -218,7 +218,8 @@ let run () =
           | Nop -> return Nop
 
       in
-      let complete = List.filter (fun x -> match x with | Nop -> false | _ -> true ) complete in
+      (* let complete = List.filter (fun x -> match x with | Nop -> false | _ -> true ) complete in *)
+      let complete = List.filter (fun x -> x != Nop  ) complete in
       let continuations = List.map f complete in
       (* should filter Nop *)
       loop (continuations @ incomplete)
