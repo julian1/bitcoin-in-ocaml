@@ -122,13 +122,17 @@ let getConnection host port =
     else
       Lwt.catch
         (fun  () ->
-        let a = (Unix.ADDR_INET (entry.Unix.h_addr_list.(0) , port)) in
+        let a_ = entry.Unix.h_addr_list.(0) in
+        (* let u = Unix.string_of_inet_addr a_ in *)
+
+        let a = Unix.ADDR_INET ( a_ , port) in 
+  
         let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
         let (inchan : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in
         let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
 
         let conn = {  
-            addr = host;
+            addr = Unix.string_of_inet_addr a_;
             port = port;
             fd = fd;
             ic = inchan ;
@@ -219,9 +223,13 @@ type my_app_state =
 {
   count : int;
   lst :  myvar Lwt.t list ;
+  connections : connection list ; 
 }
 
+(* useful for debugging *)
+let u s = explode s |> List.map Char.code |> List.map string_of_int |> String.concat " " 
 
+         
 let run () =
 
   Lwt_main.run (
@@ -247,11 +255,15 @@ let run () =
     let f state e =
       match e with
         | GotConnection conn ->
-          add_job state ( 
-          Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
-          >> Lwt_io.write conn.oc initial_version
-          >> readMessage conn
-        )
+          { state with
+             lst = ( 
+                Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
+                >> Lwt_io.write conn.oc initial_version
+                >> readMessage conn
+            ) :: state.lst
+; 
+            connections = conn :: state.connections 
+          }
         
         | GotError msg ->
           add_job state 
@@ -279,13 +291,17 @@ let run () =
               )
 
             | "addr" -> 
-              let state = add_job state 
-                (let pos, count = decodeVarInt payload 0 in
-                Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
-                >>
-                let u = explode payload |> List.map Char.code |> List.map string_of_int |> String.concat " " in
-                Lwt_io.write_line Lwt_io.stdout u 
-                >>
+              (* it's going to be easiest to stick to common address format 
+                int * int * int * int * int
+                format...
+              
+                - there's a race condition here, because we don't update known peers
+                here. which is what we should do.
+                - irrespective of whether we will connect to them, blacklisted etc... 
+              *)
+
+                let pos, count = decodeVarInt payload 0 in
+                (* should take more than the first *)
                 let pos, x = decodeInteger32 payload pos in 
                 let _, addr = decodeAddress payload pos in 
                 let formatAddress (h : ip_address ) =
@@ -295,17 +311,29 @@ let run () =
                   soi a; soi b; soi c; soi d 
                   ] (* ^ ":" ^ soi h.port *)
                 in
-                Lwt_io.write_line Lwt_io.stdout ( string_of_int x ) 
-                >> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ^ " port " ^ string_of_int addr.port ) 
-                >> getConnection (formatAddress addr) addr.port 
-              ) in
-              add_job state ( readMessage conn )
+                let a = formatAddress addr in
+                let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) state.connections in
+                if already_got then { 
+                  state with lst = 
+                    (Lwt_io.write_line Lwt_io.stdout 
+                    ( "already connected to " ^ a ^ " ignoring " )>> return Nop) :: state.lst  
+                } 
+                else { 
+                  state with 
+                    lst = ( 
+                      Lwt_io.write_line Lwt_io.stdout "whoot new unknown addr "  
+                      >> Lwt_io.write_line Lwt_io.stdout ( a ^ " port " ^ string_of_int addr.port ) 
+                      >> getConnection (formatAddress addr) addr.port 
+                      ) :: state.lst
+                    ;
+                }
 
             | s ->
               add_job state
               (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
               >> readMessage conn 
               )
+
     in
     let rec loop state =
       Lwt.nchoose_split state.lst
@@ -323,12 +351,16 @@ let run () =
       (* http://bitcoin.stackexchange.com/questions/3711/what-are-seednodes *)
    (*     getConnection "24.246.66.189" 8333  *)
 
-      getConnection "dnsseed.bluematt.me"  8333; 
+        getConnection "dnsseed.bluematt.me"  8333; 
       (*  178.162.19.156 8333 *)
-      (* 178.162.19.156 port 8333 *)
+      (* 178.162.19.156 port 8333 
+    
+      ok so we have an issue that we're connecting to the same address...
+       *)
+        (*                 68.39.77.241 8333 *) 
     ] in
 
-  let state = { count = 123 ; lst = lst; } 
+  let state = { count = 123 ; lst = lst; connections = []; } 
   in
 
     loop state 
