@@ -192,8 +192,8 @@ let run () =
       Lwt.nchoose_split lst
       >>= fun (complete, incomplete) ->
         Lwt_io.write_line Lwt_io.stdout @@
-        "complete length " ^ (string_of_int @@ List.length complete )
-        ^ " incomplete length " ^ (string_of_int @@ List.length incomplete)
+        "complete " ^ (string_of_int @@ List.length complete )
+        ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
       >>
         let f lst e =
         match e with
@@ -203,13 +203,14 @@ let run () =
             >> readMessage ic oc
 			) :: lst
 
-
           | GotError msg ->
             (Lwt_io.write_line Lwt_io.stdout msg
             >> return Nop
 			)
 			:: lst
-            
+
+
+           | Nop -> lst
 
           | GotMessage (ic, oc, header, payload) -> (
             match header.command with
@@ -220,7 +221,7 @@ let run () =
 			  ) :: lst
 
               | "inv" ->
-              (let _, inv = decodeInv payload 0 in
+              (let _, _ (*inv*) = decodeInv payload 0 in
               Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
               >> readMessage ic oc
 			  ):: lst
