@@ -614,9 +614,9 @@ let formatHeader (h : header) =
 let formatAddress (h : ip_address ) =
   let soi = string_of_int in
   let a,b,c,d = h.address  in
-  String.concat "" [
-    soi a; "." ; soi b; "."; soi c; "."; soi d; ":"; soi h.port
-  ]
+  String.concat "." [
+    soi a; soi b; soi c; soi d 
+  ] ^ ":" ^ soi h.port
 
 let formatVersion (h : version) =
   (* we can easily write a concat that will space fields, insert separator etc, pass as tuple pairs instead*)
