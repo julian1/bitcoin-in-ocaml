@@ -213,37 +213,44 @@ let run () =
               )::lst
 
             | "inv" ->
-            (let _, _ (*inv*) = decodeInv payload 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ "* got inv" (* ^ formatInv inv *)
+            (let _, inv = decodeInv payload 0 in
+              Lwt_io.write_line Lwt_io.stdout @@ "* got inv" ^ string_of_int (List.length inv) (* ^ formatInv inv *)
 
-              >> Lwt_io.write oc initial_getaddr
+              (* >> Lwt_io.write oc initial_getaddr *)
               >> readMessage ic oc
               )::lst
 
-            | "addr" -> (
+            | "addr" -> 
                 (* we sure it's not a version? 
                   ok, we want to look a bit closer...
 					-- we actually want to read the raw bytes...
 
 					1 114 58 13 85 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255 255 31 186 250 186 32 141
                 *)
-                let pos, count = decodeVarInt payload 0 in
-                Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
-				>>
-				let u = explode payload |> List.map Char.code |> List.map string_of_int |> String.concat " " in
-
-                Lwt_io.write_line Lwt_io.stdout u 
-				>>
-
-				let pos, x = decodeInteger32 payload pos in 
-				let _, addr = decodeAddress payload pos in 
-
-                Lwt_io.write_line Lwt_io.stdout ( string_of_int x ) 
-                >> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ) 
- 
-				>> 
-                readMessage ic oc
-              )::lst
+				[	
+					(let pos, count = decodeVarInt payload 0 in
+					Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
+					>>
+					let u = explode payload |> List.map Char.code |> List.map string_of_int |> String.concat " " in
+					Lwt_io.write_line Lwt_io.stdout u 
+					>>
+					let pos, x = decodeInteger32 payload pos in 
+					let _, addr = decodeAddress payload pos in 
+					let formatAddress (h : ip_address ) =
+					  let soi = string_of_int in
+					  let a,b,c,d = h.address  in
+					  String.concat "." [
+						soi a; soi b; soi c; soi d 
+					  ] (* ^ ":" ^ soi h.port *)
+					in
+					Lwt_io.write_line Lwt_io.stdout ( string_of_int x ) 
+					>> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ^ "port " ^ string_of_int addr.port ) 
+					>> getConnection (formatAddress addr) addr.port 
+					)
+					; 
+					readMessage ic oc
+				]
+				 @ lst
 
 
             | s ->
@@ -255,10 +262,10 @@ let run () =
     let rec loop lst =
       Lwt.nchoose_split lst
         >>= fun (complete, incomplete) ->
-        (*  Lwt_io.write_line Lwt_io.stdout @@
+          Lwt_io.write_line Lwt_io.stdout @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
-        >> *) 
+        >>  
           loop @@ List.fold_left f incomplete complete 
 
     in
@@ -266,9 +273,9 @@ let run () =
         (* getConnection "198.52.212.235"  8333; *)
       (* http://bitcoin.stackexchange.com/questions/3711/what-are-seednodes *)
 
-(*      getConnection "dnsseed.bluematt.me"  8333; *)
+      getConnection "dnsseed.bluematt.me"  8333; 
 
-		getConnection "24.246.66.189" 8333
+(*		getConnection "24.246.66.189" 8333 *)
     ] in
 
     loop lst
