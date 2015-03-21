@@ -214,7 +214,7 @@ let run () =
 
             | "inv" ->
             (let _, inv = decodeInv payload 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ "* got inv" ^ string_of_int (List.length inv) (* ^ formatInv inv *)
+              Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) (* ^ formatInv inv *)
 
               (* >> Lwt_io.write oc initial_getaddr *)
               >> readMessage ic oc
