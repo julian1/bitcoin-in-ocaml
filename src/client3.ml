@@ -195,50 +195,64 @@ let run () =
         "complete length " ^ (string_of_int @@ List.length complete )
         ^ " incomplete length " ^ (string_of_int @@ List.length incomplete)
       >>
-        let f e =
+        let f lst e =
         match e with
           | GotConnection (ic, oc) ->
-            Lwt_io.write_line Lwt_io.stdout "whoot got connection "
+            (Lwt_io.write_line Lwt_io.stdout "whoot got connection "
             >> Lwt_io.write oc initial_version
             >> readMessage ic oc
+			) :: lst
+
 
           | GotError msg ->
             (Lwt_io.write_line Lwt_io.stdout msg
             >> return Nop
-            )
+			)
+			:: lst
+            
 
           | GotMessage (ic, oc, header, payload) -> (
             match header.command with
               | "version" ->
-              Lwt_io.write_line Lwt_io.stdout "version message"
+             ( Lwt_io.write_line Lwt_io.stdout "version message"
               >> Lwt_io.write oc initial_verack
               >> readMessage ic oc
+			  ) :: lst
 
               | "inv" ->
-              let _, inv = decodeInv payload 0 in
+              (let _, inv = decodeInv payload 0 in
               Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
               >> readMessage ic oc
+			  ):: lst
 
               | s ->
-              Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
+              (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
               >> readMessage ic oc
+			  ):: lst
+				
           )
-
-          | Nop -> return Nop
-
       in
+	
+	   let lst = List.fold_left f [] complete in
+    
+(*
       (* let complete = List.filter (fun x -> match x with | Nop -> false | _ -> true ) complete in *)
       let complete = List.filter (fun x -> x != Nop  ) complete in
       let continuations = List.map f complete in
       (* should filter Nop *)
       loop (continuations @ incomplete)
+*)
+      loop (lst @ incomplete) 
 
 
     in
 
      let lst = [
-        getConnection "198.52.212.235"  8333;
-    (*    getConnection "198.52.212.235"  8333 *)
+        (* getConnection "198.52.212.235"  8333; *)
+
+		getConnection "dnsseed.bluematt.me"  8333;
+
+
     ] in
 
     loop lst
