@@ -267,9 +267,10 @@ let run () =
         
         | GotError msg ->
           add_job state 
-          (Lwt_io.write_line Lwt_io.stdout msg
+          (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
           >> return Nop
           )
+          (* we got a conn error and it all stopped ? *)
 
         | Nop -> state 
 
@@ -297,7 +298,7 @@ let run () =
               
                 - there's a race condition here, because we don't update known peers
                 here. which is what we should do.
-                - irrespective of whether we will connect to them, blacklisted etc... 
+                - irrespective of whether we will connect to them, blacklisted etc, already have enough etc... 
               *)
 
                 let pos, count = decodeVarInt payload 0 in
@@ -316,7 +317,9 @@ let run () =
                 if already_got then { 
                   state with lst = 
                     (Lwt_io.write_line Lwt_io.stdout 
-                    ( "already connected to " ^ a ^ " ignoring " )>> return Nop) :: state.lst  
+                    ( "already connected to " ^ a ^ " ignoring " )>> return Nop) 
+                  :: readMessage conn  
+                  :: state.lst  
                 } 
                 else { 
                   state with 
@@ -324,7 +327,9 @@ let run () =
                       Lwt_io.write_line Lwt_io.stdout "whoot new unknown addr "  
                       >> Lwt_io.write_line Lwt_io.stdout ( a ^ " port " ^ string_of_int addr.port ) 
                       >> getConnection (formatAddress addr) addr.port 
-                      ) :: state.lst
+                      ) 
+                      :: readMessage conn  
+                      :: state.lst
                     ;
                 }
 
@@ -357,7 +362,9 @@ let run () =
     
       ok so we have an issue that we're connecting to the same address...
        *)
-        (*                 68.39.77.241 8333 *) 
+        (*                 68.39.77.241 8333 
+          76.121.158.45 8333
+       *) 
     ] in
 
   let state = { count = 123 ; lst = lst; connections = []; } 
