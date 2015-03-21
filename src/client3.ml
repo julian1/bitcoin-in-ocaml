@@ -181,17 +181,17 @@ let run () =
       let f x = 
         match x with
           | GotConnection (ic, oc) ->
-          Lwt_io.write_line Lwt_io.stdout "whoot got connection "
-          >> Lwt_io.write oc initial_version
-          >> readMessage ic oc 
+            Lwt_io.write_line Lwt_io.stdout "whoot got connection "
+            >> Lwt_io.write oc initial_version
+            >> readMessage ic oc 
 
           | GotError msg ->
-          Lwt_io.write_line Lwt_io.stdout msg 
-          >> return Nop
-  
+            Lwt_io.write_line Lwt_io.stdout msg 
+            >> return Nop
+    
 
           | GotMessage (ic, oc, header, payload) ->
-          match header.command with
+            match header.command with
             | "version" ->
             Lwt_io.write_line Lwt_io.stdout "version message" 
             >> Lwt_io.write oc initial_verack
