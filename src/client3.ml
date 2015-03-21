@@ -167,6 +167,21 @@ let filterTerminated lst =
 
   VERY IMPORTANT we can use nchoose_split and get rid of the scanning...
 *)
+  (*
+          - ok need
+            - check we're not already connected - maintain a list in state
+            - track the inbound...
+            - protection against end of files. put in a banned list.
+            - combine the fd,ic,oc address into a structure...
+            - close conns...
+
+        *)
+                (* we sure it's not a version? 
+                  ok, we want to look a bit closer...
+          -- we actually want to read the raw bytes...
+
+          1 114 58 13 85 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255 255 31 186 250 186 32 141
+                *)
 
 let explode s =
   let rec exp i l =
@@ -176,8 +191,8 @@ let explode s =
 
 type my_app_state =
 {
-	count : int;
-	lst :  myvar Lwt.t list ;
+  count : int;
+  lst :  myvar Lwt.t list ;
 }
 
 
@@ -197,98 +212,72 @@ let run () =
     - app state is effectively a fold over the network events...
     *)
 
+    let add_job state job = { state with lst = job::state.lst } in
+
     let f state e =
       match e with
         | GotConnection (ic, oc) ->
-		{ state with 
-			lst = 
-          (Lwt_io.write_line Lwt_io.stdout "whoot got connection "
+          add_job state ( 
+          Lwt_io.write_line Lwt_io.stdout "whoot got connection "
           >> Lwt_io.write oc initial_version
           >> readMessage ic oc
-        )::state.lst
-		}
+        )
+        
 
         | GotError msg ->
-		{ state with 
-		lst = 
+          add_job state 
           (Lwt_io.write_line Lwt_io.stdout msg
           >> return Nop
-        )::state.lst
-		}
+          )
 
         | Nop -> state 
 
         | GotMessage (ic, oc, header, payload) -> 
           match header.command with
             | "version" ->
-				{ state with lst =
+              add_job state 
               ( Lwt_io.write_line Lwt_io.stdout "version message"
               >> Lwt_io.write oc initial_verack
               >> readMessage ic oc
-              )::state.lst
-			}
+              )
 
             | "inv" -> 
-			{ state with lst = 
-            (let _, inv = decodeInv payload 0 in
+              add_job state
+              (let _, inv = decodeInv payload 0 in
               Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) (* ^ formatInv inv *)
-
               (* >> Lwt_io.write oc initial_getaddr *)
               >> readMessage ic oc
-              )::state.lst
-			}
+              )
 
             | "addr" -> 
-				{ 
-				state with lst =
-				(*
-					- ok need
-						- check we're not already connected - maintain a list in state
-						- track the inbound...
-						- protection against end of files. put in a banned list.
-						- combine the fd,ic,oc address into a structure...
-						- close conns...
-
-				*)
-                (* we sure it's not a version? 
-                  ok, we want to look a bit closer...
-					-- we actually want to read the raw bytes...
-
-					1 114 58 13 85 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255 255 31 186 250 186 32 141
-                *)
-				[	
-					(let pos, count = decodeVarInt payload 0 in
-					Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
-					>>
-					let u = explode payload |> List.map Char.code |> List.map string_of_int |> String.concat " " in
-					Lwt_io.write_line Lwt_io.stdout u 
-					>>
-					let pos, x = decodeInteger32 payload pos in 
-					let _, addr = decodeAddress payload pos in 
-					let formatAddress (h : ip_address ) =
-					  let soi = string_of_int in
-					  let a,b,c,d = h.address  in
-					  String.concat "." [
-						soi a; soi b; soi c; soi d 
-					  ] (* ^ ":" ^ soi h.port *)
-					in
-					Lwt_io.write_line Lwt_io.stdout ( string_of_int x ) 
-					>> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ^ " port " ^ string_of_int addr.port ) 
-					>> getConnection (formatAddress addr) addr.port 
-					)
-					; 
-					readMessage ic oc
-				]
-				 @ state.lst
-				}
-
+              let state = add_job state 
+                (let pos, count = decodeVarInt payload 0 in
+                Lwt_io.write_line Lwt_io.stdout ( "* got addr - count " ^ string_of_int count ^ "\n" )
+                >>
+                let u = explode payload |> List.map Char.code |> List.map string_of_int |> String.concat " " in
+                Lwt_io.write_line Lwt_io.stdout u 
+                >>
+                let pos, x = decodeInteger32 payload pos in 
+                let _, addr = decodeAddress payload pos in 
+                let formatAddress (h : ip_address ) =
+                  let soi = string_of_int in
+                  let a,b,c,d = h.address  in
+                  String.concat "." [
+                  soi a; soi b; soi c; soi d 
+                  ] (* ^ ":" ^ soi h.port *)
+                in
+                Lwt_io.write_line Lwt_io.stdout ( string_of_int x ) 
+                >> Lwt_io.write_line Lwt_io.stdout ( formatAddress addr ^ " port " ^ string_of_int addr.port ) 
+                >> getConnection (formatAddress addr) addr.port 
+                ) in
+              add_job state ( readMessage ic oc )
 
             | s ->
-			{ state with lst =
+      { state with lst =
               (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
               >> readMessage ic oc
               )::state.lst
-			}
+      }
 
     in
     let rec loop state =
@@ -308,11 +297,11 @@ let run () =
 
       getConnection "dnsseed.bluematt.me"  8333; 
 
-(*		getConnection "24.246.66.189" 8333 *)
+(*    getConnection "24.246.66.189" 8333 *)
     ] in
 
-	let state = { count = 123 ; lst = lst; } 
-	in
+  let state = { count = 123 ; lst = lst; } 
+  in
 
     loop state 
   )
