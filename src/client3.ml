@@ -187,60 +187,54 @@ let run () =
        and we have to synchronize, 
     - app state is effectively a fold over the network events...
     *)
-    let rec loop lst =
 
-      Lwt.nchoose_split lst
-      >>= fun (complete, incomplete) ->
-        Lwt_io.write_line Lwt_io.stdout @@
-        "complete " ^ (string_of_int @@ List.length complete )
-        ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
-      >>
-        let f lst e =
-        match e with
-          | GotConnection (ic, oc) ->
-            (Lwt_io.write_line Lwt_io.stdout "whoot got connection "
-            >> Lwt_io.write oc initial_version
-            >> readMessage ic oc
-          ) :: lst
+    let f lst e =
+      match e with
+        | GotConnection (ic, oc) ->
+          (Lwt_io.write_line Lwt_io.stdout "whoot got connection "
+          >> Lwt_io.write oc initial_version
+          >> readMessage ic oc
+        )::lst
 
-          | GotError msg ->
-            (Lwt_io.write_line Lwt_io.stdout msg
-            >> return Nop
-          ) :: lst
+        | GotError msg ->
+          (Lwt_io.write_line Lwt_io.stdout msg
+          >> return Nop
+        )::lst
 
+        | Nop -> lst
 
-          | Nop -> lst
+        | GotMessage (ic, oc, header, payload) -> 
+          match header.command with
+            | "version" ->
+              ( Lwt_io.write_line Lwt_io.stdout "version message"
+              >> Lwt_io.write oc initial_verack
+              >> readMessage ic oc
+              )::lst
 
-          | GotMessage (ic, oc, header, payload) -> 
-            match header.command with
-              | "version" ->
-                ( Lwt_io.write_line Lwt_io.stdout "version message"
-                >> Lwt_io.write oc initial_verack
-                >> readMessage ic oc
-                ) :: lst
+            | "inv" ->
+            (let _, _ (*inv*) = decodeInv payload 0 in
+              Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
+              >> readMessage ic oc
+              )::lst
 
-              | "inv" ->
-              (let _, _ (*inv*) = decodeInv payload 0 in
-                Lwt_io.write_line Lwt_io.stdout @@ "* whoot got inv" (* ^ formatInv inv *)
-                >> readMessage ic oc
-                ):: lst
+            | s ->
+              (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
+              >> readMessage ic oc
+              )::lst
 
-              | s ->
-                (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
-                >> readMessage ic oc
-                ):: lst
-          
-      in
-      let new_ = List.fold_left f [] complete in
-      loop (new_ @ incomplete) 
     in
-
-     let lst = [
+    let rec loop lst =
+      Lwt.nchoose_split lst
+        >>= fun (complete, incomplete) ->
+          Lwt_io.write_line Lwt_io.stdout @@
+          "complete " ^ (string_of_int @@ List.length complete )
+          ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
+        >> let new_ = List.fold_left f [] complete in
+          loop (new_ @ incomplete) 
+    in
+    let lst = [
         (* getConnection "198.52.212.235"  8333; *)
-
       getConnection "dnsseed.bluematt.me"  8333;
-
-
     ] in
 
     loop lst
