@@ -294,7 +294,9 @@ let run () =
 
         | GotReadError (conn, msg) ->
           { state with
-            connections = List.filter (fun x -> x = conn) state.connections
+            connections = 
+				let same a b = a.addr = b.addr && a.port = b.port in 
+				List.filter (fun x -> not @@ same x conn) state.connections
           } 
           |> fun state ->
             add_job state 
