@@ -143,6 +143,15 @@ let getConnection host port =
           return @@ GotError s
         )
 
+(*
+  TODO
+    - let read top level loop handle closing of sockets. this enables comparison
+    on fd first to remove the connection. instead of addr port.
+
+    - if we've saturated max connections, and a connection hasn't sent anything
+    for a period (eg. 2 minutes) then drop one connection. this ought to 
+    enable us to cycle to always active not just open connections.
+*)
 
 (* read exactly n bytes from channel, returning a string
   - change name to readn or something? *)
