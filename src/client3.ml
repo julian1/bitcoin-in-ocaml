@@ -113,17 +113,19 @@ let getConnection host port =
     if Array.length entry.Unix.h_addr_list = 0 then
       return @@ GotError "could not resolve hostname"
     else
+      let a_ = entry.Unix.h_addr_list.(0) in
+      (* let u = Unix.string_of_inet_addr a_ in *)
+
+      let a = Unix.ADDR_INET ( a_ , port) in 
+
+      let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+      let (inchan : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in
+      let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
+
       Lwt.catch
         (fun  () ->
-        let a_ = entry.Unix.h_addr_list.(0) in
-        (* let u = Unix.string_of_inet_addr a_ in *)
 
-        let a = Unix.ADDR_INET ( a_ , port) in 
-  
-        let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
-        let (inchan : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in
-        let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
-
+        (* should only create this if get the conn *)
         let conn = {  
             addr = Unix.string_of_inet_addr a_;
             port = port;
@@ -136,6 +138,8 @@ let getConnection host port =
         )
         (fun exn ->
           let s = Printexc.to_string exn in
+		      Lwt_unix.close fd 
+          >>
           return @@ GotError s
         )
 
@@ -357,10 +361,10 @@ let run () =
                 in
                 let a = formatAddress addr in
                 let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) state.connections in
-                if already_got && List.length state.connections < 25 then { 
+                if already_got || List.length state.connections > 30 then { 
                   state with lst = 
                     (Lwt_io.write_line Lwt_io.stdout 
-                    ( "whoot new addr - already connected to " ^ a ^ " ignoring " )>> return Nop) 
+                    ( "whoot new addr - already got or ignore " ^ a )>> return Nop) 
                   :: readMessage conn  
                   :: state.lst  
                 } 
