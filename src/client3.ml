@@ -264,14 +264,13 @@ let run () =
     let f state e =
       match e with
         | GotConnection conn ->
+          add_job state 
+             (Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
+             >> Lwt_io.write conn.oc initial_version
+             >> readMessage conn ) 
+          |> fun state ->
           { state with
-             lst = ( 
-                Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
-                >> Lwt_io.write conn.oc initial_version
-                >> readMessage conn
-            ) :: state.lst
-; 
-            connections = conn :: state.connections 
+              connections = conn :: state.connections 
           }
         
         | GotError msg ->
