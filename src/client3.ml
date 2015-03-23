@@ -113,7 +113,7 @@ let getConnection host port =
     if Array.length entry.Unix.h_addr_list = 0 then
       return @@ GotError "could not resolve hostname"
     else
-      Lwt.catcH
+      Lwt.catch
         (fun  () ->
         let a_ = entry.Unix.h_addr_list.(0) in
         (* let u = Unix.string_of_inet_addr a_ in *)
@@ -166,11 +166,7 @@ let readMessage conn =
       >>= fun p ->
         return @@ GotMessage ( conn, header, p)
     ) ( fun exn ->  
-
         (* do we have to close the channels as well as the descriptor?? *)
-
-
-
         let s = Printexc.to_string exn in
         Lwt_unix.close conn.fd 
         >>
@@ -352,7 +348,7 @@ let run () =
                 in
                 let a = formatAddress addr in
                 let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) state.connections in
-                if already_got then { 
+                if already_got || List.length state.connections > 10 then { 
                   state with lst = 
                     (Lwt_io.write_line Lwt_io.stdout 
                     ( "whoot new addr - already connected to " ^ a ^ " ignoring " )>> return Nop) 
@@ -384,9 +380,14 @@ let run () =
           Lwt_io.write_line Lwt_io.stdout @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
+            ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
           (* loop @@ List.fold_left f incomplete complete  *)
-          loop @@ List.fold_left f { state with lst = incomplete } complete 
+          let new_state = List.fold_left f { state with lst = incomplete } complete 
+          in if List.length new_state.lst > 0 then
+            loop new_state 
+          else
+            return ()
 
     in
     let lst = [
