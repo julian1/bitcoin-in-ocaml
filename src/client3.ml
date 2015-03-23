@@ -161,7 +161,10 @@ let readMessage conn =
     *)
       >>= fun s ->
         let _, header = decodeHeader s 0 in
-          let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.formatHeader header ^ "\n")  in return s
+        Lwt_io.write_line Lwt_io.stdout ("payload length " ^  string_of_int header.length )  
+        >> Lwt_io.write_line Lwt_io.stdout ( if header.length > 1000 then "here" else "" )  
+   
+        >> return s
 
       (* read payload *)
       >>= fun s ->
@@ -380,12 +383,15 @@ let run () =
     in
     let rec loop state =
       Lwt.nchoose_split state.lst
+        
         >>= fun (complete, incomplete) ->
+
           Lwt_io.write_line Lwt_io.stdout @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
+
           (* loop @@ List.fold_left f incomplete complete  *)
           let new_state = List.fold_left f { state with lst = incomplete } complete 
           in if List.length new_state.lst > 0 then
