@@ -124,19 +124,19 @@ let getConnection host port =
 
       Lwt.catch
         (fun  () ->
-
-        (* should only create this if get the conn *)
-        let conn = {  
-            addr = Unix.string_of_inet_addr a_;
-            port = port;
-            fd = fd;
-            ic = inchan ;
-            oc = outchan; 
-        } in
-        Lwt_unix.connect conn.fd a
-        >> return @@ GotConnection conn 
+          Lwt_unix.connect fd a
+          >> 
+          let conn = {  
+              addr = Unix.string_of_inet_addr a_;
+              port = port;
+              fd = fd;
+              ic = inchan ;
+              oc = outchan; 
+          } in
+          return @@ GotConnection conn 
         )
         (fun exn ->
+          (* not sure if we should close here - touching fd,chan will be bug *)
           let s = Printexc.to_string exn in
 		      Lwt_unix.close fd 
           >>
