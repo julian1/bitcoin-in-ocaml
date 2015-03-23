@@ -159,6 +159,10 @@ let readMessage conn =
           let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in
       return s
     *)
+      >>= fun s ->
+        let _, header = decodeHeader s 0 in
+          let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.formatHeader header ^ "\n")  in return s
+
       (* read payload *)
       >>= fun s ->
         let _, header = decodeHeader s 0 in
@@ -348,7 +352,7 @@ let run () =
                 in
                 let a = formatAddress addr in
                 let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) state.connections in
-                if already_got || List.length state.connections > 10 then { 
+                if already_got && List.length state.connections < 25 then { 
                   state with lst = 
                     (Lwt_io.write_line Lwt_io.stdout 
                     ( "whoot new addr - already connected to " ^ a ^ " ignoring " )>> return Nop) 
@@ -395,7 +399,19 @@ let run () =
       (* http://bitcoin.stackexchange.com/questions/3711/what-are-seednodes *)
    (*     getConnection "24.246.66.189" 8333  *)
 
+       (* getConnection "seed.bitcoin.sipa.be" 8333;
         getConnection "dnsseed.bluematt.me"  8333; 
+        getConnection "dnsseed.bitcoin.dashjr.org"  8333; 
+        getConnection "bitseed.xf2.org"   8333; 
+      *)
+
+      (*  https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
+       getConnection     "23.227.177.161" 8333;
+       getConnection     "23.227.191.50" 8333;
+       getConnection     "23.229.45.32" 8333;
+       getConnection     "23.236.144.69" 8333;
+
+
       (*  178.162.19.156 8333 *)
       (* 178.162.19.156 port 8333 
     
