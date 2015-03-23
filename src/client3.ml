@@ -113,7 +113,7 @@ let getConnection host port =
     if Array.length entry.Unix.h_addr_list = 0 then
       return @@ GotError "could not resolve hostname"
     else
-      Lwt.catch
+      Lwt.catcH
         (fun  () ->
         let a_ = entry.Unix.h_addr_list.(0) in
         (* let u = Unix.string_of_inet_addr a_ in *)
@@ -167,8 +167,13 @@ let readMessage conn =
         return @@ GotMessage ( conn, header, p)
     ) ( fun exn ->  
 
-        (* ok, but what about closing ?? *)
+        (* do we have to close the channels as well as the descriptor?? *)
+
+
+
         let s = Printexc.to_string exn in
+        Lwt_unix.close conn.fd 
+        >>
         return @@ GotReadError (conn, s)
     )
 
@@ -264,32 +269,37 @@ let run () =
     let f state e =
       match e with
         | GotConnection conn ->
-          add_job state 
-             (Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
-             >> Lwt_io.write conn.oc initial_version
-             >> readMessage conn ) 
-          |> fun state ->
           { state with
               connections = conn :: state.connections 
           }
+          |> fun state ->
+          add_job state 
+             (Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
+            >> Lwt_io.write_line Lwt_io.stdout @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
+             >> Lwt_io.write conn.oc initial_version
+             >> readMessage conn ) 
+
         
         | GotError msg ->
           add_job state 
-          (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
-          >> return Nop
-          )
-          (* we got a conn error and it all stopped ? *)
+            (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
+            >> return Nop
+            )
+            (* we got a conn error and it all stopped ? *)
 
         | Nop -> state 
 
         | GotReadError (conn, msg) ->
-          add_job state 
-          (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
-          >> return Nop
-          ) |> fun state ->
           { state with
-            connections = conn :: state.connections 
+            connections = List.filter (fun x -> x = conn) state.connections
           } 
+          |> fun state ->
+            add_job state 
+            (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
+            >> Lwt_io.write_line Lwt_io.stdout @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
+            >> return Nop
+            ) 
+
  
  
 
@@ -345,7 +355,7 @@ let run () =
                 if already_got then { 
                   state with lst = 
                     (Lwt_io.write_line Lwt_io.stdout 
-                    ( "already connected to " ^ a ^ " ignoring " )>> return Nop) 
+                    ( "whoot new addr - already connected to " ^ a ^ " ignoring " )>> return Nop) 
                   :: readMessage conn  
                   :: state.lst  
                 } 
