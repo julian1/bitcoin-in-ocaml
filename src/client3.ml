@@ -81,16 +81,9 @@ type myvar =
    | GotConnection of connection
    | GotMessage of connection  * header * string
    | GotError of string
+   | GotReadError of connection * string
    | Nop
 
-
-(* read exactly n bytes from channel, returning a string
-  - change name to readn or something? *)
-let readChannel inchan length   =
-  let buf = Bytes.create length in
-  Lwt_io.read_into_exactly inchan buf 0 length
-  >>= fun _ ->
-    return @@ Bytes.to_string buf
 
 
 
@@ -115,7 +108,7 @@ let readChannel inchan length   =
 
 let getConnection host port =
   (* what is this lwt entry *)
-  Lwt_unix.gethostbyname host
+  Lwt_unix.gethostbyname host  (* FIXME this should be in lwt catch as well *)
   >>= fun entry ->
     if Array.length entry.Unix.h_addr_list = 0 then
       return @@ GotError "could not resolve hostname"
@@ -147,21 +140,37 @@ let getConnection host port =
         )
 
 
+(* read exactly n bytes from channel, returning a string
+  - change name to readn or something? *)
+let readChannel inchan length   =
+  let buf = Bytes.create length in
+  Lwt_io.read_into_exactly inchan buf 0 length
+  >>= fun _ ->
+    return @@ Bytes.to_string buf
+
 
 let readMessage conn =
-    readChannel conn.ic 24
-    (* log *)
-  (*   >>= fun s ->
-      let _, header = decodeHeader s 0 in
-        let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in
-    return s
-  *)
-    (* read payload *)
-    >>= fun s ->
-      let _, header = decodeHeader s 0 in
-      readChannel conn.ic header.length
-    >>= fun p ->
-      return @@ GotMessage ( conn, header, p)
+    Lwt.catch (
+      fun () -> 
+      readChannel conn.ic 24
+      (* log *)
+    (*   >>= fun s ->
+        let _, header = decodeHeader s 0 in
+          let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in
+      return s
+    *)
+      (* read payload *)
+      >>= fun s ->
+        let _, header = decodeHeader s 0 in
+        readChannel conn.ic header.length
+      >>= fun p ->
+        return @@ GotMessage ( conn, header, p)
+    ) ( fun exn ->  
+
+        (* ok, but what about closing ?? *)
+        let s = Printexc.to_string exn in
+        return @@ GotReadError (conn, s)
+    )
 
 (*
 let filterTerminated lst =
@@ -274,6 +283,19 @@ let run () =
 
         | Nop -> state 
 
+        | GotReadError (conn, msg) ->
+          add_job state 
+          (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
+          >> return Nop
+          ) |> fun state ->
+          { state with
+            connections = conn :: state.connections 
+          } 
+ 
+ 
+
+           
+
         | GotMessage (conn, header, payload) -> 
           match header.command with
             | "version" ->
@@ -283,11 +305,18 @@ let run () =
               >> readMessage conn 
               )
 
+            | "verack" ->
+              add_job state 
+              ( Lwt_io.write_line Lwt_io.stdout "got verack"
+              >> Lwt_io.write conn.oc initial_getaddr (* request addr *) 
+              >> readMessage conn 
+              )
+ 
+
             | "inv" -> 
               add_job state
               (let _, inv = decodeInv payload 0 in
               Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ format_addr conn  (* ^ formatInv inv *)
-              (* >> Lwt_io.write oc initial_getaddr *)
               >> readMessage conn 
               )
 
@@ -303,7 +332,7 @@ let run () =
 
                 let pos, count = decodeVarInt payload 0 in
                 (* should take more than the first *)
-                let pos, x = decodeInteger32 payload pos in 
+                let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
                 let _, addr = decodeAddress payload pos in 
                 let formatAddress (h : ip_address ) =
                   let soi = string_of_int in
@@ -324,7 +353,7 @@ let run () =
                 else { 
                   state with 
                     lst = ( 
-                      Lwt_io.write_line Lwt_io.stdout "whoot new unknown addr "  
+                      Lwt_io.write_line Lwt_io.stdout @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
                       >> Lwt_io.write_line Lwt_io.stdout ( a ^ " port " ^ string_of_int addr.port ) 
                       >> getConnection (formatAddress addr) addr.port 
                       ) 
