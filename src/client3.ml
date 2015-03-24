@@ -76,7 +76,7 @@ type connection =
 type myvar =
    | GotConnection of connection
    | GotMessage of connection  * header * string
-   | GotError of string
+   | GotConnectionError of string
    | GotReadError of connection * string
    | Nop
 
@@ -102,12 +102,12 @@ type myvar =
 
 
 
-let getConnection host port =
+let get_connection host port =
   (* what is this lwt entry *)
   Lwt_unix.gethostbyname host  (* FIXME this should be in lwt catch as well *)
   >>= fun entry ->
     if Array.length entry.Unix.h_addr_list = 0 then
-      return @@ GotError "could not resolve hostname"
+      return @@ GotConnectionError "could not resolve hostname"
     else
       let a_ = entry.Unix.h_addr_list.(0) in
       let a = Unix.ADDR_INET ( a_ , port) in 
@@ -132,7 +132,7 @@ let getConnection host port =
           (* must close *)
           let s = Printexc.to_string exn in
 		      Lwt_unix.close fd 
-          >> return @@ GotError s
+          >> return @@ GotConnectionError s
         )
 
 (*
@@ -163,7 +163,7 @@ let readChannel inchan length   =
     return @@ Bytes.to_string buf
 
 
-let readMessage conn =
+let get_message conn =
     Lwt.catch (
       fun () -> 
       (* read header *)
@@ -183,6 +183,10 @@ let readMessage conn =
           return @@ GotReadError (conn, s) 
       )
        
+
+let send_message conn s = 
+    Lwt_io.write conn.oc s >> return Nop 
+
 
 (*
 
@@ -269,45 +273,39 @@ let run () =
     - app state is effectively a fold over the network events...
     *)
 
-    let add_jobs jobs state = { state with lst = jobs @ state.lst } 
-    in
-      let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop
-    in
-    let format_addr conn = 
-      conn.addr ^ " " ^ string_of_int conn.port 
+    let add_jobs jobs state = { state with lst = jobs @ state.lst } in
+    let remove_conn conn state = { state with 
+        (* physical equality *)
+        connections = List.filter (fun x -> x.fd != conn.fd) state.connections
+      } in
+    let add_conn conn state =  { state with connections = conn::state.connections } in
+    let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
+    let format_addr conn = conn.addr ^ " " ^ string_of_int conn.port 
     in 
     let f state e =
       match e with
+        | Nop -> state 
         | GotConnection conn ->
-          { state with
-            connections = conn :: state.connections 
-          } 
+          state
+          |> add_conn conn
           |> add_jobs [
             log @@ "whoot got connection " ^ format_addr conn   ^
               "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
-            >> (* or separate? *) 
-             Lwt_io.write conn.oc initial_version 
+            (* or separate? *) 
+            >> send_message conn initial_version 
             >> log @@ "*** whoot wrote initial version " ^ format_addr conn
             ;
-             readMessage conn
+             get_message conn
           ] 
         
-        | GotError msg ->
+        | GotConnectionError msg ->
           add_jobs [ 
-            log @@ "got error " ^ msg >> return Nop
+            log @@ "got connection error " ^ msg >> return Nop
             ] state 
 
-        | Nop -> state 
-
         | GotReadError (conn, msg) ->
-          { state with
-            connections = 
-(*				let same a b = a.addr = b.addr && a.port = b.port in 
-				List.filter (fun x -> not @@ same x conn) state.connections
-*)
-            (* physical equality *)
-            List.filter (fun x -> x.fd != conn.fd) state.connections 
-          } 
+          state 
+          |> remove_conn conn
           |> add_jobs [ 
             log @@ "got error " ^ msg
             ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
@@ -319,20 +317,21 @@ let run () =
           match header.command with
             | "version" ->
               add_jobs [ 
-                log "got version message"
                 (* should be 3 separate jobs? *)
-                >> Lwt_io.write conn.oc initial_verack 
+                log "got version message"
+                >> send_message conn initial_verack
                 >> log @@ "*** whoot wrote verack " ^ format_addr conn
                 ;
-                readMessage conn 
+                get_message conn 
               ] state 
 
             | "verack" ->
               add_jobs [ 
+                (* should be 3 separate jobs? *)
                 log "got verack - requesting addr"
-                >> Lwt_io.write conn.oc initial_getaddr >> return Nop
+                >> send_message conn initial_getaddr
                 ;
-                readMessage conn 
+                get_message conn 
               ] state 
  
             | "inv" -> 
@@ -340,7 +339,7 @@ let run () =
               add_jobs [ 
                 log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
                 ;
-                readMessage conn 
+                get_message conn 
               ] state
 
             | "addr" -> 
@@ -363,22 +362,23 @@ let run () =
                   add_jobs [ 
                     log @@ "whoot new addr - already got or ignore " ^ a  
                     ;
-                    readMessage conn  
+                    get_message conn  
                   ] state 
-                else { 
+                else 
                   add_jobs [ 
-                      Lwt_io.write_line Lwt_io.stdout @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
-                      >> Lwt_io.write_line Lwt_io.stdout ( a ^ " port " ^ string_of_int addr.port ) 
-                      >> getConnection (formatAddress addr) addr.port 
-                      ) 
-                      ;
-                      readMessage conn  
+                   log @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
+                    ^  " " ^ a ^ " port " ^ string_of_int addr.port 
+                   ;  
+                    get_connection (formatAddress addr) addr.port 
+                    ;
+                    get_message conn  
                 ] state
 
             | s ->
               add_jobs [ 
-                Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
-                >> readMessage conn 
+                log @@ "message " ^ s
+                ;
+                get_message conn 
               ] state
 
     in
@@ -386,8 +386,7 @@ let run () =
       Lwt.nchoose_split state.lst
         
         >>= fun (complete, incomplete) ->
-
-          Lwt_io.write_line Lwt_io.stdout @@
+          log @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
@@ -402,21 +401,21 @@ let run () =
 
     in
     let lst = [
-         (* getConnection "198.52.212.235"  8333;  *)
+         (* get_connection "198.52.212.235"  8333;  *)
       (* http://bitcoin.stackexchange.com/questions/3711/what-are-seednodes *)
-   (*     getConnection "24.246.66.189" 8333  *)
+   (*     get_connection "24.246.66.189" 8333  *)
 
-       (* getConnection "seed.bitcoin.sipa.be" 8333;
-        getConnection "dnsseed.bluematt.me"  8333; 
-        getConnection "dnsseed.bitcoin.dashjr.org"  8333; 
-        getConnection "bitseed.xf2.org"   8333; 
+       (* get_connection "seed.bitcoin.sipa.be" 8333;
+        get_connection "dnsseed.bluematt.me"  8333; 
+        get_connection "dnsseed.bitcoin.dashjr.org"  8333; 
+        get_connection "bitseed.xf2.org"   8333; 
       *)
 
       (*  https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
-       getConnection     "23.227.177.161" 8333;
-       getConnection     "23.227.191.50" 8333;
-       getConnection     "23.229.45.32" 8333;
-       getConnection     "23.236.144.69" 8333;
+       get_connection     "23.227.177.161" 8333;
+       get_connection     "23.227.191.50" 8333;
+       get_connection     "23.229.45.32" 8333;
+       get_connection     "23.236.144.69" 8333;
 
 
       (*  178.162.19.156 8333 *)
