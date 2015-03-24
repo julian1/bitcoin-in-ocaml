@@ -382,8 +382,9 @@ let f state e =
             get_message conn 
           ] state
 
+
          
-let run initial f =
+let run f s =
   Lwt_main.run (
     let rec loop state =
       Lwt.nchoose_split state.lst
@@ -393,14 +394,13 @@ let run initial f =
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
-          (* loop @@ List.fold_left f incomplete complete  *)
           let new_state = List.fold_left f { state with lst = incomplete } complete 
           in if List.length new_state.lst > 0 then
             loop new_state 
           else
             return ()
     in
-    loop initial
+    loop s 
   )
 
 
@@ -414,8 +414,7 @@ let s =
   ] in
   { count = 123 ; lst = lst; connections = []; } 
 
-
-let () = run s f  
+let () = run f s  
 
 
 
