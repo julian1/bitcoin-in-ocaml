@@ -269,7 +269,6 @@ let run () =
     - app state is effectively a fold over the network events...
     *)
 
-    let add_job job state = { state with lst = job::state.lst }  in
     let add_jobs jobs state = { state with lst = jobs @ state.lst } 
     in
     let format_addr conn = 
@@ -282,19 +281,20 @@ let run () =
               connections = conn :: state.connections 
           }
           |> 
-          add_job 
-             (Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
+          add_jobs [
+             Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
             >> Lwt_io.write_line Lwt_io.stdout @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
              >> Lwt_io.write conn.oc initial_version
             (* this ought to be a separate job? *)
-             >> readMessage conn ) 
+             >> readMessage conn
+          ] 
 
         
         | GotError msg ->
-          add_job 
-            (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
+          add_jobs [ 
+            Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
             >> return Nop
-            ) state 
+            ] state 
             (* we got a conn error and it all stopped ? *)
 
         | Nop -> state 
@@ -314,33 +314,30 @@ let run () =
             >> return Nop ; 
 		        Lwt_unix.close conn.fd >> return Nop 
           ]
- 
-
-           
 
         | GotMessage (conn, header, payload) -> 
           match header.command with
             | "version" ->
-              add_job 
-              ( Lwt_io.write_line Lwt_io.stdout "version message"
-              >> Lwt_io.write conn.oc initial_verack
-              >> readMessage conn 
-              ) state 
+              add_jobs [ 
+                Lwt_io.write_line Lwt_io.stdout "version message"
+                >> Lwt_io.write conn.oc initial_verack
+                (* should be separate job *)
+                >> readMessage conn 
+              ] state 
 
             | "verack" ->
-              add_job 
-              ( Lwt_io.write_line Lwt_io.stdout "got verack"
-              >> Lwt_io.write conn.oc initial_getaddr (* request addr *) 
-              >> readMessage conn 
-              )state 
+              add_jobs [ 
+                Lwt_io.write_line Lwt_io.stdout "got verack"
+                >> Lwt_io.write conn.oc initial_getaddr (* request addr *) 
+                >> readMessage conn 
+              ] state 
  
-
             | "inv" -> 
-              add_job 
-              (let _, inv = decodeInv payload 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ format_addr conn  (* ^ formatInv inv *)
-              >> readMessage conn 
-              ) state
+              add_jobs [ 
+                let _, inv = decodeInv payload 0 in
+                Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ format_addr conn  (* ^ formatInv inv *)
+                >> readMessage conn 
+              ] state
 
             | "addr" -> 
               (* it's going to be easiest to stick to common address format 
@@ -385,10 +382,10 @@ let run () =
                 }
 
             | s ->
-              add_job 
-              (Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
-              >> readMessage conn 
-              ) state
+              add_jobs [ 
+                Lwt_io.write_line Lwt_io.stdout @@ "message " ^ s
+                >> readMessage conn 
+              ] state
 
     in
     let rec loop state =
