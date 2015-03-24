@@ -136,11 +136,10 @@ let getConnection host port =
           return @@ GotConnection conn 
         )
         (fun exn ->
-          (* not sure if we should close here - touching fd,chan will be bug *)
+          (* must close *)
           let s = Printexc.to_string exn in
 		      Lwt_unix.close fd 
-          >>
-          return @@ GotError s
+          >> return @@ GotError s
         )
 
 (*
@@ -151,6 +150,8 @@ let getConnection host port =
     - if we've saturated max connections, and a connection hasn't sent anything
     for a period (eg. 2 minutes) then drop one connection. this ought to 
     enable us to cycle to always active not just open connections.
+
+    - guard payload length to ocaml max string length - no it's huge on 64bit. 
 *)
 
 (* read exactly n bytes from channel, returning a string
@@ -172,26 +173,32 @@ let readMessage conn =
           let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in
       return s
     *)
-      >>= fun s ->
+      (* >>= fun s ->
         let _, header = decodeHeader s 0 in
         Lwt_io.write_line Lwt_io.stdout ("payload length " ^  string_of_int header.length )  
         >> Lwt_io.write_line Lwt_io.stdout ( if header.length > 1000 then "here" else "" )  
-   
         >> return s
+    *)
 
       (* read payload *)
       >>= fun s ->
         let _, header = decodeHeader s 0 in
-        readChannel conn.ic header.length
-      >>= fun p ->
-        return @@ GotMessage ( conn, header, p)
-    ) ( fun exn ->  
-        (* do we have to close the channels as well as the descriptor?? *)
-        let s = Printexc.to_string exn in
-        Lwt_unix.close conn.fd 
-        >>
-        return @@ GotReadError (conn, s)
-    )
+        if header.length < 10*1000000 then
+        
+          readChannel conn.ic header.length
+        >>= fun p -> 
+          return @@ GotMessage ( conn, header, p)
+    else
+          return @@ GotReadError (conn, "payload too big" ) 
+
+      ) ( fun exn ->  
+          (* do we have to close the channels as well as the descriptor?? *)
+          let s = Printexc.to_string exn in
+          Lwt_unix.close conn.fd 
+          >>
+          return @@ GotReadError (conn, s) 
+      )
+       
 
 (*
 let filterTerminated lst =
@@ -276,12 +283,11 @@ let run () =
     - app state is effectively a fold over the network events...
     *)
 
-    let add_job state job = { state with lst = job::state.lst } in
-
+    let add_job state job = { state with lst = job::state.lst } 
+    in
     let format_addr conn = 
-      conn.addr ^ " " ^ string_of_int conn.port in 
-
-
+      conn.addr ^ " " ^ string_of_int conn.port 
+    in 
     let f state e =
       match e with
         | GotConnection conn ->
