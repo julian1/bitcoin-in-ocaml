@@ -329,9 +329,10 @@ let run () =
 
             | "verack" ->
               add_jobs [ 
-                Lwt_io.write_line Lwt_io.stdout "got verack"
-                >> Lwt_io.write conn.oc initial_getaddr (* request addr *) 
-                >> readMessage conn 
+                log "got verack"
+                >> Lwt_io.write conn.oc initial_getaddr >> return Nop(* request addr *) 
+                ;
+                readMessage conn 
               ] state 
  
             | "inv" -> 
