@@ -311,7 +311,7 @@ let run () =
           |> add_jobs [ 
             log @@ "got error " ^ msg
             ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
-            >> return Nop ; 
+            ;
 		        Lwt_unix.close conn.fd >> return Nop 
           ]
 
@@ -329,17 +329,18 @@ let run () =
 
             | "verack" ->
               add_jobs [ 
-                log "got verack"
-                >> Lwt_io.write conn.oc initial_getaddr >> return Nop(* request addr *) 
+                log "got verack - requesting addr"
+                >> Lwt_io.write conn.oc initial_getaddr >> return Nop
                 ;
                 readMessage conn 
               ] state 
  
             | "inv" -> 
+              let _, inv = decodeInv payload 0 in
               add_jobs [ 
-                let _, inv = decodeInv payload 0 in
-                Lwt_io.write_line Lwt_io.stdout @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ format_addr conn  (* ^ formatInv inv *)
-                >> readMessage conn 
+                log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
+                ;
+                readMessage conn 
               ] state
 
             | "addr" -> 
