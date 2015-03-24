@@ -71,6 +71,8 @@ type connection =
   fd :  Lwt_unix.file_descr ;
   ic : Lwt_io.input Lwt_io.channel ; 
   oc : Lwt_io.output Lwt_io.channel ; 
+
+  last_activity : float;
 }
 
 type myvar =
@@ -125,6 +127,7 @@ let get_connection host port =
               fd = fd;
               ic = inchan ;
               oc = outchan; 
+              last_activity = Unix.time () ;(* in pure more precision *)
           } in
           return @@ GotConnection conn 
         )
@@ -276,7 +279,7 @@ let string_of_bytes s =
 let f state e =
 
   (* non-pure - should move out of here, *)
-  let now = Unix.time () in (* state, time is seconds, gettimeofday more precision *)
+  let (now : float) = Unix.time () in (* state, time is seconds, gettimeofday more precision *)
 
   (* helpers *)
   let add_jobs jobs state = { state with lst = jobs @ state.lst } in
@@ -289,119 +292,133 @@ let f state e =
   let format_addr conn = conn.addr ^ " " ^ string_of_int conn.port 
   in 
 
-  match e with
-    | Nop -> state 
-    | GotConnection conn ->
-      state
-      |> add_conn conn
-      |> add_jobs [
-        log @@ "whoot got connection " ^ format_addr conn   ^
-          "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
-        (* or separate? *) 
-        >> send_message conn initial_version 
-        >> log @@ "*** whoot wrote initial version " ^ format_addr conn
-        ;
-         get_message conn
-      ] 
-    
-    | GotConnectionError msg ->
-      add_jobs [ 
-        log @@ "got connection error " ^ msg >> return Nop
-        ] state 
+  (* maybe it's the choose() that fails ... *)
+  let housekeep state = 
+    (* so we need to remove from the connections *)
+    let aged conn = (now -. conn.last_activity) > 30. in 
+    let stale,ok = List.partition aged state.connections in
+    let clean_up_jobs = List.map (fun conn -> 
+        log @@ "*** before purging connection " ^ conn.addr 
+        >> Lwt_unix.close conn.fd 
+        >> log @@ "*** after purging connection " ^ conn.addr 
+    ) stale
+    in 
+    state 
+    |> add_jobs clean_up_jobs 
+    |> fun state -> { state with connections = ok } 
 
-    | GotReadError (conn, msg) ->
-      state 
-      |> remove_conn conn
-      |> add_jobs [ 
-        log @@ "got error " ^ msg
-        ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
-        ;
-        Lwt_unix.close conn.fd >> return Nop 
-      ]
-
-    | GotMessage (conn, header, payload) -> 
-      match header.command with
-        | "version" ->
-          state
-          |>
-			remove_conn conn 
-          |>
-			add_conn { conn with addr = "x"  } 
-            (* we have the conn, we don't need to look it up 
-				actually we have to replace it so we do. 
-            *)
-          
-          |> add_jobs [ 
-            (* should be 3 separate jobs? *)
-            log "got version message"
-            >> send_message conn initial_verack
-            >> log @@ "*** whoot wrote verack " ^ format_addr conn
-            ;
-            get_message conn 
-          ] 
-
-        | "verack" ->
-          add_jobs [ 
-            (* should be 3 separate jobs? *)
-            log "got verack - requesting addr"
-            >> send_message conn initial_getaddr
-            ;
-            get_message conn 
+  in
+  let new_state =
+    match e with
+      | Nop -> state 
+      | GotConnection conn ->
+        state
+        |> add_conn conn
+        |> add_jobs [
+          log @@ "whoot got connection " ^ format_addr conn   ^
+            "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
+          (* or separate? *) 
+          >> send_message conn initial_version 
+          >> log @@ "*** whoot wrote initial version " ^ format_addr conn
+          ;
+           get_message conn
+        ] 
+      
+      | GotConnectionError msg ->
+        add_jobs [ 
+          log @@ "got connection error " ^ msg >> return Nop
           ] state 
 
-        | "inv" -> 
-          let _, inv = decodeInv payload 0 in
-          add_jobs [ 
-            log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
-            ;
-            get_message conn 
-          ] state
+      | GotReadError (conn, msg) ->
+        state 
+        |> remove_conn conn
+        |> add_jobs [ 
+          log @@ "got error " ^ msg
+          ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
+          ;
+          Lwt_unix.close conn.fd >> return Nop 
+        ]
 
-        | "addr" -> 
-            let pos, count = decodeVarInt payload 0 in
-            (* should take more than the first *)
-            let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
-            let _, addr = decodeAddress payload pos in 
-            let formatAddress (h : ip_address ) =
-              let soi = string_of_int in
-              let a,b,c,d = h.address  in
-              String.concat "." [
-              soi a; soi b; soi c; soi d 
-              ] (* ^ ":" ^ soi h.port *)
-            in
-            let a = formatAddress addr in
-            let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) 
-                state.connections 
-            in
-            if already_got || List.length state.connections > 30 then  
-              add_jobs [ 
-                log @@ "whoot new addr - already got or ignore " ^ a  
-                ;
-                get_message conn  
-              ] state 
-            else 
-              add_jobs [ 
-               log @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
-                ^  " " ^ a ^ " port " ^ string_of_int addr.port 
-               ;  
-                get_connection (formatAddress addr) addr.port 
-                ;
-                get_message conn  
+      | GotMessage (conn, header, payload) -> 
+        match header.command with
+          | "version" ->
+            state
+            |> remove_conn conn 
+            |> add_conn { conn with last_activity = now } 
+            |> add_jobs [ 
+              (* should be 3 separate jobs? *)
+              log "got version message"
+              >> send_message conn initial_verack
+              >> log @@ "*** whoot wrote verack " ^ format_addr conn
+              ;
+              get_message conn 
+            ] 
+
+          | "verack" ->
+            add_jobs [ 
+              (* should be 3 separate jobs? *)
+              log "got verack - requesting addr"
+              >> send_message conn initial_getaddr
+              ;
+              get_message conn 
+            ] state 
+
+          | "inv" -> 
+            let _, inv = decodeInv payload 0 in
+            add_jobs [ 
+              log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
+              ;
+              get_message conn 
             ] state
 
-        | s ->
-          add_jobs [ 
-            log @@ "message " ^ s
-            ;
-            get_message conn 
-          ] state
+          | "addr" -> 
+              let pos, count = decodeVarInt payload 0 in
+              (* should take more than the first *)
+              let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
+              let _, addr = decodeAddress payload pos in 
+              let formatAddress (h : ip_address ) =
+                let soi = string_of_int in
+                let a,b,c,d = h.address  in
+                String.concat "." [
+                soi a; soi b; soi c; soi d 
+                ] (* ^ ":" ^ soi h.port *)
+              in
+              let a = formatAddress addr in
+              let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) 
+                  state.connections 
+              in
+              if already_got || List.length state.connections > 30 then  
+                add_jobs [ 
+                  log @@ "whoot new addr - already got or ignore " ^ a  
+                  ;
+                  get_message conn  
+                ] state 
+              else 
+                add_jobs [ 
+                 log @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
+                  ^  " " ^ a ^ " port " ^ string_of_int addr.port 
+                 ;  
+                  get_connection (formatAddress addr) addr.port 
+                  ;
+                  get_message conn  
+              ] state
 
+          | s ->
+            add_jobs [ 
+              log @@ "message " ^ s
+              ;
+              get_message conn 
+            ] state
+
+  in housekeep new_state 
 
          
 let run f s =
   Lwt_main.run (
     let rec loop state =
-      Lwt.nchoose_split state.lst
+      Lwt.catch (
+      fun () -> Lwt.nchoose_split state.lst
+
         >>= fun (complete, incomplete) ->
           Lwt_io.write_line Lwt_io.stdout  @@
             "complete " ^ (string_of_int @@ List.length complete )
@@ -413,6 +430,13 @@ let run f s =
             loop new_state 
           else
             return ()
+      )
+        (fun exn ->
+          (* must close *)
+          let s = Printexc.to_string exn in
+          Lwt_io.write_line Lwt_io.stdout ("here -> " ^ s ) 
+        )
+
     in
     loop s 
   )
