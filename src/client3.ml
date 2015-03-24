@@ -114,14 +114,11 @@ let getConnection host port =
       return @@ GotError "could not resolve hostname"
     else
       let a_ = entry.Unix.h_addr_list.(0) in
-      (* let u = Unix.string_of_inet_addr a_ in *)
-
       let a = Unix.ADDR_INET ( a_ , port) in 
-
       let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
       let (inchan : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in
-      let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd in
-
+      let outchan = Lwt_io.of_fd ~mode:Lwt_io.output fd 
+      in
       Lwt.catch
         (fun  () ->
           Lwt_unix.connect fd a
@@ -167,40 +164,29 @@ let readMessage conn =
     Lwt.catch (
       fun () -> 
       readChannel conn.ic 24
-      (* log *)
-    (*   >>= fun s ->
-        let _, header = decodeHeader s 0 in
-          let _ = Lwt_io.write_line Lwt_io.stdout ("----\n" ^ Message.hex_of_string s ^ "\n" ^ Message.formatHeader header ^ "\n")  in
-      return s
-    *)
-      (* >>= fun s ->
-        let _, header = decodeHeader s 0 in
-        Lwt_io.write_line Lwt_io.stdout ("payload length " ^  string_of_int header.length )  
-        >> Lwt_io.write_line Lwt_io.stdout ( if header.length > 1000 then "here" else "" )  
-        >> return s
-    *)
-
       (* read payload *)
       >>= fun s ->
         let _, header = decodeHeader s 0 in
         if header.length < 10*1000000 then
-        
           readChannel conn.ic header.length
-        >>= fun p -> 
+          >>= fun p -> 
           return @@ GotMessage ( conn, header, p)
-    else
+        else
           return @@ GotReadError (conn, "payload too big" ) 
-
-      ) ( fun exn ->  
-          (* do we have to close the channels as well as the descriptor?? *)
+      ) 
+      ( fun exn ->  
           let s = Printexc.to_string exn in
-          Lwt_unix.close conn.fd 
-          >>
           return @@ GotReadError (conn, s) 
       )
        
 
 (*
+
+
+          (* do we have to close the channels as well as the descriptor?? *)
+          Lwt_unix.close conn.fd 
+          >>
+
 let filterTerminated lst =
   (* ok, hang on this might miss
     because several finish - but only one gets returned
@@ -264,7 +250,8 @@ type my_app_state =
 }
 
 (* useful for debugging *)
-let u s = explode s |> List.map Char.code |> List.map string_of_int |> String.concat " " 
+let string_of_bytes s = 
+  explode s |> List.map (fun ch -> ch |> Char.code |> string_of_int ) |> String.concat " " 
 
          
 let run () =
