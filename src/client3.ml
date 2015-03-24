@@ -283,20 +283,14 @@ let run () =
             connections = conn :: state.connections 
           } 
           |> add_jobs [
-            log ( "whoot got connection " ^ format_addr conn  )
-            >> log ( "connections now " ^ ( string_of_int @@ List.length state.connections))
-            ;
+            log @@ "whoot got connection " ^ format_addr conn   ^
+              "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
+            >> (* or separate? *) 
              Lwt_io.write conn.oc initial_version 
-            >> log ( "whoot wrote version " ^ format_addr conn  )
+            >> log @@ "*** whoot wrote initial version " ^ format_addr conn
             ;
              readMessage conn
-            ;
-             readMessage conn
-            ;
-
-
           ] 
-
         
         | GotError msg ->
           add_jobs [ 
@@ -315,8 +309,8 @@ let run () =
             List.filter (fun x -> x.fd != conn.fd) state.connections 
           } 
           |> add_jobs [ 
-            Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
-            >> Lwt_io.write_line Lwt_io.stdout @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
+            log @@ "got error " ^ msg
+            ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
             >> return Nop ; 
 		        Lwt_unix.close conn.fd >> return Nop 
           ]
@@ -325,10 +319,12 @@ let run () =
           match header.command with
             | "version" ->
               add_jobs [ 
-                Lwt_io.write_line Lwt_io.stdout "version message"
-                (* should be 3 separate jobs *)
-                >> Lwt_io.write conn.oc initial_verack
-                >> readMessage conn 
+                log "got version message"
+                (* should be 3 separate jobs? *)
+                >> Lwt_io.write conn.oc initial_verack 
+                >> log @@ "*** whoot wrote verack " ^ format_addr conn
+                ;
+                readMessage conn 
               ] state 
 
             | "verack" ->
