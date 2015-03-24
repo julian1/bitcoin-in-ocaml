@@ -161,7 +161,13 @@ let get_connection host port =
   - change name to readn or something? *)
 let readChannel inchan length   =
   let buf = Bytes.create length in
-  Lwt_io.read_into_exactly inchan buf 0 length
+
+  Lwt.pick [
+    Lwt_unix.timeout 180. 
+    (* >> Lwt_io.write_line Lwt_io.stdout "timeout!!!" doesn't run *)
+    ;
+    Lwt_io.read_into_exactly inchan buf 0 length
+  ] 
   >>= fun _ ->
     return @@ Bytes.to_string buf
 
@@ -183,7 +189,7 @@ let get_message conn =
       ) 
       ( fun exn ->  
           let s = Printexc.to_string exn in
-          return @@ GotReadError (conn, s) 
+          return @@ GotReadError (conn, "here2 " ^ s) 
       )
        
 
@@ -290,9 +296,9 @@ let f state e =
   let add_conn conn state =  { state with connections = conn::state.connections } in
   let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
   let format_addr conn = conn.addr ^ " " ^ string_of_int conn.port 
-  in 
 
   (* maybe it's the choose() that fails ... *)
+(*
   let housekeep state = 
     (* so we need to remove from the connections *)
     let aged conn = (now -. conn.last_activity) > 30. in 
@@ -306,6 +312,7 @@ let f state e =
     state 
     |> add_jobs clean_up_jobs 
     |> fun state -> { state with connections = ok } 
+*)
 
   in
   let new_state =
@@ -410,7 +417,7 @@ let f state e =
               get_message conn 
             ] state
 
-  in housekeep new_state 
+  in new_state 
 
          
 let run f s =
@@ -429,13 +436,14 @@ let run f s =
           in if List.length new_state.lst > 0 then
             loop new_state 
           else
-            return ()
+            Lwt_io.write_line Lwt_io.stdout "finishing - no more jobs to run!!" 
+            >> return ()
       )
         (fun exn ->
           (* must close *)
           let s = Printexc.to_string exn in
-          Lwt_io.write_line Lwt_io.stdout ("here -> " ^ s ) 
-          >> (* but we haven't changed the lst, so we hope it works it's way out ??? *)  
+          Lwt_io.write_line Lwt_io.stdout ("finishing - exception " ^ s ) 
+          >> (* just exist cleanly *)  
             return ()
         )
 
@@ -446,6 +454,7 @@ let run f s =
   - then we ought to be able to close it 
   - it may well be easier... since only need to deal with one at a time...
 
+  kk
 *)
 
     in
