@@ -72,7 +72,6 @@ type connection =
   ic : Lwt_io.input Lwt_io.channel ; 
   oc : Lwt_io.output Lwt_io.channel ; 
 
-  last_activity : float;
 }
 
 type myvar =
@@ -127,7 +126,6 @@ let get_connection host port =
               fd = fd;
               ic = inchan ;
               oc = outchan; 
-              last_activity = Unix.time () ;(* in pure more precision *)
           } in
           return @@ GotConnection conn 
         )
@@ -284,9 +282,6 @@ let string_of_bytes s =
 
 let f state e =
 
-  (* non-pure - should move out of here, *)
-  let (now : float) = Unix.time () in (* state, time is seconds, gettimeofday more precision *)
-
   (* helpers *)
   let add_jobs jobs state = { state with lst = jobs @ state.lst } in
   let remove_conn conn state = { state with 
@@ -350,8 +345,6 @@ let f state e =
         match header.command with
           | "version" ->
             state
-            |> remove_conn conn 
-            |> add_conn { conn with last_activity = now } 
             |> add_jobs [ 
               (* should be 3 separate jobs? *)
               log "got version message"
