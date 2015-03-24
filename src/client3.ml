@@ -157,6 +157,11 @@ let get_connection host port =
 
 (* read exactly n bytes from channel, returning a string
   - change name to readn or something? *)
+
+(* timeout throws an exception which is horrible 
+  - althought we could just wrap it inside the pick to emit a value ...
+*)
+
 let readChannel inchan length   =
   let buf = Bytes.create length in
 
