@@ -274,6 +274,11 @@ let string_of_bytes s =
 *)
 
 let f state e =
+
+  (* non-pure - should move out of here, *)
+  let now = Unix.time () in (* state, time is seconds, gettimeofday more precision *)
+
+  (* helpers *)
   let add_jobs jobs state = { state with lst = jobs @ state.lst } in
   let remove_conn conn state = { state with 
       (* physical equality *)
@@ -317,14 +322,23 @@ let f state e =
     | GotMessage (conn, header, payload) -> 
       match header.command with
         | "version" ->
-          add_jobs [ 
+          state
+          |>
+			remove_conn conn 
+          |>
+			add_conn { conn with addr = "x"  } 
+            (* we have the conn, we don't need to look it up 
+				actually we have to replace it so we do. 
+            *)
+          
+          |> add_jobs [ 
             (* should be 3 separate jobs? *)
             log "got version message"
             >> send_message conn initial_verack
             >> log @@ "*** whoot wrote verack " ^ format_addr conn
             ;
             get_message conn 
-          ] state 
+          ] 
 
         | "verack" ->
           add_jobs [ 
@@ -406,11 +420,11 @@ let run f s =
 
 let s = 
   let lst = [
-    (*  https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
-     get_connection     "23.227.177.161" 8333;
-     get_connection     "23.227.191.50" 8333;
-     get_connection     "23.229.45.32" 8333;
-     get_connection     "23.236.144.69" 8333;
+    (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
+    get_connection     "23.227.177.161" 8333;
+    get_connection     "23.227.191.50" 8333;
+    get_connection     "23.229.45.32" 8333;
+    get_connection     "23.236.144.69" 8333;
   ] in
   { count = 123 ; lst = lst; connections = []; } 
 
