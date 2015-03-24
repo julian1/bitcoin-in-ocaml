@@ -271,6 +271,8 @@ let run () =
 
     let add_jobs jobs state = { state with lst = jobs @ state.lst } 
     in
+      let log = Lwt_io.write_line Lwt_io.stdout
+    in
     let format_addr conn = 
       conn.addr ^ " " ^ string_of_int conn.port 
     in 
@@ -282,8 +284,9 @@ let run () =
           }
           |> 
           add_jobs [
-             Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
-            >> Lwt_io.write_line Lwt_io.stdout @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
+            log ( "whoot got connection " ^ format_addr conn  )
+            >> log @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
+            (* this ought to be a separate job? *)
              >> Lwt_io.write conn.oc initial_version
             (* this ought to be a separate job? *)
              >> readMessage conn
