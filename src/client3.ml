@@ -320,8 +320,8 @@ let run () =
             | "version" ->
               add_jobs [ 
                 Lwt_io.write_line Lwt_io.stdout "version message"
+                (* should be 3 separate jobs *)
                 >> Lwt_io.write conn.oc initial_verack
-                (* should be separate job *)
                 >> readMessage conn 
               ] state 
 
