@@ -284,6 +284,7 @@ let run () =
              (Lwt_io.write_line Lwt_io.stdout ( "whoot got connection " ^ format_addr conn  )
             >> Lwt_io.write_line Lwt_io.stdout @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
              >> Lwt_io.write conn.oc initial_version
+            (* this ought to be a separate job? *)
              >> readMessage conn ) 
 
         
