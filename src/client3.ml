@@ -271,7 +271,7 @@ let run () =
 
     let add_jobs jobs state = { state with lst = jobs @ state.lst } 
     in
-      let log = Lwt_io.write_line Lwt_io.stdout
+      let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop
     in
     let format_addr conn = 
       conn.addr ^ " " ^ string_of_int conn.port 
@@ -280,25 +280,28 @@ let run () =
       match e with
         | GotConnection conn ->
           { state with
-              connections = conn :: state.connections 
-          }
-          |> 
-          add_jobs [
+            connections = conn :: state.connections 
+          } 
+          |> add_jobs [
             log ( "whoot got connection " ^ format_addr conn  )
-            >> log @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
-            (* this ought to be a separate job? *)
-             >> Lwt_io.write conn.oc initial_version
-            (* this ought to be a separate job? *)
-             >> readMessage conn
+            >> log ( "connections now " ^ ( string_of_int @@ List.length state.connections))
+            ;
+             Lwt_io.write conn.oc initial_version 
+            >> log ( "whoot wrote version " ^ format_addr conn  )
+            ;
+             readMessage conn
+            ;
+             readMessage conn
+            ;
+
+
           ] 
 
         
         | GotError msg ->
           add_jobs [ 
-            Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
-            >> return Nop
+            log @@ "got error " ^ msg >> return Nop
             ] state 
-            (* we got a conn error and it all stopped ? *)
 
         | Nop -> state 
 
