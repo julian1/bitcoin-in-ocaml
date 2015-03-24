@@ -273,16 +273,17 @@ let run () =
     - app state is effectively a fold over the network events...
     *)
 
-    let add_jobs jobs state = { state with lst = jobs @ state.lst } in
-    let remove_conn conn state = { state with 
-        (* physical equality *)
-        connections = List.filter (fun x -> x.fd != conn.fd) state.connections
-      } in
-    let add_conn conn state =  { state with connections = conn::state.connections } in
-    let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
-    let format_addr conn = conn.addr ^ " " ^ string_of_int conn.port 
-    in 
     let f state e =
+      let add_jobs jobs state = { state with lst = jobs @ state.lst } in
+      let remove_conn conn state = { state with 
+          (* physical equality *)
+          connections = List.filter (fun x -> x.fd != conn.fd) state.connections
+        } in
+      let add_conn conn state =  { state with connections = conn::state.connections } in
+      let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
+      let format_addr conn = conn.addr ^ " " ^ string_of_int conn.port 
+      in 
+
       match e with
         | Nop -> state 
         | GotConnection conn ->
@@ -386,7 +387,7 @@ let run () =
       Lwt.nchoose_split state.lst
         
         >>= fun (complete, incomplete) ->
-          log @@
+          Lwt_io.write_line Lwt_io.stdout  @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
