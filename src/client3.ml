@@ -435,7 +435,18 @@ let run f s =
           (* must close *)
           let s = Printexc.to_string exn in
           Lwt_io.write_line Lwt_io.stdout ("here -> " ^ s ) 
+          >> (* but we haven't changed the lst, so we hope it works it's way out ??? *)  
+            return ()
         )
+
+(* - ok there's an easy way to handle this 
+  - we have a read bound.
+  - what we need is to put it on a timer so it returns...
+  after a period.
+  - then we ought to be able to close it 
+  - it may well be easier... since only need to deal with one at a time...
+
+*)
 
     in
     loop s 
