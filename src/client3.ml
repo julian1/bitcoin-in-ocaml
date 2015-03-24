@@ -1,8 +1,4 @@
 
-(* TODO, we need a ping/pong response, to ensure we stay connected
-
-  first bit of script is almost certainly length.
-*)
 
 open Message
 open Script
@@ -141,16 +137,21 @@ let getConnection host port =
 
 (*
   TODO
-    - let read top level loop handle closing of sockets. this enables comparison
-    on fd first to remove the connection. instead of addr port.
+ 
+  - we need a ping/pong response, to ensure we stay connected
 
     - if we've saturated max connections, and a connection hasn't sent anything
     for a period (eg. 2 minutes) then drop one connection. this ought to 
     enable us to cycle to always active not just open connections.
 
+    - done - let read top level loop handle closing of sockets. this enables comparison
+    on fd first to remove the connection. instead of addr port.
+      (actually not really needed now using physical equality comparison) 
+
     - done - guard payload length to ocaml max string length - no it's huge on 64bit. 
 
     - change the order of add_job so we can pipe it...
+        actually we should pass an array for multiple jobs. 
 *)
 
 (* read exactly n bytes from channel, returning a string
@@ -268,7 +269,8 @@ let run () =
     - app state is effectively a fold over the network events...
     *)
 
-    let add_job job state = { state with lst = job::state.lst } 
+    let add_job job state = { state with lst = job::state.lst }  in
+    let add_jobs jobs state = { state with lst = jobs @ state.lst } 
     in
     let format_addr conn = 
       conn.addr ^ " " ^ string_of_int conn.port 
@@ -306,17 +308,12 @@ let run () =
             (* physical equality *)
             List.filter (fun x -> x.fd != conn.fd) state.connections 
           } 
-          |> add_job 
-            (Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
+          |> add_jobs [ 
+            Lwt_io.write_line Lwt_io.stdout @@ "got error " ^ msg
             >> Lwt_io.write_line Lwt_io.stdout @@ "connections now " ^ ( string_of_int @@ List.length state.connections)
-            >> return Nop
-            ) 
-          |> add_job 
-		        (Lwt_unix.close conn.fd >> return Nop )
- 
- 
-
- 
+            >> return Nop ; 
+		        Lwt_unix.close conn.fd >> return Nop 
+          ]
  
 
            
