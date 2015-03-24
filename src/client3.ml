@@ -344,15 +344,6 @@ let run () =
               ] state
 
             | "addr" -> 
-              (* it's going to be easiest to stick to common address format 
-                int * int * int * int * int
-                format...
-              
-                - there's a race condition here, because we don't update known peers
-                here. which is what we should do.
-                - irrespective of whether we will connect to them, blacklisted etc, already have enough etc... 
-              *)
-
                 let pos, count = decodeVarInt payload 0 in
                 (* should take more than the first *)
                 let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
@@ -365,24 +356,24 @@ let run () =
                   ] (* ^ ":" ^ soi h.port *)
                 in
                 let a = formatAddress addr in
-                let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) state.connections in
+                let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) 
+                    state.connections 
+                in
                 if already_got || List.length state.connections > 30 then  
                   add_jobs [ 
                     log @@ "whoot new addr - already got or ignore " ^ a  
-					;
-					readMessage conn  
+                    ;
+                    readMessage conn  
                   ] state 
                 else { 
-                  state with 
-                    lst = ( 
+                  add_jobs [ 
                       Lwt_io.write_line Lwt_io.stdout @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
                       >> Lwt_io.write_line Lwt_io.stdout ( a ^ " port " ^ string_of_int addr.port ) 
                       >> getConnection (formatAddress addr) addr.port 
                       ) 
-                      :: readMessage conn  
-                      :: state.lst
-                    ;
-                }
+                      ;
+                      readMessage conn  
+                ] state
 
             | s ->
               add_jobs [ 
