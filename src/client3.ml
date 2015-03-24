@@ -366,13 +366,12 @@ let run () =
                 in
                 let a = formatAddress addr in
                 let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) state.connections in
-                if already_got || List.length state.connections > 30 then { 
-                  state with lst = 
-                    (Lwt_io.write_line Lwt_io.stdout 
-                    ( "whoot new addr - already got or ignore " ^ a )>> return Nop) 
-                  :: readMessage conn  
-                  :: state.lst  
-                } 
+                if already_got || List.length state.connections > 30 then  
+                  add_jobs [ 
+                    log @@ "whoot new addr - already got or ignore " ^ a  
+					;
+					readMessage conn  
+                  ] state 
                 else { 
                   state with 
                     lst = ( 
