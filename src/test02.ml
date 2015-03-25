@@ -17,20 +17,23 @@ let in_posix_thread ~on_exn f =
     with e -> on_exn e) ()
 *)
 
+(*
+  to write a block.
+    - write append only log
+    - delete old head
+    - add new head
+*)
 
 let () = Lwt_main.run (
+
 	Lwt_io.write_line Lwt_io.stdout "hi"
 
-	>> (Lwt_preemptive.detach (fun () ->
-		LevelDB.open_db "mydb" 
-	) )()
-
+	>> Lwt_preemptive.detach 
+    (fun () -> LevelDB.open_db "mydb" ) ()
 
 	>>= fun db -> 
-		(Lwt_preemptive.detach (fun () ->
-				LevelDB.get db "myhash" 
-			) )()
-
+		Lwt_preemptive.detach 
+      (fun () -> LevelDB.get db "myhash" ) ()
 	
 	>>= fun v -> 
     match v with 
