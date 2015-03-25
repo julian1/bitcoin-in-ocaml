@@ -24,21 +24,22 @@ let in_posix_thread ~on_exn f =
     - add new head
 *)
 
+let detach f = 
+  Lwt_preemptive.detach 
+    (fun () -> f ) () 
+
 let () = Lwt_main.run (
 
 	Lwt_io.write_line Lwt_io.stdout "hi"
 
-	>> Lwt_preemptive.detach 
-    (fun () -> LevelDB.open_db "mydb" ) ()
+	>> detach @@ LevelDB.open_db "mydb" 
 
-	>>= fun db -> 
-		Lwt_preemptive.detach 
-      (fun () -> LevelDB.get db "myhash" ) ()
+	>>= fun db -> detach @@ LevelDB.get db "myhash" 
 	
 	>>= fun v -> 
-Lwt_io.write_line Lwt_io.stdout 
-   @@  match v with 
-      | Some s -> s 
-      | None -> "none" 
+    Lwt_io.write_line Lwt_io.stdout 
+      @@ match v with 
+        | Some s -> s 
+        | None -> "none" 
     
 )
