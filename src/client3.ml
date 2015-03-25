@@ -425,6 +425,9 @@ let f state e =
                 [[]]]
 
                 **********************
+				BASICALLY the same as before - except request inv from all blocks. and 
+					avoid requesting the same sequence of blocks multiple times.
+
                 SIMPLER APPROACH - would be just select single next item and request it.
                     then we don't group.
 
