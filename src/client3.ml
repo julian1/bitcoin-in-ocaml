@@ -78,7 +78,7 @@ type myvar =
    | GotConnection of connection
    | GotMessage of connection  * header * string
    | GotConnectionError of string
-   | GotReadError of connection * string
+   | GotReadError of connection * string (* change name MessageError - because *)
    | Nop
 
 
