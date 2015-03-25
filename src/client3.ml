@@ -380,20 +380,50 @@ let f state e =
           | "inv" ->
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
-              |> List.filter (fun (inv_type,hash) -> inv_type == 1)
+              |> List.filter (fun (inv_type,hash) -> inv_type == 2)
               |> List.map (fun (_,hash)->hash)
             in
   
             (* - want to also filter in leveldb 
               but this is an IO action  
               - which needs to be encoded as a job...
+              -- actually it maybe simple just do a di
+              -----------
+              - the sequence actually (normally) begins with our request for future blocks
+                  and this will determine who we get the responses from...
+              - then we get inv of 500? 
+              - then we will request in order...
+              - and what about if two different nodes have a different view 
+  
+              - ok, to pick up forks we really need to request future blocks
+              from all peers.
+              - don't merge, - because we need to know what peer has what 
+                - actually we could merge into a Map hash -> List of peers.
+                - no cause then we loose the ordering.
+              - and work our way through them...
+              - testing if we already have the block...
+              -----------------------
+  
+              - each individual peer - only has a linear chain because it knows the best chain.     
+                  but the network might have a tree.
+                - our job is to ensure we get the tree, so we can verify the best path ourselves.
+ 
+              - 1. we do the request from head to all peers (so we don't loose forks)
+              - 2. get inventory of next 500 blocks back, from all peers 
+              - 3. select just the next 100 blocks - to avoid overloading a peer 
+                because they could arrive out of order.
+                (but we have to 
+
+              - they won't come out of order. because we aggregate into a single request.
+
+              -
             *) 
 
             let encodeInventory lst =
               (* encodeInv - move to Message  - and need to zip *)
               encodeVarInt (List.length lst )
               ^ String.concat "" 
-                (List.map (fun hash -> encodeInteger32 1 ^ encodeHash32 hash) lst)
+                (List.map (fun hash -> encodeInteger32 2 ^ encodeHash32 hash) lst)
             in
             let payload = encodeInventory block_hashes in 
             let header = encodeHeader {
@@ -404,8 +434,20 @@ let f state e =
               } 
             in
             add_jobs [ 
-              send_message conn (header ^ payload) ; 
-              log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn) ;
+              (* check if pending or already have and request if not 
+                don't bother to format message unless we've got.
+                also write that it's pending...
+              *)
+              send_message conn (header ^ payload); 
+              (* log @@ conn.addr ^ " " ^ string_of_int conn.port ^ " got inv !!! " ;  *)
+              get_message conn ; 
+            ] state
+
+          | "block" ->
+            (* at the moment we dont care about tx *)
+            let _, tx = decodeTx payload 0 in
+            add_jobs [ 
+              log @@ "got block " ^ conn.addr ^ " " ^ string_of_int conn.port  ; 
               get_message conn ; 
             ] state
 
@@ -468,11 +510,12 @@ let run f s =
       fun () -> Lwt.nchoose_split state.lst
 
         >>= fun (complete, incomplete) ->
-          Lwt_io.write_line Lwt_io.stdout  @@
+          (*Lwt_io.write_line Lwt_io.stdout  @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
+          *)
           let new_state = List.fold_left f { state with lst = incomplete } complete 
           in if List.length new_state.lst > 0 then
             loop new_state 
