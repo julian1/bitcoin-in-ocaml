@@ -333,14 +333,14 @@ let f state e =
       
       | GotConnectionError msg ->
         add_jobs [ 
-          log @@ "got connection error " ^ msg >> return Nop
+          log @@ "could not connect " ^ msg >> return Nop
           ] state 
 
       | GotReadError (conn, msg) ->
         state 
         |> remove_conn conn
         |> add_jobs [ 
-          log @@ "got error " ^ msg
+          log @@ "could not read message " ^ msg
           ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
           ;
           Lwt_unix.close conn.fd >> return Nop 
@@ -422,26 +422,26 @@ let f state e =
               -
             *) 
 
-            let encodeInventory lst =
-              (* encodeInv - move to Message  - and need to zip *)
-              encodeVarInt (List.length lst )
-              ^ String.concat "" 
-                (List.map (fun hash -> encodeInteger32 2 ^ encodeHash32 hash) lst)
-            in
-            let payload = encodeInventory block_hashes in 
-            let header = encodeHeader {
-              magic = m ;
-              command = "getdata";
-              length = strlen payload;
-              checksum = checksum payload;
-              } 
-            in
             add_jobs [ 
               (* check if pending or already have and request if not 
                 don't bother to format message unless we've got.
                 also write that it's pending...
               *)
               if List.length block_hashes > 0 then
+                let encodeInventory lst =
+                  (* encodeInv - move to Message  - and need to zip *)
+                  encodeVarInt (List.length lst )
+                  ^ String.concat "" 
+                    (List.map (fun hash -> encodeInteger32 2 ^ encodeHash32 hash) lst)
+                in
+                let payload = encodeInventory block_hashes in 
+                let header = encodeHeader {
+                  magic = m ;
+                  command = "getdata";
+                  length = strlen payload;
+                  checksum = checksum payload;
+                  } 
+                in
                 log @@ "requesting block " ^ conn.addr ^ " " ^ string_of_int conn.port  
                 >> send_message conn (header ^ payload)
               else
