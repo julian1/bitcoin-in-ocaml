@@ -383,6 +383,12 @@ let f state e =
               |> List.filter (fun (inv_type,hash) -> inv_type == 1)
               |> List.map (fun (_,hash)->hash)
             in
+  
+            (* - want to also filter in leveldb 
+              but this is an IO action  
+              - which needs to be encoded as a job...
+            *) 
+
             let encodeInventory lst =
               (* encodeInv - move to Message  - and need to zip *)
               encodeVarInt (List.length lst )
