@@ -380,7 +380,7 @@ let f state e =
           | "inv" ->
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
-              |> List.filter (fun (inv_type,hash) -> inv_type == 2)
+              |> List.filter (fun (inv_type,_) -> inv_type == 2)
               |> List.map (fun (_,hash)->hash)
             in
   
@@ -409,17 +409,18 @@ let f state e =
                 - our job is to ensure we get the tree, so we can verify the best path ourselves.
                 - we know the root node (genesis)
  
-              - 1. we do the request from head to all peers (so we don't loose forks)
+              - 1. we do the request from all heads to all peers (so we don't loose forks)
               - 2. get inventory of next 500 blocks back, from all peers 
-              - 3. select just the next 100 blocks - to avoid overloading a peer 
-                because they could arrive out of order.
-                (but we have to 
+                    - then group for each sequence of hashes 
+              
+              - 3. then just make the request for the groups from peers that have them. choose
+                peer at random. 
 
-              - so the issue is... if client doesn't serve we need to rerequest.
-                  but we'll do this automatically i think. because we'll try to process
-                  the heads often?
+              - 4. if a particular head doesn't move for 5 minutes then we just issue again.
 
-              -
+              - we deal in batches which makes it easier - not the next 1. but the next ten or 100 .
+                ie. have we sent a request for the next 100 blocks from x hash.
+                  - if yes then don't request again.
             *) 
 
             add_jobs [ 
@@ -452,8 +453,7 @@ let f state e =
             ] state
 
           | "block" ->
-            (* at the moment we dont care about tx *)
-            let _, tx = decodeTx payload 0 in
+            (* let _, block = decodeBlock payload 0 in *)
             add_jobs [ 
               log @@ "got block " ^ conn.addr ^ " " ^ string_of_int conn.port  ; 
               get_message conn ; 
@@ -462,7 +462,7 @@ let f state e =
 
           | "tx" ->
             (* at the moment we dont care about tx *)
-            let _, tx = decodeTx payload 0 in
+            (* let _, tx = decodeTx payload 0 in *)
             add_jobs [ 
               log "got tx!!! " (*^ ( Message.formatTx tx) *); 
               get_message conn ; 
