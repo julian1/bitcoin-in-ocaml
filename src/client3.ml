@@ -404,9 +404,10 @@ let f state e =
               - testing if we already have the block...
               -----------------------
   
-              - each individual peer - only has a linear chain because it knows the best chain.     
+              - each individual peer - only has a linear chain because it knows it's best path.     
                   but the network might have a tree.
                 - our job is to ensure we get the tree, so we can verify the best path ourselves.
+                - we know the root node (genesis)
  
               - 1. we do the request from head to all peers (so we don't loose forks)
               - 2. get inventory of next 500 blocks back, from all peers 
@@ -414,7 +415,9 @@ let f state e =
                 because they could arrive out of order.
                 (but we have to 
 
-              - they won't come out of order. because we aggregate into a single request.
+              - so the issue is... if client doesn't serve we need to rerequest.
+                  but we'll do this automatically i think. because we'll try to process
+                  the heads often?
 
               -
             *) 
@@ -438,7 +441,12 @@ let f state e =
                 don't bother to format message unless we've got.
                 also write that it's pending...
               *)
-              send_message conn (header ^ payload); 
+              if List.length block_hashes > 0 then
+                log @@ "requesting block " ^ conn.addr ^ " " ^ string_of_int conn.port  
+                >> send_message conn (header ^ payload)
+              else
+                return Nop ;
+              
               (* log @@ conn.addr ^ " " ^ string_of_int conn.port ^ " got inv !!! " ;  *)
               get_message conn ; 
             ] state
