@@ -36,7 +36,9 @@ let () = Lwt_main.run (
       (fun () -> LevelDB.get db "myhash" ) ()
 	
 	>>= fun v -> 
-    match v with 
-      | Some s -> Lwt_io.write_line Lwt_io.stdout s 
-      | None -> Lwt_io.write_line Lwt_io.stdout "none" 
+Lwt_io.write_line Lwt_io.stdout 
+   @@  match v with 
+      | Some s -> s 
+      | None -> "none" 
+    
 )
