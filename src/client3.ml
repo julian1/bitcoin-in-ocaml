@@ -410,13 +410,13 @@ let f state e =
             ] state
 
 
-            | "tx" ->
-              (* at the moment we dont care about tx *)
-              let _, tx = decodeTx payload 0 in
-              add_jobs [ 
-                log "got tx!!! " (*^ ( Message.formatTx tx) *); 
-                get_message conn ; 
-              ] state
+          | "tx" ->
+            (* at the moment we dont care about tx *)
+            let _, tx = decodeTx payload 0 in
+            add_jobs [ 
+              log "got tx!!! " (*^ ( Message.formatTx tx) *); 
+              get_message conn ; 
+            ] state
 
 
           | "addr" -> 
