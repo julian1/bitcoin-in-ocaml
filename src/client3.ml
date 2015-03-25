@@ -383,18 +383,13 @@ let f state e =
               |> List.filter (fun (inv_type,hash) -> inv_type == 1)
               |> List.map (fun (_,hash)->hash)
             in
-            (* request data - we need to encode this .... *)
-
-            let payload = 
-              encodeVarInt (List.length block_hashes)
+            let encodeInventory lst =
+              (* encodeInv - move to Message  - and need to zip *)
+              encodeVarInt (List.length lst )
               ^ String.concat "" 
-                  (List.map 
-                    (fun hash -> 
-                      (encodeInteger32 1 )
-                      ^ ( encodeHash32 hash )
-                    )
-                  block_hashes)
+                (List.map (fun hash -> encodeInteger32 1 ^ encodeHash32 hash) lst)
             in
+            let payload = encodeInventory block_hashes in 
             let header = encodeHeader {
               magic = m ;
               command = "getdata";
@@ -408,8 +403,9 @@ let f state e =
               get_message conn ; 
             ] state
 
-            (* at the moment we dont care about tx *)
+
             | "tx" ->
+              (* at the moment we dont care about tx *)
               let _, tx = decodeTx payload 0 in
               add_jobs [ 
                 log "got tx!!! " (*^ ( Message.formatTx tx) *); 
