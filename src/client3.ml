@@ -162,7 +162,7 @@ let get_connection host port =
   - althought we could just wrap it inside the pick to emit a value ...
 *)
 
-let readChannel inchan length   =
+let readChannel inchan length (* timeout here *)  =
   let buf = Bytes.create length in
 
   Lwt.pick [
