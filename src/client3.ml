@@ -368,13 +368,54 @@ let f state e =
               get_message conn 
             ] state 
 
-          | "inv" -> 
+(*          | "inv" -> 
             let _, inv = decodeInv payload 0 in
             add_jobs [ 
               log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
               ;
               get_message conn 
             ] state
+*)
+
+          | "inv" ->
+            let _, inv = decodeInv payload 0 in
+            let block_hashes = inv
+              |> List.filter (fun (inv_type,hash) -> inv_type == 1)
+              |> List.map (fun (_,hash)->hash)
+            in
+            (* request data - we need to encode this .... *)
+
+            let payload = 
+              encodeVarInt (List.length block_hashes)
+              ^ String.concat "" 
+                  (List.map 
+                    (fun hash -> 
+                      (encodeInteger32 1 )
+                      ^ ( encodeHash32 hash )
+                    )
+                  block_hashes)
+            in
+            let header = encodeHeader {
+              magic = m ;
+              command = "getdata";
+              length = strlen payload;
+              checksum = checksum payload;
+              } 
+            in
+            add_jobs [ 
+              send_message conn (header ^ payload) ; 
+              log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn) ;
+              get_message conn ; 
+            ] state
+
+            (* at the moment we dont care about tx *)
+            | "tx" ->
+              let _, tx = decodeTx payload 0 in
+              add_jobs [ 
+                log "got tx!!! " (*^ ( Message.formatTx tx) *); 
+                get_message conn ; 
+              ] state
+
 
           | "addr" -> 
               let pos, count = decodeVarInt payload 0 in
