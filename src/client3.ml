@@ -409,16 +409,94 @@ let f state e =
                 - our job is to ensure we get the tree, so we can verify the best path ourselves.
                 - we know the root node (genesis)
  
-              - 1. we do the request from all heads to all peers (so we don't loose forks)
-              - 2. get inventory of next 500 blocks back, from all peers 
-                    - then group for each sequence of hashes 
-              
-              - 3. then just make the request for the groups from peers that have them. choose
-                peer at random. 
+              - 1. if a head hasn't updated for a period (5 mins) send message request for next to to a                 all peers 
+                  (so we don't loose forks)
+              - 2. we'll get back inventory of next 500 blocks back, from all peers 
+                    - then group for each sequence of hashes,taking a certain number (10,100,500) etc. 
+                    WE HAVE TO GROUP to know we explored all fork options
+                    
+              - 3. if we havent seen a returned group before - request the block data from that peer 
+                  otherwise if we have seen (meaning we've issued request), ignore.
 
               - 4. if a particular head doesn't move for 5 minutes then we just issue again.
 
-              - we deal in batches which makes it easier - not the next 1. but the next ten or 100 .
+
+                - first node in the list represents the last valid block we have.  
+                [[]]]
+
+                **********************
+                SIMPLER APPROACH - would be just select single next item and request it.
+                    then we don't group.
+
+                heads (gets updated as we get new blocks pointing back)
+                  [ genesis ] k 
+                  - after block inv request...
+
+                pending sequences (just an optimisation to prevent 
+                  downloading the same thing from multiple sources - but why not make finegrained)
+                  - might clear this on the timer. will need to be a map.
+   
+                we don't need received, it's implied by heads. we kind of do for out-of-order
+                spurious inv messages. will be in leveldb
+ 
+                  ----
+                  - look at the heads and request next sequence of blocks from all peers.
+
+                  - when get a inv sequence returned from a peer - select top 10 as seq and
+                check if not already pending.
+                  (we have to select everything to avoid arriving out-of-order) 
+                  - so it has to be a sequence and we request everything in the sequence in 
+                  order, so the peer can give us something.
+
+                  - we don't remove from pending - except on fallback timing. kkkkkkk  
+
+                - so it's very little different from what we have already. except we ask from
+                  everyone. then filter to avoid requesting the same thing too often.  
+
+                - VERY IMPORTANT - and to keep it ticking over after we've got our 100 blocks
+                or so, - we can just mark in the pending that when we receive that block
+                we should do more head requests.
+
+                  - when we get a block we can remove it from pending. no because we want to 
+                  prevent another
+
+                **********************
+
+                  [ hash0 hash1 hash2 hash3 ]  
+                  [ hash0 hash1 hash4 hash5 ]  
+                  - so for each of those sequences we try to pull them
+
+                - when we get hash0 we see it links to genesis, so we remove genesis.
+                - when we get hash1 we'll remove hash0 from both lists. 
+
+                - we'll only save a block to disk if it advances a known head. but we can't avoid
+                downloading it, since we have to check if it's a valid fork
+
+                - ok the spurious inv we get are not a problem . we add to the list of segments,
+                do the download, check and remove 
+
+                - we have to have two lists. the actual heads. 
+
+            -----
+
+                IMPORTNAT - if someone sends us an invalid block to get in an inv, we still have to
+                retrieve it.  where headers first we dont because we can validate it.
+                - but... we can drop the connection after a bit. but this is complicated.
+
+
+                IMPORTANT maybe get rid of the current head. and instead use a list of size one. when
+                we're at a tip.
+  
+                [ hash, hash hash hash ]
+                [ hash ]  <-- at tip
+
+
+              - IMPORTANT - we need to make sure we can immediately continue when we have our block. 
+                  easy. just test the received block with the last in the set. in which 
+                  case we'll go back to 2. 
+
+              - we deal in sequences of hashes which makes it easier - not the next 1. 
+                but the next ten or 100 .
                 ie. have we sent a request for the next 100 blocks from x hash.
                   - if yes then don't request again.
             *) 
@@ -443,8 +521,12 @@ let f state e =
                   checksum = checksum payload;
                   } 
                 in
-                log @@ "requesting block " ^ conn.addr ^ " " ^ string_of_int conn.port  
-                >> send_message conn (header ^ payload)
+                log @@ "requesting block (actually not) " 
+                  ^ string_of_int (List.length block_hashes )^ " " 
+                  ^ hex_of_string (List.hd block_hashes) ^ " " 
+                  ^ conn.addr ^ " " 
+                  ^ string_of_int conn.port  
+                (* >> send_message conn (header ^ payload) *)
               else
                 return Nop ;
               
@@ -523,7 +605,7 @@ let run f s =
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
-          *)
+*)
           let new_state = List.fold_left f { state with lst = incomplete } complete 
           in if List.length new_state.lst > 0 then
             loop new_state 
