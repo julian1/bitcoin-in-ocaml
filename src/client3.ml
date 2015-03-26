@@ -533,21 +533,14 @@ let f state e =
               ] state
 
             (* completely separate bit.
-                this is only requesting against a single node, after which it will be marked...
-                actually I think we might need to record the pending with the node
-
-                The head will advance as we start getting blocks - but we don't necessarily 
-                want to keep requesting stuff. 
-            
-                a timer is easier.
-(now -. conn.last_activity) > 30. in 
-
+                can be tacked on to any message response from a peer.
                 actually this code, is nice in how it round-robbins
              *)
             |> fun state -> 
 
               let now = Unix.time () in
-              let stale,ok = List.partition (fun (x:myblock ) -> (now -. x.last_request) > 10. ) state.heads in 
+              let stale_test (x : myblock) = (now -. x.last_request) > 10. in
+              let stale,ok = List.partition stale_test state.heads in 
               (* update timestamp *)
               let stale = List.map (fun x -> { x with last_request = now; } ) stale in
               let state = { state with heads = ok @ stale } in 
