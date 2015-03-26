@@ -504,6 +504,9 @@ let f state e =
             (* completely separate bit. *)
             |> fun state -> 
 
+              (* ok, I think we need a separate list for whether a request has been made
+                for inv items *)
+
               (* so filter for stuff where there's no pending *)
               let o  = List.filter (fun x -> not @@ SS.mem x.hash state.pending  ) state.heads in 
               let jobs =  List.map 
