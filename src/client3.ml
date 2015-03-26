@@ -383,159 +383,43 @@ let f state e =
               |> List.filter (fun (inv_type,_) -> inv_type == 2)
               |> List.map (fun (_,hash)->hash)
             in
-  
-            (* - want to also filter in leveldb 
-              but this is an IO action  
-              - which needs to be encoded as a job...
-              -- actually it maybe simple just do a di
-              -----------
-              - the sequence actually (normally) begins with our request for future blocks
-                  and this will determine who we get the responses from...
-              - then we get inv of 500? 
-              - then we will request in order...
-              - and what about if two different nodes have a different view 
-  
-              - ok, to pick up forks we really need to request future blocks
-              from all peers.
-              - don't merge, - because we need to know what peer has what 
-                - actually we could merge into a Map hash -> List of peers.
-                - no cause then we loose the ordering.
-              - and work our way through them...
-              - testing if we already have the block...
-              -----------------------
-  
-              - each individual peer - only has a linear chain because it knows it's best path.     
-                  but the network might have a tree.
-                - our job is to ensure we get the tree, so we can verify the best path ourselves.
-                - we know the root node (genesis)
- 
-              - 1. if a head hasn't updated for a period (5 mins) send message request for next to to a                 all peers 
-                  (so we don't loose forks)
-              - 2. we'll get back inventory of next 500 blocks back, from all peers 
-                    - then group for each sequence of hashes,taking a certain number (10,100,500) etc. 
-                    WE HAVE TO GROUP to know we explored all fork options
-                    
-              - 3. if we havent seen a returned group before - request the block data from that peer 
-                  otherwise if we have seen (meaning we've issued request), ignore.
 
-              - 4. if a particular head doesn't move for 5 minutes then we just issue again.
-
-
-                - first node in the list represents the last valid block we have.  
-                [[]]]
-
-                **********************
-				BASICALLY the same as before - except request inv from all blocks. and 
-					avoid requesting the same sequence of blocks multiple times.
-
-                SIMPLER APPROACH - would be just select single next item and request it.
-                    then we don't group.
-
-                heads (gets updated as we get new blocks pointing back)
-                  [ genesis ] k 
-                  - after block inv request...
-
-                pending sequences (just an optimisation to prevent 
-                  downloading the same thing from multiple sources - but why not make finegrained)
-                  - might clear this on the timer. will need to be a map.
-   
-                we don't need received, it's implied by heads. we kind of do for out-of-order
-                spurious inv messages. will be in leveldb
- 
-                  ----
-                  - look at the heads and request next sequence of blocks from all peers.
-
-                  - when get a inv sequence returned from a peer - select top 10 as seq and
-                check if not already pending.
-                  (we have to select everything to avoid arriving out-of-order) 
-                  - so it has to be a sequence and we request everything in the sequence in 
-                  order, so the peer can give us something.
-
-                  - we don't remove from pending - except on fallback timing. kkkkkkk  
-
-                - so it's very little different from what we have already. except we ask from
-                  everyone. then filter to avoid requesting the same thing too often.  
-
-                - VERY IMPORTANT - and to keep it ticking over after we've got our 100 blocks
-                or so, - we can just mark in the pending that when we receive that block
-                we should do more head requests.
-
-                  - when we get a block we can remove it from pending. no because we want to 
-                  prevent another
-
-                **********************
-
-                  [ hash0 hash1 hash2 hash3 ]  
-                  [ hash0 hash1 hash4 hash5 ]  
-                  - so for each of those sequences we try to pull them
-
-                - when we get hash0 we see it links to genesis, so we remove genesis.
-                - when we get hash1 we'll remove hash0 from both lists. 
-
-                - we'll only save a block to disk if it advances a known head. but we can't avoid
-                downloading it, since we have to check if it's a valid fork
-
-                - ok the spurious inv we get are not a problem . we add to the list of segments,
-                do the download, check and remove 
-
-                - we have to have two lists. the actual heads. 
-
-            -----
-
-                IMPORTNAT - if someone sends us an invalid block to get in an inv, we still have to
-                retrieve it.  where headers first we dont because we can validate it.
-                - but... we can drop the connection after a bit. but this is complicated.
-
-
-                IMPORTANT maybe get rid of the current head. and instead use a list of size one. when
-                we're at a tip.
-  
-                [ hash, hash hash hash ]
-                [ hash ]  <-- at tip
-
-
-              - IMPORTANT - we need to make sure we can immediately continue when we have our block. 
-                  easy. just test the received block with the last in the set. in which 
-                  case we'll go back to 2. 
-
-              - we deal in sequences of hashes which makes it easier - not the next 1. 
-                but the next ten or 100 .
-                ie. have we sent a request for the next 100 blocks from x hash.
-                  - if yes then don't request again.
-            *) 
-
-            add_jobs [ 
-              (* check if pending or already have and request if not 
-                don't bother to format message unless we've got.
-                also write that it's pending...
-              *)
-              if List.length block_hashes > 0 then
-                let encodeInventory lst =
-                  (* encodeInv - move to Message  - and need to zip *)
-                  encodeVarInt (List.length lst )
-                  ^ String.concat "" 
-                    (List.map (fun hash -> encodeInteger32 2 ^ encodeHash32 hash) lst)
-                in
-                let payload = encodeInventory block_hashes in 
-                let header = encodeHeader {
-                  magic = m ;
-                  command = "getdata";
-                  length = strlen payload;
-                  checksum = checksum payload;
-                  } 
-                in
+            if List.length block_hashes > 0 then
+              let encodeInventory lst =
+                (* encodeInv - move to Message  - and need to zip *)
+                encodeVarInt (List.length lst )
+                ^ String.concat "" 
+                  (List.map (fun hash -> encodeInteger32 2 ^ encodeHash32 hash) lst)
+              in
+              let payload = encodeInventory block_hashes in 
+              let header = encodeHeader {
+                magic = m ;
+                command = "getdata";
+                length = strlen payload;
+                checksum = checksum payload;
+                } 
+              in add_jobs [ 
                 log @@ "requesting block (actually not) " 
                   ^ string_of_int (List.length block_hashes )^ " " 
                   ^ hex_of_string (List.hd block_hashes) ^ " " 
                   ^ conn.addr ^ " " 
-                  ^ string_of_int conn.port  
+                  ^ string_of_int conn.port ; 
                 (* >> send_message conn (header ^ payload) *)
-              else
-                return Nop ;
+                  get_message conn ; 
+                ] state
+
+            else
+              add_jobs [ 
+                get_message conn ; 
+              ] state
+
+              (* check if pending or already have and request if not 
+                don't bother to format message unless we've got.
+                also write that it's pending...
+              *)
+
               
               (* log @@ conn.addr ^ " " ^ string_of_int conn.port ^ " got inv !!! " ;  *)
-              get_message conn ; 
-            ] state
 
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
