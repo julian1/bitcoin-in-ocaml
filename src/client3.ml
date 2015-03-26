@@ -256,11 +256,25 @@ let filterTerminated lst =
 
 module SS = Map.Make(struct type t = string let compare = compare end)
 
-
+(* change name to requested *)
 type pending_request =
 {
     addr1 : string  ; (* or conn? *)
 }
+
+
+
+type myblock = 
+{
+    hash : string;
+    previous : string;  (* could be a list pointer at myblock *) 
+    height : int;   (* if known? *)
+    difficulty : int ; (* aggregated *)
+    (* bool requested *)
+    (* bool have *)
+
+}
+
 
 
 type my_app_state =
@@ -270,6 +284,10 @@ type my_app_state =
   connections : connection list ; 
 
 	pending : pending_request SS.t;	
+
+
+	heads : myblock SS.t;	
+
 
 
 }
@@ -574,7 +592,23 @@ let s =
     get_connection     "23.229.45.32" 8333;
     get_connection     "23.236.144.69" 8333;
   ] in
-  { count = 123 ; lst = lst; connections = []; pending = SS.empty } 
+  let heads = 
+      (* as an exception - we add genesis even though it's not been downloaded it yet *)
+      let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+      SS.empty 
+      |> SS.add genesis { 
+        hash = genesis; 
+        previous = ""; 
+        height = 0; 
+        difficulty = 123 
+      } in
+  { 
+    count = 123 ; 
+    lst = lst; 
+    connections = []; 
+    pending = SS.empty ; 
+    heads = heads ; 
+  } 
 
 let () = run f s  
 
