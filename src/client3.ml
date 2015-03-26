@@ -510,8 +510,10 @@ let f state e =
                 for inv items *)
 
               (* so filter for stuff where there's no pending *)
-              let o  = List.filter (fun (x:myblock ) -> not x.pending  ) state.heads in 
+              let o  = List.filter (fun (x:myblock ) -> not x.pending) state.heads in 
               let jobs = List.map (fun x -> send_message conn (initial_getblocks x.hash)) o in 
+              let new_heads = List.map (fun (x:myblock ) -> { x with pending= false} ) state.heads in 
+ 
 
 
               add_jobs jobs 
