@@ -520,9 +520,6 @@ let f state e =
 
 
 
-            
-
-
               (* check if pending or already have and request if not 
                 don't bother to format message unless we've got.
                 also write that it's pending...
@@ -533,8 +530,10 @@ let f state e =
 
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
+            let hash = (Message.strsub payload 0 80 |> Message.sha256d |> Message.strrev ) in
+ 
             add_jobs [ 
-              log @@ "got block " ^ conn.addr ^ " " ^ string_of_int conn.port  ; 
+              log @@ "got block " ^ conn.addr ^ " " ^ string_of_int conn.port ^ " " ^ hex_of_string hash ; 
               get_message conn ; 
             ] state
 
