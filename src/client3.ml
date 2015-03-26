@@ -60,6 +60,30 @@ let initial_getaddr =
   header
 
 
+let initial_getblocks starting_hash =
+  (* we can only request one at a time 
+    - the list are the options, and server returns a sequence
+    from the first valid block in our list
+  *)
+  let payload =
+    encodeInteger32 1  (* version *)
+    ^ encodeVarInt 1
+    ^ encodeHash32 starting_hash
+
+ (*   ^ encodeHash32 (string_of_hex "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"  ) *)
+(*    ^ encodeHash32 ( string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"  ) *)
+                        (* this isn't right it should be a hash *)
+    ^ zeros 32   (* block to stop - we don't know should be 32 bytes *)
+	in
+  let header = encodeHeader {
+    magic = m ;
+    command = "getblocks";
+    length = strlen payload;
+    checksum = checksum payload;
+  } in
+	header ^ payload
+
+
 
 type connection =
 {
@@ -480,9 +504,19 @@ let f state e =
             (* completely separate bit. *)
             |> fun state -> 
 
-              let o  = List.map (fun x -> x ) state.heads in 
+              (* so filter for stuff where there's no pending *)
+              let o  = List.filter (fun x -> not @@ SS.mem x.hash state.pending  ) state.heads in 
+              let jobs =  List.map 
+                  (fun x -> send_message conn (initial_getblocks x.hash)) o in 
 
-              state  
+
+              add_jobs [ 
+                (* this is only sending to one - whereas we want to send to all *) 
+                log @@ " size of o " ^ string_of_int ( List.length o ) ;
+              ] state
+
+
+
             
 
 
