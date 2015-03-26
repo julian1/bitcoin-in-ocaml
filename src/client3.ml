@@ -465,9 +465,19 @@ let f state e =
           *)
 
 		(*	
+			**** VERY IMPORTANT ****
+			if something is pending and isn't received after a minute, then 
+				we should clear it. pending can just be set to 30 secs or something...
+				to cover time between request and receive 
+				we do need the recieved list however.
+
 			- OK, we're probably getting 244, because of some truncation somewhere in how we're 
-			doing stuff... 
+			encoding the varInt request ... 
 			- if we can mark expected we're much better.
+			then we can mark the last item - so that we can immediately request again.
+	
+			- actually we could test that pending == received
+			- no just keep a last item.
 		*)
           | "inv" ->
             let needed_inv_type = 2 in
@@ -593,7 +603,11 @@ let f state e =
             add_jobs [ 
               log @@ "got block " ^ conn.addr ^ " " 
                 ^ string_of_int conn.port ^ " " ^ hex_of_string hash 
-                ^ " heads now " ^ String.concat " " @@ List.map (fun x -> hex_of_string x.hash) new_heads ; 
+                ^ " heads " ^ String.concat " " @@ List.map ( fun x -> 
+					hex_of_string x.hash
+					^ " height " ^ string_of_int x.height 
+				) 
+				new_heads ; 
 
               get_message conn ; 
             ] { state with heads = new_heads } 
