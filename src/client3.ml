@@ -479,6 +479,13 @@ let f state e =
 			- actually we could test that pending == received
 			- no just keep a last item.
 		*)
+
+	        (*
+            - actually the first thing we should do - is filter inv items
+            against leveldb.     
+            - either thread this through the main block
+            - ... 
+          *)	
           | "inv" ->
             let needed_inv_type = 2 in
 
@@ -541,11 +548,8 @@ let f state e =
 
               let now = Unix.time () in
               let stale,ok = List.partition (fun (x:myblock ) -> (now -. x.last_request) > 10. ) state.heads in 
-              let stale = List.map (fun x -> 
-                (* update timestamp *)
-                { x with last_request = now; } 
-                ) stale
-              in
+              (* update timestamp *)
+              let stale = List.map (fun x -> { x with last_request = now; } ) stale in
               let state = { state with heads = ok @ stale } in 
               let jobs = List.map (fun x -> 
                   log @@ " requesting head hash " ^ hex_of_string x.hash
