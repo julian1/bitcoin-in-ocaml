@@ -510,10 +510,11 @@ let f state e =
                   (fun x -> send_message conn (initial_getblocks x.hash)) o in 
 
 
-              add_jobs [ 
+              add_jobs jobs 
+               (* @@ [ 
                 (* this is only sending to one - whereas we want to send to all *) 
                 log @@ " size of o " ^ string_of_int ( List.length o ) ;
-              ] state
+              ] )*)  state
 
 
 
