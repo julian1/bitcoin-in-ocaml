@@ -286,7 +286,8 @@ type my_app_state =
 	pending : pending_request SS.t;	
 
 
-	heads : myblock SS.t;	
+	(* heads : myblock SS.t;	*)
+	heads : myblock list ;	
 
 
 
@@ -424,6 +425,11 @@ let f state e =
                   it was ever received.
       
               - actually we broadcast our getall blocks to all nodes...
+
+              update of pending is easy. if it's not received and pending shows it's
+              stale, then delete the entry from pending.
+
+              - are we sure we don't want to combine the head. 
           *)
           | "inv" ->
             let needed_inv_type = 1 in
@@ -470,6 +476,15 @@ let f state e =
                 log @@ " already pending ";
                 get_message conn ; 
               ] state
+
+            (* completely separate bit. *)
+            |> fun state -> 
+
+              let o  = List.map (fun x -> x ) state.heads in 
+
+              state  
+            
+
 
               (* check if pending or already have and request if not 
                 don't bother to format message unless we've got.
@@ -592,14 +607,12 @@ let s =
   ] in
   let heads = 
       (* as an exception - we add genesis even though it's not been downloaded it yet *)
-      let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
-      SS.empty 
-      |> SS.add genesis { 
-        hash = genesis; 
+      [ { 
+        hash = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"; 
         previous = ""; 
         height = 0; 
         difficulty = 123 
-      } in
+      } ] in
   { 
     count = 123 ; 
     lst = lst; 
