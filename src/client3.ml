@@ -251,11 +251,27 @@ let filterTerminated lst =
 
           1 114 58 13 85 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255 255 31 186 250 186 32 141
                 *)
+
+
+
+module SS = Map.Make(struct type t = string let compare = compare end)
+
+
+type pending_request =
+{
+    addr1 : string  ; (* or conn? *)
+}
+
+
 type my_app_state =
 {
   count : int;
   lst :  myvar Lwt.t list ;
   connections : connection list ; 
+
+	pending : pending_request SS.t;	
+
+
 }
 
 let explode s =
@@ -377,13 +393,18 @@ let f state e =
             ] state
 *)
 
+          (* - ok, so for each block we have to mark in pending 
+            - and we want to limit the number
+              - we might use a map record from who it's pending to make it easier to work with?
+              - or the request time
+          *)
+
           | "inv" ->
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
               |> List.filter (fun (inv_type,_) -> inv_type == 2)
               |> List.map (fun (_,hash)->hash)
             in
-
             if List.length block_hashes > 0 then
               let encodeInventory lst =
                 (* encodeInv - move to Message  - and need to zip *)
@@ -399,12 +420,12 @@ let f state e =
                 checksum = checksum payload;
                 } 
               in add_jobs [ 
-                log @@ "requesting block (actually not) " 
+                log @@ "requesting blocks (actually not) " 
                   ^ string_of_int (List.length block_hashes )^ " " 
-                  ^ String.concat " " (List.map hex_of_string block_hashes) ^ " " 
+                  ^ String.concat "\n" (List.map hex_of_string block_hashes) ^ " " 
                   ^ conn.addr ^ " " 
                   ^ string_of_int conn.port ; 
-                (* >> send_message conn (header ^ payload) *)
+                  (* >> send_message conn (header ^ payload) *)
                   get_message conn ; 
                 ] state
 
@@ -531,7 +552,7 @@ let s =
     get_connection     "23.229.45.32" 8333;
     get_connection     "23.236.144.69" 8333;
   ] in
-  { count = 123 ; lst = lst; connections = []; } 
+  { count = 123 ; lst = lst; connections = []; pending = SS.empty } 
 
 let () = run f s  
 
