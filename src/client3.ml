@@ -417,6 +417,14 @@ let f state e =
               - or the request time
           *)
 
+          (*
+            when analyzing the heads. 
+              - make a request...  if the block is not pending. 
+              - and put the time of request in the pending so we can see if 
+                  it was ever received.
+      
+              - actually we broadcast our getall blocks to all nodes...
+          *)
           | "inv" ->
             let needed_inv_type = 1 in
 
@@ -426,15 +434,7 @@ let f state e =
               |> List.map (fun (_,hash)->hash)
             in
 
-            (* and filter according to pending 
-              this needs a fold ...
-              No get the set that aren't members.
-              then add
-    
-              we need an easy way to add the elments to map list...
-            *)
             let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in
-
             if List.length block_hashes > 0 then
 
               let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
@@ -467,9 +467,7 @@ let f state e =
 
             else
               add_jobs [ 
-                  log @@ " already pending "
-                  ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
-                  
+                log @@ " already pending ";
                 get_message conn ; 
               ] state
 
