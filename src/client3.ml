@@ -297,8 +297,7 @@ type myblock =
     (* bool requested *)
     (* bool have *)
 
-    pending : bool;  (* an inventory request... *)
-
+    last_request : float;
 }
 
 
@@ -511,25 +510,46 @@ let f state e =
                 want to keep requesting stuff. 
             
                 a timer is easier.
+(now -. conn.last_activity) > 30. in 
+
              *)
             |> fun state -> 
-              let o  = List.filter (fun (x:myblock ) -> not x.pending) state.heads in 
+
+              let now = Unix.time () in
+              let stale,ok = List.partition (fun (x:myblock ) -> (now -. x.last_request) > 10. ) state.heads in 
+              let stale = List.map (fun x -> 
+                (* update timestamp *)
+                { x with last_request = now; } 
+                ) stale
+              in  
               let jobs = List.map (fun x -> 
                   log @@ " requesting head hash " ^ hex_of_string x.hash
                   >> send_message conn (initial_getblocks x.hash)
-              ) o in 
-              let new_heads = List.map (fun (x:myblock ) -> { x with pending= true } ) state.heads in 
+              ) stale in 
               add_jobs jobs 
-               (* @@ [ 
-                (* this is only sending to one - whereas we want to send to all *) 
-                log @@ " size of o " ^ string_of_int ( List.length o ) ;
-              ] )*)  { state with heads = new_heads }
+                 { state with heads = ok @ stale } 
 
 
 
               (* check if pending or already have and request if not 
                 don't bother to format message unless we've got.
                 also write that it's pending...
+
+      let _, header = decodeBlock payload 0 in 
+
+      Lwt_io.write_line Lwt_io.stdout ( "* got block " ^ ( Message.hex_of_string hash) 
+        ^ " previous " ^  Message.hex_of_string header.previous ^ "\n" )
+
+      (* find() will throw if entry not found...  *)
+      >> 
+      (* does this block point at a head - if so we update the head! *)
+      if SS.mem header.previous state.heads then 
+        let old = SS.find header.previous state.heads in 
+        let new_ = { hash = hash; previous = header.previous; height = old.height + 1 ; difficulty = 123 } in 
+        let state = { 
+          state with 
+
+ 
               *)
 
               
@@ -538,11 +558,28 @@ let f state e =
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
             let hash = (Message.strsub payload 0 80 |> Message.sha256d |> Message.strrev ) in
+            let _, header = decodeBlock payload 0 in 
+
+            (* should be just remove and add, which is a map ... *)
+            let new_heads = List.map (fun x -> 
+              if header.previous = x.hash then
+                { 
+                  hash = hash; 
+                  previous = header.previous;  
+                  height = x.height + 1; 
+                  last_request = Unix.time ();
+                  difficulty = x.difficulty 
+              }  
+              else x 
+            ) state.heads in 
  
             add_jobs [ 
-              log @@ "got block " ^ conn.addr ^ " " ^ string_of_int conn.port ^ " " ^ hex_of_string hash ; 
+              log @@ "got block " ^ conn.addr ^ " " 
+                ^ string_of_int conn.port ^ " " ^ hex_of_string hash 
+                ^ " heads now " ^ String.concat " " @@ List.map (fun x -> hex_of_string x.hash) new_heads ; 
+
               get_message conn ; 
-            ] state
+            ] { state with heads = new_heads } 
 
 
           | "tx" ->
@@ -655,7 +692,7 @@ let s =
         previous = ""; 
         height = 0; 
         difficulty = 123; 
-        pending = false;
+        last_request = Unix.time (); (* now *)
       } ] in
   { 
     count = 123 ; 
