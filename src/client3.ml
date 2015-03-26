@@ -297,6 +297,8 @@ type myblock =
     (* bool requested *)
     (* bool have *)
 
+    pending : bool;  (* an inventory request... *)
+
 }
 
 
@@ -508,9 +510,8 @@ let f state e =
                 for inv items *)
 
               (* so filter for stuff where there's no pending *)
-              let o  = List.filter (fun x -> not @@ SS.mem x.hash state.pending  ) state.heads in 
-              let jobs =  List.map 
-                  (fun x -> send_message conn (initial_getblocks x.hash)) o in 
+              let o  = List.filter (fun (x:myblock ) -> not x.pending  ) state.heads in 
+              let jobs = List.map (fun x -> send_message conn (initial_getblocks x.hash)) o in 
 
 
               add_jobs jobs 
@@ -649,7 +650,8 @@ let s =
         hash = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"; 
         previous = ""; 
         height = 0; 
-        difficulty = 123 
+        difficulty = 123; 
+        pending = false;
       } ] in
   { 
     count = 123 ; 
