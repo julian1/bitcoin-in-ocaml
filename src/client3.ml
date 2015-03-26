@@ -401,7 +401,7 @@ let f state e =
               in add_jobs [ 
                 log @@ "requesting block (actually not) " 
                   ^ string_of_int (List.length block_hashes )^ " " 
-                  ^ hex_of_string (List.hd block_hashes) ^ " " 
+                  ^ String.concat " " (List.map hex_of_string block_hashes) ^ " " 
                   ^ conn.addr ^ " " 
                   ^ string_of_int conn.port ; 
                 (* >> send_message conn (header ^ payload) *)
