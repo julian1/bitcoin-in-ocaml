@@ -400,11 +400,11 @@ let f state e =
           *)
 
           | "inv" ->
-            let needed_type = 2 in
+            let needed_inv_type = 2 in
 
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
-              |> List.filter (fun (inv_type,_) -> inv_type = needed_type )
+              |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
               |> List.map (fun (_,hash)->hash)
             in
 
@@ -417,7 +417,7 @@ let f state e =
             *)
             let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in
 
-            let new_pending = List.fold_left (fun m elt -> SS.add elt { addr1 = "x"; } m ) 
+            let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
               state.pending block_hashes in
 
             if List.length block_hashes > 0 then
@@ -426,7 +426,7 @@ let f state e =
                 (* encodeInv - move to Message  - and need to zip *)
                 encodeVarInt (List.length lst )
                 ^ String.concat "" 
-                  (List.map (fun hash -> encodeInteger32 needed_type ^ encodeHash32 hash) lst)
+                  (List.map (fun hash -> encodeInteger32 needed_inv_type ^ encodeHash32 hash) lst)
               in
               let payload = encodeInventory block_hashes in 
               let header = encodeHeader {
