@@ -400,7 +400,7 @@ let f state e =
           *)
 
           | "inv" ->
-            let needed_inv_type = 2 in
+            let needed_inv_type = 1 in
 
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
@@ -436,17 +436,20 @@ let f state e =
                 checksum = checksum payload;
                 } 
               in add_jobs [ 
-                log @@ "requesting blocks (actually not) " 
+                log @@ "requesting inv " 
+                  ^ "pending " ^ string_of_int (SS.cardinal state.pending )^ " " 
+                  ^ "new pending " ^ string_of_int (SS.cardinal new_pending )^ " " 
                   ^ string_of_int (List.length block_hashes )^ " " 
                   ^ String.concat "\n" (List.map hex_of_string block_hashes) ^ " " 
                   ^ conn.addr ^ " " 
                   ^ string_of_int conn.port ; 
                   (* >> send_message conn (header ^ payload) *)
                   get_message conn ; 
-                ] state
+                ] { state with pending = new_pending; }
 
             else
               add_jobs [ 
+
                 get_message conn ; 
               ] state
 
