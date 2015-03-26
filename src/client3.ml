@@ -458,7 +458,7 @@ let f state e =
               - are we sure we don't want to combine the head. 
           *)
           | "inv" ->
-            let needed_inv_type = 1 in
+            let needed_inv_type = 2 in
 
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
@@ -503,24 +503,20 @@ let f state e =
                 get_message conn ; 
               ] state
 
-            (* completely separate bit. *)
+            (* completely separate bit.
+                this is only requesting against a single node, after which it will be marked...
+          
+                actually I think we might need to record the pending with the node
+             *)
             |> fun state -> 
-
-              (* ok, I think we need a separate list for whether a request has been made
-                for inv items *)
-
-              (* so filter for stuff where there's no pending *)
               let o  = List.filter (fun (x:myblock ) -> not x.pending) state.heads in 
               let jobs = List.map (fun x -> send_message conn (initial_getblocks x.hash)) o in 
               let new_heads = List.map (fun (x:myblock ) -> { x with pending= false} ) state.heads in 
- 
-
-
               add_jobs jobs 
                (* @@ [ 
                 (* this is only sending to one - whereas we want to send to all *) 
                 log @@ " size of o " ^ string_of_int ( List.length o ) ;
-              ] )*)  state
+              ] )*)  { state with heads = new_heads }
 
 
 
