@@ -405,7 +405,18 @@ let f state e =
               |> List.filter (fun (inv_type,_) -> inv_type == 2)
               |> List.map (fun (_,hash)->hash)
             in
+
+            (* and filter according to pending 
+              this needs a fold ...
+              No get the set that aren't members.
+              then add
+            *)
+            let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in
+
             if List.length block_hashes > 0 then
+
+
+
               let encodeInventory lst =
                 (* encodeInv - move to Message  - and need to zip *)
                 encodeVarInt (List.length lst )
