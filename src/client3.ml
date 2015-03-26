@@ -456,6 +456,19 @@ let f state e =
 
               - are we sure we don't want to combine the head. 
           *)
+          (*
+			- server only sent half the blocks and stopped. 
+			- requesting again ... 
+			- but blocks were marked as pending already so they're ignored , so 
+ 
+			- when cleared pending we advanced furtuer 
+          *)
+
+		(*	
+			- OK, we're probably getting 244, because of some truncation somewhere in how we're 
+			doing stuff... 
+			- if we can mark expected we're much better.
+		*)
           | "inv" ->
             let needed_inv_type = 2 in
 
@@ -465,11 +478,12 @@ let f state e =
               |> List.map (fun (_,hash)->hash)
             in
 
-            let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in
+(*            let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in *)
             if List.length block_hashes > 0 then
 
-              let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
+  (*            let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
                 state.pending block_hashes in
+  *)          let new_pending = SS.empty  in
 
               let encodeInventory lst =
                 (* encodeInv - move to Message  - and need to zip *)
@@ -498,7 +512,6 @@ let f state e =
 
             else
               add_jobs [ 
-                log @@ " already pending ";
                 get_message conn ; 
               ] state
 
@@ -512,6 +525,7 @@ let f state e =
                 a timer is easier.
 (now -. conn.last_activity) > 30. in 
 
+                actually this code, is nice in how it round-robbins
              *)
             |> fun state -> 
 
@@ -521,13 +535,16 @@ let f state e =
                 (* update timestamp *)
                 { x with last_request = now; } 
                 ) stale
-              in  
+              in
+              let state = { state with heads = ok @ stale } in 
               let jobs = List.map (fun x -> 
                   log @@ " requesting head hash " ^ hex_of_string x.hash
+                  ^ " from " ^ format_addr conn   
+                  ^ " length heads " ^ string_of_int @@ List.length state.heads 
                   >> send_message conn (initial_getblocks x.hash)
               ) stale in 
               add_jobs jobs 
-                 { state with heads = ok @ stale } 
+                 state 
 
 
 
