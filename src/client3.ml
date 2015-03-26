@@ -601,8 +601,10 @@ let f state e =
             ) state.heads in 
  
             add_jobs [ 
-              log @@ "got block " ^ conn.addr ^ " " 
-                ^ string_of_int conn.port ^ " " ^ hex_of_string hash 
+              log @@ "got " 
+				^ " block " ^ hex_of_string hash 
+				^ " from " ^ conn.addr ^ " " ^ string_of_int conn.port 
+                ^ " heads count " ^ string_of_int (List.length state.heads) 
                 ^ " heads " ^ String.concat " " @@ List.map ( fun x -> 
 					hex_of_string x.hash
 					^ " height " ^ string_of_int x.height 
