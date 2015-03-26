@@ -443,13 +443,15 @@ let f state e =
                   ^ String.concat "\n" (List.map hex_of_string block_hashes) ^ " " 
                   ^ conn.addr ^ " " 
                   ^ string_of_int conn.port ; 
-                  (* >> send_message conn (header ^ payload) *)
+                  send_message conn (header ^ payload); 
                   get_message conn ; 
                 ] { state with pending = new_pending; }
 
             else
               add_jobs [ 
-
+                  log @@ " already pending "
+                  ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
+                  
                 get_message conn ; 
               ] state
 
@@ -473,7 +475,8 @@ let f state e =
             (* at the moment we dont care about tx *)
             (* let _, tx = decodeTx payload 0 in *)
             add_jobs [ 
-              log "got tx!!! " (*^ ( Message.formatTx tx) *); 
+              (let hash = (payload |> Message.sha256d |> Message.strrev ) in 
+              log  @@  "got tx!!! " ^ hex_of_string hash )   ; 
               get_message conn ; 
             ] state
 
