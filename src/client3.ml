@@ -417,10 +417,10 @@ let f state e =
             *)
             let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in
 
-            let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
-              state.pending block_hashes in
-
             if List.length block_hashes > 0 then
+
+              let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
+                state.pending block_hashes in
 
               let encodeInventory lst =
                 (* encodeInv - move to Message  - and need to zip *)
