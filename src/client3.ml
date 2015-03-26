@@ -485,6 +485,10 @@ let f state e =
             against leveldb.     
             - either thread this through the main block
             - ... 
+            - there's actually no reason why why can't run this through the 
+              job ...
+              leveldb -> have we got.
+              no send message.
           *)	
           | "inv" ->
             let needed_inv_type = 2 in
