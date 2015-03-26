@@ -505,13 +505,20 @@ let f state e =
 
             (* completely separate bit.
                 this is only requesting against a single node, after which it will be marked...
-          
                 actually I think we might need to record the pending with the node
+
+                The head will advance as we start getting blocks - but we don't necessarily 
+                want to keep requesting stuff. 
+            
+                a timer is easier.
              *)
             |> fun state -> 
               let o  = List.filter (fun (x:myblock ) -> not x.pending) state.heads in 
-              let jobs = List.map (fun x -> send_message conn (initial_getblocks x.hash)) o in 
-              let new_heads = List.map (fun (x:myblock ) -> { x with pending= false} ) state.heads in 
+              let jobs = List.map (fun x -> 
+                  log @@ " requesting head hash " ^ hex_of_string x.hash
+                  >> send_message conn (initial_getblocks x.hash)
+              ) o in 
+              let new_heads = List.map (fun (x:myblock ) -> { x with pending= true } ) state.heads in 
               add_jobs jobs 
                (* @@ [ 
                 (* this is only sending to one - whereas we want to send to all *) 
