@@ -347,6 +347,12 @@ let string_of_bytes s =
 - app state is effectively a fold over the network events...
 *)
 
+let detach f = 
+  Lwt_preemptive.detach 
+    (fun () -> f ) () 
+
+
+
 let f state e =
 
   (* helpers *)
@@ -491,6 +497,7 @@ let f state e =
               job ...
               leveldb -> have we got.
               no send message.
+-> -> 
           *)	
           | "inv" ->
             let needed_inv_type = 2 in
@@ -523,9 +530,15 @@ let f state e =
               } 
               in add_jobs [ 
 
-                  
+                  (* detach ( LevelDB.mem state.db "hash") >>= fun _ -> return Nop ;*)  
 
-                  log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes); 
+              		( detach @@ LevelDB.get state.db "hash" 
+                
+                    >>= fun _ -> return Nop );
+                 
+                 (* detach ( LevelDB.mem state.db "hash") >>  return Nop ; *)
+
+                  log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
                   send_message conn (header ^ payload); 
                   get_message conn ; 
                 ] state 
