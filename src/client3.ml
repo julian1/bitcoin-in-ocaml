@@ -499,18 +499,13 @@ let f state e =
               |> List.map (fun (_,hash)->hash)
             in
 
-(*            let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in *)
+
             if List.length block_hashes > 0 then
-
-  (*            let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
-                state.pending block_hashes in
-  *)          let new_pending = SS.empty  in
-
               let encodeInventory lst =
+                let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
                 (* encodeInv - move to Message  - and need to zip *)
                 encodeVarInt (List.length lst )
-                ^ String.concat "" 
-                  (List.map (fun hash -> encodeInteger32 needed_inv_type ^ encodeHash32 hash) lst)
+                ^ String.concat "" @@ List.map encodeInvItem lst
               in
               let payload = encodeInventory block_hashes in 
               let header = encodeHeader {
@@ -521,15 +516,10 @@ let f state e =
                 } 
               in add_jobs [ 
                 log @@ "request " 
-                  (* ^ "pending " ^ string_of_int (SS.cardinal state.pending )^ " " 
-                  ^ "new pending " ^ string_of_int (SS.cardinal new_pending )^ " " 
-                  ^ string_of_int (List.length block_hashes )^ " "  *)
-                   ^ String.concat "\n" (List.map hex_of_string block_hashes) (*^ " "*) 
-                  (* ^ conn.addr ^ " " 
-                  ^ string_of_int conn.port *) ; 
+                   ^ String.concat "\n" (List.map hex_of_string block_hashes); (*^ " "*) 
                   send_message conn (header ^ payload); 
                   get_message conn ; 
-                ] { state with pending = new_pending; }
+                ] state 
 
             else
               add_jobs [ 
