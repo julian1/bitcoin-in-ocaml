@@ -530,16 +530,19 @@ let f state e =
 						no it's not going to expose it. we need to bind >> the results
 						through... 
                   *) 
-                 ( 
+        (*         ( 
                   Lwt.choose ( 
                     List.map (fun hash -> detach @@ LevelDB.mem state.db hash ) block_hashes 
                    ) 
                     >>= fun v -> return Nop 
                   ) ;
+*)
 				(                                  
-					detach @@ 
+					detach @@ ( 
 					List.fold_left (fun acc hash 
 						-> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
+					|> List.rev
+					)
 					>>= fun block_hashes ->  
 					   let encodeInventory lst =
 							let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
@@ -556,7 +559,8 @@ let f state e =
 						  }
 						in 
 
-						log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
+						log @@ "request count " ^ string_of_int  (List.length block_hashes) 
+						>> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
 						>> send_message conn (header ^ payload); 
 				)
 					;
