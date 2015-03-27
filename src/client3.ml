@@ -1,5 +1,7 @@
+(*
+corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client3.byte
 
-
+*)
 open Message
 open Script
 
@@ -314,7 +316,7 @@ type my_app_state =
 	(* heads : myblock SS.t;	*)
 	heads : myblock list ;	
 
-
+  db : LevelDB.db ; 
 
 }
 
@@ -499,8 +501,13 @@ let f state e =
               |> List.map (fun (_,hash)->hash)
             in
 
-
             if List.length block_hashes > 0 then
+
+              (* - ok, all this stuff wants to be moved into the job and only
+                done for items that don't exist in level db 
+                - but leveldb interface - expects one at a time? 
+                - no we can pass a list, and get back key/ responses
+              *)
               let encodeInventory lst =
                 let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
                 (* encodeInv - move to Message  - and need to zip *)
@@ -513,10 +520,12 @@ let f state e =
                 command = "getdata";
                 length = strlen payload;
                 checksum = checksum payload;
-                } 
+              } 
               in add_jobs [ 
-                log @@ "request " 
-                   ^ String.concat "\n" (List.map hex_of_string block_hashes); (*^ " "*) 
+
+                  
+
+                  log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes); 
                   send_message conn (header ^ payload); 
                   get_message conn ; 
                 ] state 
@@ -724,6 +733,7 @@ let s =
     connections = []; 
     pending = SS.empty ; 
     heads = heads ; 
+    db = LevelDB.open_db "mydb"; 
   } 
 
 let () = run f s  
