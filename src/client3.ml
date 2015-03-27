@@ -527,16 +527,23 @@ let f state e =
                 command = "getdata";
                 length = strlen payload;
                 checksum = checksum payload;
-              } 
+              }
               in add_jobs [ 
 
-                  (* detach ( LevelDB.mem state.db "hash") >>= fun _ -> return Nop ;*)  
-
-              		( detach @@ LevelDB.get state.db "hash" 
-                
-                    >>= fun _ -> return Nop );
+                  (* - ok, we want to batch the jobs somehow - cause we have to get a list 
+                    at the end. is there something like a fold? 
+                    - even if we manage to get it to join(). we're not going to get 
+                    an aggregated response at the end 
+                  *) 
+                 ( 
+                  Lwt.join ( 
+                    List.map (fun hash -> detach @@ LevelDB.mem state.db hash >>= fun _ -> return ()) block_hashes 
+                   ) 
+                    >> return Nop 
+                  ) ;
+                  
                  
-                 (* detach ( LevelDB.mem state.db "hash") >>  return Nop ; *)
+                  (detach @@ LevelDB.mem state.db "hash" >>= fun _ ->  return Nop ); 
 
                   log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
                   send_message conn (header ^ payload); 
