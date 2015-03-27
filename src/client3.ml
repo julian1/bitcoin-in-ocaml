@@ -537,33 +537,34 @@ let f state e =
                     >>= fun v -> return Nop 
                   ) ;
 				(                                  
-				detach @@ 
-				List.fold_left (fun acc hash 
-					-> if LevelDB.mem state.db hash then hash :: acc else acc) [] block_hashes
-				
-				>>= fun _ ->  
-				   let encodeInventory lst =
-						let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
-						(* encodeInv - move to Message  - and need to zip *)
-						encodeVarInt (List.length lst )
-						^ String.concat "" @@ List.map encodeInvItem lst
-					  in
-					  let payload = encodeInventory block_hashes in 
-					  let header = encodeHeader {
-						magic = m ;
-						command = "getdata";
-						length = strlen payload;
-						checksum = checksum payload;
-					  }
-					in 
-					send_message conn (header ^ payload); 
+					detach @@ 
+					List.fold_left (fun acc hash 
+						-> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
+					>>= fun block_hashes ->  
+					   let encodeInventory lst =
+							let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+							(* encodeInv - move to Message  - and need to zip *)
+							encodeVarInt (List.length lst )
+							^ String.concat "" @@ List.map encodeInvItem lst
+						  in
+						  let payload = encodeInventory block_hashes in 
+						  let header = encodeHeader {
+							magic = m ;
+							command = "getdata";
+							length = strlen payload;
+							checksum = checksum payload;
+						  }
+						in 
+
+						log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
+						>> send_message conn (header ^ payload); 
 				)
 					;
-				 
+		(*
                   (detach @@ LevelDB.mem state.db "hash" >>= fun _ ->  return Nop ); 
-
                   log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
                   (* send_message conn (header ^ payload); *) 
+		*)
                   get_message conn ; 
                 ] state 
 
