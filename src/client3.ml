@@ -643,6 +643,16 @@ let f state e =
             ) state.heads in 
  
             add_jobs [ 
+				
+					(
+
+					log "storing to db " 
+					>> detach ( 
+						LevelDB.put state.db hash "whoot" 
+					) >> return Nop
+					)
+					;
+
               log @@ "got " 
 				^ " block " ^ hex_of_string hash 
 				^ " from " ^ conn.addr ^ " " ^ string_of_int conn.port 
