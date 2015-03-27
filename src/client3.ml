@@ -641,6 +641,12 @@ let f state e =
               }  
               else x 
             ) state.heads in 
+
+			(* Unless the block advances the head we shouldn't store it 
+				so it's sort of working.
+				it's not advancing because heads are out of sync with db records,
+				and block requests are being supressed. 
+			*)
  
             add_jobs [ 
 					(
