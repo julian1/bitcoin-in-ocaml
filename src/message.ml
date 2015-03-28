@@ -45,7 +45,7 @@ type block =
   nTime : int;
   bits : int;
   nonce : int;
-  tx_count : int;
+  (* tx_count : int; *)
 }
 
 
@@ -297,7 +297,7 @@ let decodeVarInt s pos =
     | _ -> (pos, first)
 
 
-
+(* change name decodeBlockHeader *)
 let decodeBlock (s:string) pos = 
 	let pos, version = decodeInteger32 s pos in 
 	let pos, previous = decodeHash32 s pos in
@@ -305,9 +305,11 @@ let decodeBlock (s:string) pos =
 	let pos, nTime = decodeInteger32 s pos in
 	let pos, bits = decodeInteger32 s pos in
 	let pos, nonce = decodeInteger32 s pos in
-	let pos, tx_count = decodeVarInt s pos in 
+
+	(* TODO remove this - tx count is not part of block header, but the block description *)  
+	(* let pos, tx_count = decodeVarInt s pos in  *)
 	pos, ({ version = version; previous = previous; merkle = merkle; 
-		nTime = nTime; bits = bits; nonce = nonce; tx_count = tx_count } : block) 
+		nTime = nTime; bits = bits; nonce = nonce; (* tx_count = tx_count *)  } : block) 
 
 
 
@@ -668,7 +670,7 @@ let formatBlock (h : block) =
     "\nnTime:    "; string_of_int h.nTime; 
     "\nbits:    "; string_of_int h.bits; 
     "\nnonce:    "; string_of_int h.nonce; 
-    "\ntx_count:    "; string_of_int h.tx_count; 
+    (*"\ntx_count:    "; string_of_int h.tx_count;  *)
   ]
 
 
