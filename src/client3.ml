@@ -662,6 +662,13 @@ let f state e =
          
 let run f s =
   Lwt_main.run (
+
+    Lwt_io.open_file Lwt_io.output "blocks.dat"  
+
+    >>= fun fd -> return () 
+
+    >>
+
     let rec loop state =
       Lwt.catch (
       fun () -> Lwt.nchoose_split state.jobs 
