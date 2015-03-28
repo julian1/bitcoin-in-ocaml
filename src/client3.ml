@@ -672,14 +672,21 @@ let run f =
 
   Lwt_main.run (
 
-    Lwt_io.open_file Lwt_io.input "blocks.dat"  
-    >>= fun ic -> 
+    Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
+
+    >>= fun fd -> 
+      let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in
       readChannel ic 24
+
     >>= fun s ->
         let _, header = decodeHeader s 0 in
 
-        return ()
-   
+        Lwt_io.write_line Lwt_io.stdout header.command 
+        >> Lwt_io.write_line Lwt_io.stdout (string_of_int header.length ) 
+ 
+     >> Lwt_io.close ic 
+
+  (* 
     >>
     (* get initial state up *)
     Lwt_io.open_file Lwt_io.output "blocks.dat"  
@@ -745,6 +752,7 @@ let run f =
         )
     in
       loop state 
+*)
   )
 
 
