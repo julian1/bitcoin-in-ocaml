@@ -687,7 +687,7 @@ Lwt.return block
       let block = Bytes .create len in
       Lwt_unix.read fd block 0 len >>= 
       fun ret ->
-        Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >> 
+        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
       return (
         if ret > 0 then Some ( Bytes.to_string block )
         else None 
@@ -706,19 +706,20 @@ Lwt.return block
       >>= fun x -> match x with 
         | Some s -> ( 
           let _, header = decodeHeader s 0 in
-          Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length  
-          >> read_bytes fd 84  (* var int tx count is not part of block header *)  
+          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+          read_bytes fd 80 
           >>= fun u -> match u with 
             | Some ss -> 
-              Lwt_io.write_line Lwt_io.stdout @@ "here " ^ string_of_int @@ String.length ss 
-              >> let _, block_header = decodeBlock ss 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ string_of_int block_header.version 
-              >> advance fd (header.length - 84 )
+              let hash = ss |> Message.sha256d |> Message.strrev  in
+              let _, block_header = decodeBlock ss 0 in
+              Lwt_io.write_line Lwt_io.stdout @@ 
+                hex_of_string hash 
+                ^ " " ^ hex_of_string block_header.previous 
+              >> advance fd (header.length - 80 )
               >> loop fd  (* *)
             | None -> 
               return ()
           )
-
         | None -> 
           return ()
     in 
