@@ -529,7 +529,10 @@ let f state e =
                 let last_expected_block = block_hashes |> List.rev |> List.hd
               in 
               add_jobs [ 
-                log @@ "requesting blocks\n" ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
+                log @@ "requesting blocks " 
+                    ^ string_of_int (List.length block_hashes) 
+                   (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
+                    ; 
                 send_message conn (header ^ payload); 
                 get_message conn ; 
               ] { state with last_expected_block = last_expected_block } 
@@ -585,6 +588,10 @@ let f state e =
 
               ok, rather than maintaining the download heads... lets compute 
               when we need .
+              ----
+                
+                our optimiser isn't working very well. everytime we get a random block
+                it gets updated. 
             *)
 
             if not (SS.mem hash state.heads )
@@ -597,7 +604,9 @@ let f state e =
               in
               
               add_jobs [ 
-                log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
+                log @@ "got block - updated chain " 
+                  ^ string_of_int  (SS.cardinal heads )
+                  ^ " len " ^ (string_of_int (String.length payload));
                 Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
                 get_message conn ; 
               ] { state with heads = heads;  
@@ -611,7 +620,7 @@ let f state e =
                 } 
             else
               add_jobs [ 
-                log "already have block or block doesn't change chain - ignored ";
+                log "got block - already have or cant build on - ignored ";
                 get_message conn ; 
               ] state 
 
@@ -731,7 +740,8 @@ Lwt.return block
       let u =  (* very strange that this var is needed to typecheck *)
       match Lwt_unix.state fd with 
         Opened -> 
-          loop fd SS.empty  
+          Lwt_io.write_line Lwt_io.stdout "scanning blocks!!" 
+          >> loop fd SS.empty  
           >>= fun heads -> Lwt_unix.close fd
           >> return heads
         | _ -> return 
