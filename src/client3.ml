@@ -731,9 +731,9 @@ Lwt.return block
       let u =  (* very strange that this var is needed to typecheck *)
       match Lwt_unix.state fd with 
         Opened -> 
-          let heads = loop fd SS.empty in 
-          Lwt_unix.close fd
-          >> heads
+          loop fd SS.empty  
+          >>= fun heads -> Lwt_unix.close fd
+          >> return heads
         | _ -> return 
             ( SS.empty 
             |>
