@@ -524,45 +524,28 @@ let f state e =
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
               if now -. state.download_head_last_time  > 10. then 
+                (* create a set of all pointed-to block hashes *)
+                let previous = 
+                  SS.bindings state.heads 
+                  |> List.map (fun (_,head ) -> head.previous) 
+                  |> SSS.of_list
+                in
+                (* get the tips of the blockchain tree by filtering all block hashes against the set *)
+                let heads = 
+                  SS.filter (fun a b -> not @@ SSS.mem a previous ) state.heads 
+                  |> SS.bindings 
+                  |> List.map (fun (tip,_ ) -> tip) 
+                in
+                (* choose one at random *)
+                let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
+                let head = List.nth heads index in
+                add_jobs [
+                log @@ "**** update download_head " 
 
-                  (* hang on this isn't right 
-                    what we need is the map of previous items...
-                    and a substraction.
-
-                    - we need to compute a new map ...
-                    - need to bulk add... 
-                    - from_list
-
-
-                  let previous = 
-                    SS.map (fun (a,b) -> a ) state.heads 
-                  in
-
-
-                  *) 
-                  let previous = 
-                    SS.bindings state.heads 
-                    |> List.map (fun (_,head ) -> head.previous) 
-                    |> SSS.of_list
-                  in
-                  let x = SS.filter (fun a b -> not @@ SSS.mem a previous ) state.heads in 
-
-                  let previous = ["a"] in
-
-                  let index = now |> int_of_float |> (fun x -> x mod List.length previous) in 
-
-
-                
-
-                  let head = List.nth previous index in
-
-                  add_jobs [
-                  log @@ "**** update download_head " 
-
-                  ^ "\n download_heads count " ^ (string_of_int @@ List.length previous )
-                  ^ "\n head " ^ hex_of_string head 
-                  ^ "\n from " ^ format_addr conn   
-                  >> send_message conn (initial_getblocks head)
+                ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
+                ^ "\n head " ^ hex_of_string head 
+                ^ "\n from " ^ format_addr conn   
+                >> send_message conn (initial_getblocks head)
                 ]
                 { state with download_head_last_time = now }  
               else
