@@ -728,11 +728,12 @@ Lwt.return block
     in 
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
     >>= fun fd -> 
-      let u = 
+      let u =  (* very strange that this var is needed to typecheck *)
       match Lwt_unix.state fd with 
-        Opened -> loop fd SS.empty  
-
-
+        Opened -> 
+          let heads = loop fd SS.empty in 
+          Lwt_unix.close fd
+          >> heads
         | _ -> return 
             ( SS.empty 
             |>
@@ -741,13 +742,11 @@ Lwt.return block
            { 
             previous = ""; 
             height = 0; 
-          }  
-          )
+          })
         in u
- 
 
-   >>= fun heads ->   Lwt_io.write_line Lwt_io.stdout @@ "blocks read " ^ string_of_int (SS.cardinal heads  )
-
+   >>= fun heads ->   
+      Lwt_io.write_line Lwt_io.stdout @@ "blocks read " ^ string_of_int (SS.cardinal heads  )
 
     >>
     (* get initial state up 
