@@ -691,13 +691,15 @@ Lwt.return block
 
       fun ret ->
        Lwt_io.write_line Lwt_io.stdout @@ "read "  ^ string_of_int ret 
-      >> if ret > 0 then 
-          return Some block
+      >> return (
+          if ret > 0 then 
+          Some block
         else
-          return None 
+          None 
+        )
 
-      >>= fun s ->
-        if String.length s > 0 then
+      >>= fun x -> match x with 
+        | Some s -> 
           let _, header = decodeHeader s 0 in
           Lwt_io.write_line Lwt_io.stdout @@ header.command 
             ^ " " ^ string_of_int header.length  
@@ -708,7 +710,7 @@ Lwt.return block
             Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r 
  
             >> loop fd 
-        else
+        | None -> 
           return ()
     in 
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
