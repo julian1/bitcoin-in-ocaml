@@ -549,20 +549,22 @@ let f state e =
 
             (* completely separate bit.  code can go anywhere peer.  *)
             |> fun state -> 
+             
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
               if now -. state.time_of_last_valid_block  > 10. then 
                 (* create a set of all pointed-to block hashes *)
+                (* watch out for non-tail call optimised functions here which might blow stack *)
                 let previous = 
                   SS.bindings state.heads 
-                  |> List.map (fun (_,head ) -> head.previous) 
+                  |> List.rev_map (fun (_,head ) -> head.previous) 
                   |> SSS.of_list
                 in
                 (* get the tips of the blockchain tree by filtering all block hashes against the set *)
                 let heads = 
                   SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
                   |> SS.bindings 
-                  |> List.map (fun (tip,_ ) -> tip) 
+                  |> List.rev_map (fun (tip,_ ) -> tip) 
                 in
                 (* choose one at random *)
                 let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
