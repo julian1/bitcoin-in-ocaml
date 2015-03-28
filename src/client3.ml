@@ -102,7 +102,7 @@ type connection =
 
 type my_action =
    | GotConnection of connection
-   | GotMessage of connection  * header * string
+   | GotMessage of connection  * header * string * string
    | GotConnectionError of string
    | GotReadError of connection * string (* change name MessageError - because *)
    | Nop
@@ -212,7 +212,7 @@ let get_message conn =
           (* read payload *)
           readChannel conn.ic header.length
           >>= fun p -> 
-          return @@ GotMessage ( conn, header, p)
+          return @@ GotMessage ( conn, header, s, p)
         else
           return @@ GotReadError (conn, "payload too big" ) 
       ) 
@@ -336,10 +336,13 @@ type my_app_state =
 
     may only be used for fast downloading...
   *)
-  last_download_block : float; (* change name _time *)
+  last_download_block : float; (* change name _time, or condition  *)
   
-  (* from an inv request - to optimize downloads *)
+  (* from an inv request - used to quickly prompt another inv request *)
   last_expected_block : string;
+
+
+  blocks_oc : Lwt_io.output Lwt_io.channel ; 
 
 (*
   db : LevelDB.db ; 
@@ -441,7 +444,7 @@ let f state e =
           Lwt_unix.close conn.fd >> return Nop 
         ]
 
-      | GotMessage (conn, header, payload) -> 
+      | GotMessage (conn, header, raw_header, payload) -> 
         match header.command with
           | "version" ->
             state
@@ -545,7 +548,7 @@ let f state e =
                 in
                 (* get the tips of the blockchain tree by filtering all block hashes against the set *)
                 let heads = 
-                  SS.filter (fun a b -> not @@ SSS.mem a previous ) state.heads 
+                  SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
                   |> SS.bindings 
                   |> List.map (fun (tip,_ ) -> tip) 
                 in
@@ -591,6 +594,7 @@ let f state e =
               
               add_jobs [ 
                 log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
+                Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
                 get_message conn ; 
               ] { state with heads = heads;  
     
@@ -613,7 +617,7 @@ let f state e =
             (* let _, tx = decodeTx payload 0 in *)
             add_jobs [ 
               (let hash = (payload |> Message.sha256d |> Message.strrev ) in 
-              log  "got tx!!! " (* ^ hex_of_string hash *) )   ; 
+              log @@ "got tx!!! "  ^ hex_of_string hash )   ; 
               get_message conn ; 
             ] state
 
@@ -666,8 +670,8 @@ let run f =
 
     (* get initial state up *)
     Lwt_io.open_file Lwt_io.output "blocks.dat"  
-    >>= fun fd -> return () 
-    >>
+    >>= fun fd -> 
+
     let state = 
       let jobs = [
         (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
@@ -688,12 +692,12 @@ let run f =
       { 
         jobs = jobs; 
         connections = []; 
-    (*    pending = SS.empty ;  *)
         heads = heads ; 
-        (* download_heads = [ genesis ] ; *) 
         last_download_block = 0.;  
     (*    db = LevelDB.open_db "mydb"; *)
         last_expected_block = "";
+
+        blocks_oc = fd
       } 
     in
 
@@ -723,17 +727,6 @@ let run f =
           >> (* just exist cleanly *)  
             return ()
         )
-
-(* - ok there's an easy way to handle this 
-  - we have a read bound.
-  - what we need is to put it on a timer so it returns...
-  after a period.
-  - then we ought to be able to close it 
-  - it may well be easier... since only need to deal with one at a time...
-
-  kk
-*)
-
     in
       loop state 
   )
