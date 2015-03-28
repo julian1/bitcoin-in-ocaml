@@ -728,27 +728,35 @@ Lwt.return block
     in 
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
     >>= fun fd -> 
-      loop  fd  SS.empty 
-
-    >>= fun heads  -> 
-      Lwt_io.write_line Lwt_io.stdout @@ "done " ^ string_of_int (SS.cardinal heads  )
-
-    >> Lwt_unix.close fd 
-
-
-    >> return () 
-
+      match Lwt_unix.state fd with 
+(*        Opened -> loop fd SS.empty  
+*)
+        | _ -> return 
+            ( SS.empty 
+            |>
+            let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+            SS.add genesis 
+           { 
+            previous = ""; 
+            height = 0; 
+          }  
+          )
  
 
-  (* 
+   >>= fun heads ->   Lwt_io.write_line Lwt_io.stdout @@ "blocks read " ^ string_of_int (SS.cardinal heads  )
+
+
     >>
-    (* get initial state up *)
-    Lwt_io.open_file Lwt_io.output "blocks.dat"  
+    (* get initial state up 
+      uggh opening the file, non truncate ... 
+    *)
+(*     Lwt_io.open_file ~flags: [O_WRONLY ] Lwt_io.output       "blocks.dat"  *)  
+    Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0  
+ 
     >>= fun fd -> 
-    
+      let blocks_oc = Lwt_io.of_fd ~mode:Lwt_io.output fd  in
+ 
     (* we actually need to read it as well... as write it... *) 
-
-
     let state = 
       let jobs = [
         (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
@@ -757,6 +765,7 @@ Lwt.return block
         get_connection     "23.229.45.32" 8333;
         get_connection     "23.236.144.69" 8333;
       ] in
+(*
       let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
       let heads = 
           SS.empty 
@@ -766,6 +775,7 @@ Lwt.return block
             height = 0; 
             (* difficulty = 123; *)
           }  in
+*)
       { 
         jobs = jobs; 
         connections = []; 
@@ -774,10 +784,9 @@ Lwt.return block
     (*    db = LevelDB.open_db "mydb"; *)
         last_expected_block = "";
 
-        blocks_oc = fd
+        blocks_oc = blocks_oc
       } 
     in
-
 
     let rec loop state =
       Lwt.catch (
@@ -789,7 +798,7 @@ Lwt.return block
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
-*)
+      *)
           let new_state = List.fold_left f { state with jobs = incomplete } complete 
           in if List.length new_state.jobs > 0 then
             loop new_state 
@@ -806,7 +815,6 @@ Lwt.return block
         )
     in
       loop state 
-*)
   )
 
 
