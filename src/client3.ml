@@ -100,7 +100,7 @@ type connection =
 
 }
 
-type myvar =
+type my_action =
    | GotConnection of connection
    | GotMessage of connection  * header * string
    | GotConnectionError of string
@@ -233,7 +233,7 @@ let send_message conn s =
           Lwt_unix.close conn.fd 
           >>
 
-let filterTerminated lst =
+let filterTerminated jobs =
   (* ok, hang on this might miss
     because several finish - but only one gets returned
 
@@ -245,7 +245,7 @@ let filterTerminated lst =
      | Fail _ -> false
      | _ -> true
   in
-  List.filter f lst
+  List.filter f jobs
 *)
 
 
@@ -280,11 +280,11 @@ let filterTerminated lst =
 
 
 
-module SS = Map.Make(struct type t = string let compare = compare end)
 
 (* 
 	if we use this - then change name to expected 
 
+module SS = Map.Make(struct type t = string let compare = compare end)
 type pending_request =
 {
     addr1 : string  ; (* or conn? *)
@@ -316,16 +316,13 @@ type my_head =
 type my_app_state =
 {
 (*  count : int; *)
+(* pending : pending_request SS.t; *)	
+(* heads : my_head SS.t;	*)
 
-  lst :  myvar Lwt.t list ;
+  jobs :  my_action Lwt.t list ;
   connections : connection list ; 
 
-	(* pending : pending_request SS.t; *)	
-
-
-	(* heads : my_head SS.t;	*)
 	heads : my_head list ;	
-
   db : LevelDB.db ; 
 
 }
@@ -350,7 +347,7 @@ let string_of_bytes s =
 *)
 
 (*
-- lst = jobs, tasks, threads, fibres
+- jobs = jobs, tasks, threads, fibres
 - within a task we can sequence as many sub tasks using >>= as we like
 - we only have to thread stuff through this main function, when the app state changes
    and we have to synchronize, 
@@ -366,7 +363,7 @@ let detach f =
 let f state e =
 
   (* helpers *)
-  let add_jobs jobs state = { state with lst = jobs @ state.lst } in
+  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } in
   let remove_conn conn state = { state with 
       (* physical equality *)
       connections = List.filter (fun x -> x.fd != conn.fd) state.connections
@@ -554,11 +551,11 @@ let f state e =
 					|> List.rev
 					)
 					>>= fun block_hashes ->  
-					   let encodeInventory lst =
+					   let encodeInventory jobs =
 							let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
 							(* encodeInv - move to Message  - and need to zip *)
-							encodeVarInt (List.length lst )
-							^ String.concat "" @@ List.map encodeInvItem lst
+							encodeVarInt (List.length jobs )
+							^ String.concat "" @@ List.map encodeInvItem jobs 
 						  in
 						  let payload = encodeInventory block_hashes in 
 						  let header = encodeHeader {
@@ -745,7 +742,7 @@ let run f s =
   Lwt_main.run (
     let rec loop state =
       Lwt.catch (
-      fun () -> Lwt.nchoose_split state.lst
+      fun () -> Lwt.nchoose_split state.jobs 
 
         >>= fun (complete, incomplete) ->
           (*Lwt_io.write_line Lwt_io.stdout  @@
@@ -754,8 +751,8 @@ let run f s =
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
 *)
-          let new_state = List.fold_left f { state with lst = incomplete } complete 
-          in if List.length new_state.lst > 0 then
+          let new_state = List.fold_left f { state with jobs = incomplete } complete 
+          in if List.length new_state.jobs > 0 then
             loop new_state 
           else
             Lwt_io.write_line Lwt_io.stdout "finishing - no more jobs to run!!" 
@@ -785,7 +782,7 @@ let run f s =
 
 
 let s = 
-  let lst = [
+  let jobs = [
     (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
     get_connection     "23.227.177.161" 8333;
     get_connection     "23.227.191.50" 8333;
@@ -802,7 +799,7 @@ let s =
         last_request = Unix.time (); (* now *)
       } ] in
   { 
-    lst = lst; 
+    jobs = jobs; 
     connections = []; 
 (*    pending = SS.empty ;  *)
     heads = heads ; 
