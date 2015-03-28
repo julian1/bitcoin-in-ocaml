@@ -282,39 +282,49 @@ let filterTerminated lst =
 
 module SS = Map.Make(struct type t = string let compare = compare end)
 
-(* change name to requested *)
+(* 
+	if we use this - then change name to expected 
+
 type pending_request =
 {
     addr1 : string  ; (* or conn? *)
 }
+*)
 
 
-
-type myblock = 
+type my_head = 
 {
     hash : string;
-    previous : string;  (* could be a list pointer at myblock *) 
+    previous : string;  (* could be a list pointer at my_head *) 
     height : int;   (* if known? *)
     difficulty : int ; (* aggregated *)
     (* bool requested *)
     (* bool have *)
-
     last_request : float;
 }
 
+(*
+	- the blockchain (unlike connections) has to be an on-disk structure.
 
+	- we need to be able to serialize this head structure
+
+	- VERY IMPORTANT and an api (Lwt based) around the db, to manipulate
+	the on-disk data structures.
+	- eg. should wrap the db.
+*)
 
 type my_app_state =
 {
-  count : int;
+(*  count : int; *)
+
   lst :  myvar Lwt.t list ;
   connections : connection list ; 
 
-	pending : pending_request SS.t;	
+	(* pending : pending_request SS.t; *)	
 
 
-	(* heads : myblock SS.t;	*)
-	heads : myblock list ;	
+	(* heads : my_head SS.t;	*)
+	heads : my_head list ;	
 
   db : LevelDB.db ; 
 
@@ -584,7 +594,7 @@ let f state e =
             |> fun state -> 
 
               let now = Unix.time () in
-              let stale_test (x : myblock) = (now -. x.last_request) > 10. in
+              let stale_test (x : my_head) = (now -. x.last_request) > 10. in
               let stale,ok = List.partition stale_test state.heads in 
               (* update timestamp *)
               let stale = List.map (fun x -> { x with last_request = now; } ) stale in
@@ -647,7 +657,16 @@ let f state e =
 				it's not advancing because heads are out of sync with db records,
 				and block requests are being supressed. 
 			*)
- 
+			(*
+				- ok, we have the issue that the head contains prev, 
+				accumulated difficulty etc. 
+
+				- it might be easier to use binary serialization to read
+				and write some of these structures...
+
+				- the blockchain has to become a disk structure.
+
+			*) 
             add_jobs [ 
 					(
 					log "storing to db " 
@@ -783,10 +802,9 @@ let s =
         last_request = Unix.time (); (* now *)
       } ] in
   { 
-    count = 123 ; 
     lst = lst; 
     connections = []; 
-    pending = SS.empty ; 
+(*    pending = SS.empty ;  *)
     heads = heads ; 
     db = LevelDB.open_db "mydb"; 
   } 
