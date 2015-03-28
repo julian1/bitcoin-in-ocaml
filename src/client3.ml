@@ -683,33 +683,51 @@ Lwt.return block
 *)
 
 
+    let read_bytes fd len =
+      let block = Bytes .create len in
+      Lwt_unix.read fd block 0 len >>= 
+      fun ret ->
+       (* Lwt_io.write_line Lwt_io.stdout @@ "read "  ^ string_of_int ret  *)
+      return (
+        if ret > 0 then Some ( Bytes.to_string block )
+        else None 
+        )
+    in
+
+    let advance fd len =
+        Lwt_unix.lseek fd len SEEK_CUR 
+        >>= fun r -> 
+          (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+        return ()
+    in
 
     let rec loop fd =
-
-      let block = String.create 24 in
-      Lwt_unix.read fd block 0 24 >>= 
-
-      fun ret ->
-       Lwt_io.write_line Lwt_io.stdout @@ "read "  ^ string_of_int ret 
-      >> return (
-          if ret > 0 then 
-          Some block
-        else
-          None 
-        )
-
+      read_bytes fd 24
       >>= fun x -> match x with 
         | Some s -> 
           let _, header = decodeHeader s 0 in
-          Lwt_io.write_line Lwt_io.stdout @@ header.command 
-            ^ " " ^ string_of_int header.length  
-            ^ " " ^ string_of_int @@ String.length s 
+          Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length  
 
-          >> Lwt_unix.lseek fd (header.length) SEEK_CUR 
-          >>= fun r -> 
-            Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r 
- 
-            >> loop fd 
+  
+          >> read_bytes fd header.length 
+          >> loop fd 
+
+(*
+          >> read_bytes fd 200 
+          >>= fun u -> match u with 
+            | Some ss -> 
+
+              Lwt_io.write_line Lwt_io.stdout "here" 
+              >> 
+              let _, block_header = decodeBlock ss 0 in
+              Lwt_io.write_line Lwt_io.stdout @@ string_of_int block_header.version 
+(*
+              >> advance fd (header.length - 80 )
+              >> loop fd  *)
+
+            | None -> 
+              return ()
+*)
         | None -> 
           return ()
     in 
