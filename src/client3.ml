@@ -472,13 +472,37 @@ let f state e =
 
               add_jobs [ 
                   log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
-              (*
-                  (detach @@ LevelDB.mem state.db "hash" >>= fun _ ->  return Nop ); 
-                  log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
-                  (* send_message conn (header ^ payload); *) 
-    *)
-                  get_message conn ; 
-                ] state 
+                  ( 
+                      (* filter for if we have object already *) 
+                      detach @@ ( 
+                      List.fold_left (fun acc hash 
+                        -> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
+                      |> List.rev
+                      )
+
+                      (* request objects *) 
+                      >>= fun block_hashes ->  
+                         let encodeInventory jobs =
+                          let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+                          (* encodeInv - move to Message  - and need to zip *)
+                          encodeVarInt (List.length jobs )
+                          ^ String.concat "" @@ List.map encodeInvItem jobs 
+                          in
+                          let payload = encodeInventory block_hashes in 
+                          let header = encodeHeader {
+                          magic = m ;
+                          command = "getdata";
+                          length = strlen payload;
+                          checksum = checksum payload;
+                          }
+                        in 
+                        log @@ "request count " ^ string_of_int  (List.length block_hashes) 
+                        >> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
+                        >> send_message conn (header ^ payload); 
+                    )
+                ;
+                get_message conn ; 
+            ] state 
 
             else
               add_jobs [ 
@@ -490,7 +514,7 @@ let f state e =
                 actually this code, is nice in how it round-robbins
              *)
             |> fun state -> 
-
+              (* round robin making requests to advance the head *)
               let now = Unix.time () in
               if now -. state.last_head_request  > 10. then 
                 let index = now |> int_of_float |> fun a -> a mod List.length state.heads  in
