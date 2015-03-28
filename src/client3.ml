@@ -340,7 +340,7 @@ type my_app_state =
 
     may only be used for fast downloading...
   *)
-  last_download_block : float; (* change name _time, or condition  *)
+  time_of_last_valid_block : float; (* change name _time, or condition  *)
   
   (* from an inv request - used to quickly prompt another inv request *)
   last_expected_block : string;
@@ -526,7 +526,12 @@ let f state e =
                 checksum = checksum payload;
               }
               in 
-                let last_expected_block = block_hashes |> List.rev |> List.hd
+                let last_expected_block = 
+                  (* we get a lot of peers trying to send single blocks which we don't care about yet *) 
+                  if List.length block_hashes > 10 then
+                    block_hashes |> List.rev |> List.hd
+                  else
+                    state.last_expected_block
               in 
               add_jobs [ 
                 log @@ "requesting blocks " 
@@ -546,7 +551,7 @@ let f state e =
             |> fun state -> 
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
-              if now -. state.last_download_block  > 10. then 
+              if now -. state.time_of_last_valid_block  > 10. then 
                 (* create a set of all pointed-to block hashes *)
                 let previous = 
                   SS.bindings state.heads 
@@ -569,7 +574,7 @@ let f state e =
                   ^ "\n from " ^ format_addr conn   
                   >> send_message conn (initial_getblocks head)
                 ]
-                { state with last_download_block = now }  
+                { state with time_of_last_valid_block = now }  
               else
                  state
 (*
@@ -611,7 +616,7 @@ let f state e =
                 get_message conn ; 
               ] { state with heads = heads;  
     
-                  last_download_block = 
+                  time_of_last_valid_block = 
                     if hash = state.last_expected_block then 
                       0.
                     else
@@ -792,7 +797,7 @@ Lwt.return block
         jobs = jobs; 
         connections = []; 
         heads = heads ; 
-        last_download_block = 0.;  
+        time_of_last_valid_block = 0.;  
     (*    db = LevelDB.open_db "mydb"; *)
         last_expected_block = "";
 
