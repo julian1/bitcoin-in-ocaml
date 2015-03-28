@@ -1,0 +1,358 @@
+(*
+            in
+            let new_heads = List.map (fun head -> 
+              if header.previous = head.hash then
+                { 
+                  hash = hash; 
+                  previous = header.previous;  
+                  height = head.height + 1; 
+              }  
+              else head 
+            ) state.heads in 
+            add_jobs [ 
+                (
+                log "storing hash to db " 
+                >> detach ( 
+                  LevelDB.put state.db hash header.previous 
+                ) >> return Nop
+                )
+                ;
+                    log @@ "got " 
+              ^ " block " ^ hex_of_string hash 
+              ^ " from " ^ conn.addr ^ " " ^ string_of_int conn.port 
+                      ^ " heads count " ^ string_of_int (List.length state.heads) 
+                      ^ " heads " ^ String.concat " " @@ List.map ( fun x -> 
+                hex_of_string x.hash
+                ^ " height " ^ string_of_int x.height 
+              ) 
+              new_heads ; 
+              get_message conn ; 
+              (* need to update last time *) 
+            ] { state with heads = new_heads; download_head_last_time = Unix.time ()  } 
+*)
+
+ 
+(*                ( 
+                  (* filter against db *) 
+                  detach @@ ( 
+                    List.fold_left (fun acc hash 
+                      -> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
+                    |> List.rev
+                  )
+                  (* request objects *) 
+                  >>= fun block_hashes ->  
+                     let encodeInventory jobs =
+                        let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+                        (* encodeInv - move to Message  - and need to zip *)
+                        encodeVarInt (List.length jobs )
+                        ^ String.concat "" @@ List.map encodeInvItem jobs 
+                      in
+                      let payload = encodeInventory block_hashes in 
+                      let header = encodeHeader {
+                        magic = m ;
+                        command = "getdata";
+                        length = strlen payload;
+                        checksum = checksum payload;
+                      }
+                    in 
+                    log @@ "request count " ^ string_of_int  (List.length block_hashes) 
+                    >> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
+                    >> send_message conn (header ^ payload); 
+                  )
+                ;
+ *)       
+
+hmmmn. if were going to read all db entries into memory at the start - in order to determine heads 
+       - then we could do this with a simple append journal. and just keep all blocks in memory. 
+		and avoid the leveldb.
+		- replace leveldb indexes for blocks with a straight memory implementation? 
+		- it becomes a lot easier to answer the question
+
+		on block receipt
+			- store block to disk (permanent record)
+			- store block index to disk sequentially (for fast load on restart)
+			- update head  (to drive download)
+			- update internal map. (to enable filtering )
+
+		mem -> sequential index -> objects 
+
+		on inv
+			- just test if it advances the heads (this is sufficient) 
+
+
+            add_jobs [ 
+                (
+                log "storing hash to db " 
+                >> detach ( 
+                  LevelDB.put state.db hash header.previous 
+                ) >> return Nop
+                )
+                ;
+                    log @@ "got " 
+              ^ " block " ^ hex_of_string hash 
+              ^ " from " ^ conn.addr ^ " " ^ string_of_int conn.port 
+                      ^ " heads count " ^ string_of_int (List.length state.heads) 
+                      ^ " heads " ^ String.concat " " @@ List.map ( fun x -> 
+                hex_of_string x.hash
+                ^ " height " ^ string_of_int x.height 
+              ) 
+              new_heads ; 
+              get_message conn ; 
+              (* need to update last time *) 
+            ] { state with heads = new_heads; download_head_last_time = Unix.time ()  } 
+
+
+
+-------
+- what we've got is nice - we get a record of all teh forks 
+
+      height can also be removed. 
+      the only thing needed is lseek  position for block.
+
+      - height can be derived.
+      - heads/tips can be derived
+      - accumulated difficulty can be derived (if store for single block)   
+      - it's possible to write sequentially to disk, what 
+
+      - so on start up we read the thing into memory. 
+      - it's going to be a 20MB file/ data structure
+
+      - very important - and it could be used to check whether we already received 
+                 
+
+      - OR rather than storing in Map, use leveldb itself. 
+        hash -> previous 
+
+      - so on app startup, we scan all the block indexes to compute the heads?
+        and then just use the in-memory thing
+
+
+(*
+              let stale,ok = List.partition stale_test state.heads in 
+              (* update timestamp *)
+              let stale = List.map (fun x -> { x with last_request = now; } ) stale in
+              let state = { state with heads = ok @ stale } 
+			in 
+              let jobs = List.map (fun x -> 
+                  log @@ " requesting head hash " ^ hex_of_string x.hash
+                  ^ " from " ^ format_addr conn   
+                  ^ " length heads " ^ string_of_int @@ List.length state.heads 
+                  >> send_message conn (initial_getblocks x.hash)
+              ) stale in 
+              add_jobs jobs 
+                 state 
+*)
+
+              (* check if pending or already have and request if not 
+                don't bother to format message unless we've got.
+                also write that it's pending...
+
+      let _, header = decodeBlock payload 0 in 
+
+      Lwt_io.write_line Lwt_io.stdout ( "* got block " ^ ( Message.hex_of_string hash) 
+        ^ " previous " ^  Message.hex_of_string header.previous ^ "\n" )
+
+      (* find() will throw if entry not found...  *)
+      >> 
+      (* does this block point at a head - if so we update the head! *)
+      if SS.mem header.previous state.heads then 
+        let old = SS.find header.previous state.heads in 
+        let new_ = { hash = hash; previous = header.previous; height = old.height + 1 ; difficulty = 123 } in 
+        let state = { 
+          state with 
+
+ 
+              *)
+
+              
+              (* log @@ conn.addr ^ " " ^ string_of_int conn.port ^ " got inv !!! " ;  *)
+
+
+
+					detach @@ ( 
+					List.fold_left (fun acc hash 
+						-> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
+					|> List.rev
+					)
+					>>= fun block_hashes ->  
+					   let encodeInventory jobs =
+							let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+							(* encodeInv - move to Message  - and need to zip *)
+							encodeVarInt (List.length jobs )
+							^ String.concat "" @@ List.map encodeInvItem jobs 
+						  in
+						  let payload = encodeInventory block_hashes in 
+						  let header = encodeHeader {
+							magic = m ;
+							command = "getdata";
+							length = strlen payload;
+							checksum = checksum payload;
+						  }
+						in 
+
+						log @@ "request count " ^ string_of_int  (List.length block_hashes) 
+						>> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
+						>> send_message conn (header ^ payload); 
+				)
+					;
+
+
+
+
+            (* Unless the block advances the head we shouldn't store it 
+              so it's sort of working.
+              it's not advancing because heads are out of sync with db records,
+              and block requests are being supressed. 
+            *)
+            (*
+              - ok, we have the issue that the head contains prev, 
+              accumulated difficulty etc. 
+
+              - it might be easier to use binary serialization to read
+              and write some of these structures...
+
+              - the blockchain has to become a disk structure.
+
+            *) 
+
+
+
+ 
+                  (* ^ conn.addr ^ " " 
+                  ^ string_of_int conn.port *) ;
+
+                  (* ^ "pending " ^ string_of_int (SS.cardinal state.pending )^ " " 
+                  ^ "new pending " ^ string_of_int (SS.cardinal new_pending )^ " " 
+                  ^ string_of_int (List.length block_hashes )^ " "  *)              i
+
+
+(*            let new_pending = List.fold_left (fun m hash -> SS.add hash { addr1 = "x"; } m ) 
+                state.pending block_hashes in
+  *)
+(*            let block_hashes = List.filter (fun a -> not @@ SS.mem a state.pending) block_hashes in *)
+ 
+whats the reason for not adding individually to pending? 
+
+
+
+				**********************
+				BASICALLY the same as before - except request inv from all blocks. and 
+					avoid requesting the same sequence of blocks multiple times.
+
+                SIMPLER APPROACH - would be just select single next item and request it.
+                    then we don't group.
+
+                heads (gets updated as we get new blocks pointing back)
+                  [ genesis ] k 
+                  - after block inv request...
+
+                pending sequences (just an optimisation to prevent 
+                  downloading the same thing from multiple sources - but why not make finegrained)
+                  - might clear this on the timer. will need to be a map.
+   
+                we don't need received, it's implied by heads. we kind of do for out-of-order
+                spurious inv messages. will be in leveldb
+ 
+                  ----
+                  - look at the heads and request next sequence of blocks from all peers.
+
+                  - when get a inv sequence returned from a peer - select top 10 as seq and
+                check if not already pending.
+                  (we have to select everything to avoid arriving out-of-order) 
+                  - so it has to be a sequence and we request everything in the sequence in 
+                  order, so the peer can give us something.
+
+                  - we don't remove from pending - except on fallback timing. kkkkkkk  
+
+                - so it's very little different from what we have already. except we ask from
+                  everyone. then filter to avoid requesting the same thing too often.  
+
+                - VERY IMPORTANT - and to keep it ticking over after we've got our 100 blocks
+                or so, - we can just mark in the pending that when we receive that block
+                we should do more head requests.
+
+                  - when we get a block we can remove it from pending. no because we want to 
+                  prevent another
+
+                **********************
+
+            (* - want to also filter in leveldb 
+              but this is an IO action  
+              - which needs to be encoded as a job...
+              -- actually it maybe simple just do a di
+              -----------
+              - the sequence actually (normally) begins with our request for future blocks
+                  and this will determine who we get the responses from...
+              - then we get inv of 500? 
+              - then we will request in order...
+              - and what about if two different nodes have a different view 
+  
+              - ok, to pick up forks we really need to request future blocks
+              from all peers.
+              - don't merge, - because we need to know what peer has what 
+                - actually we could merge into a Map hash -> List of peers.
+                - no cause then we loose the ordering.
+              - and work our way through them...
+              - testing if we already have the block...
+              -----------------------
+  
+              - each individual peer - only has a linear chain because it knows it's best path.     
+                  but the network might have a tree.
+                - our job is to ensure we get the tree, so we can verify the best path ourselves.
+                - we know the root node (genesis)
+ 
+              - 1. if a head hasn't updated for a period (5 mins) send message request for next to to a                 all peers 
+                  (so we don't loose forks)
+              - 2. we'll get back inventory of next 500 blocks back, from all peers 
+                    - then group for each sequence of hashes,taking a certain number (10,100,500) etc. 
+                    WE HAVE TO GROUP to know we explored all fork options
+                    
+              - 3. if we havent seen a returned group before - request the block data from that peer 
+                  otherwise if we have seen (meaning we've issued request), ignore.
+
+              - 4. if a particular head doesn't move for 5 minutes then we just issue again.
+
+
+                - first node in the list represents the last valid block we have.  
+                [[]]]
+
+                  [ hash0 hash1 hash2 hash3 ]  
+                  [ hash0 hash1 hash4 hash5 ]  
+                  - so for each of those sequences we try to pull them
+
+                - when we get hash0 we see it links to genesis, so we remove genesis.
+                - when we get hash1 we'll remove hash0 from both lists. 
+
+                - we'll only save a block to disk if it advances a known head. but we can't avoid
+                downloading it, since we have to check if it's a valid fork
+
+                - ok the spurious inv we get are not a problem . we add to the list of segments,
+                do the download, check and remove 
+
+                - we have to have two lists. the actual heads. 
+
+            -----
+
+                IMPORTNAT - if someone sends us an invalid block to get in an inv, we still have to
+                retrieve it.  where headers first we dont because we can validate it.
+                - but... we can drop the connection after a bit. but this is complicated.
+
+
+                IMPORTANT maybe get rid of the current head. and instead use a list of size one. when
+                we're at a tip.
+  
+                [ hash, hash hash hash ]
+                [ hash ]  <-- at tip
+
+
+              - IMPORTANT - we need to make sure we can immediately continue when we have our block. 
+                  easy. just test the received block with the last in the set. in which 
+                  case we'll go back to 2. 
+
+              - we deal in sequences of hashes which makes it easier - not the next 1. 
+                but the next ten or 100 .
+                ie. have we sent a request for the next 100 blocks from x hash.
+                  - if yes then don't request again.
+            *) 
+
+

@@ -690,7 +690,8 @@ let s =
     get_connection     "23.229.45.32" 8333;
     get_connection     "23.236.144.69" 8333;
   ] in
-  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in
+  let genesis = string_of_hex "000000000000000010879e092119599612b57c6508b15b9b97a4862ab998c8cb" in 
+(*  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in *)
   let heads = 
       SS.empty 
       |> SS.add genesis 
