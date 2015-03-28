@@ -1,5 +1,7 @@
+(*
+corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client3.byte
 
-
+*)
 open Message
 open Script
 
@@ -60,6 +62,30 @@ let initial_getaddr =
   header
 
 
+let initial_getblocks starting_hash =
+  (* we can only request one at a time 
+    - the list are the options, and server returns a sequence
+    from the first valid block in our list
+  *)
+  let payload =
+    encodeInteger32 1  (* version *)
+    ^ encodeVarInt 1
+    ^ encodeHash32 starting_hash
+
+ (*   ^ encodeHash32 (string_of_hex "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"  ) *)
+(*    ^ encodeHash32 ( string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"  ) *)
+                        (* this isn't right it should be a hash *)
+    ^ zeros 32   (* block to stop - we don't know should be 32 bytes *)
+	in
+  let header = encodeHeader {
+    magic = m ;
+    command = "getblocks";
+    length = strlen payload;
+    checksum = checksum payload;
+  } in
+	header ^ payload
+
+
 
 type connection =
 {
@@ -74,11 +100,11 @@ type connection =
 
 }
 
-type myvar =
+type my_action =
    | GotConnection of connection
    | GotMessage of connection  * header * string
    | GotConnectionError of string
-   | GotReadError of connection * string
+   | GotReadError of connection * string (* change name MessageError - because *)
    | Nop
 
 
@@ -207,7 +233,7 @@ let send_message conn s =
           Lwt_unix.close conn.fd 
           >>
 
-let filterTerminated lst =
+let filterTerminated jobs =
   (* ok, hang on this might miss
     because several finish - but only one gets returned
 
@@ -219,7 +245,7 @@ let filterTerminated lst =
      | Fail _ -> false
      | _ -> true
   in
-  List.filter f lst
+  List.filter f jobs
 *)
 
 
@@ -251,11 +277,71 @@ let filterTerminated lst =
 
           1 114 58 13 85 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255 255 31 186 250 186 32 141
                 *)
+
+
+
+
+(* 
+	if we use this - then change name to expected 
+
+type pending_request =
+{
+    addr1 : string  ; (* or conn? *)
+}
+*)
+
+(*
+	heads can be computed by scanning the indexes at startup.
+	there's no point maintaining fast lookup memory map and leveldb btree indexes.
+*)
+
+
+module SS = Map.Make(struct type t = string let compare = compare end)
+
+module SSS = Set.Make(String);; 
+
+type my_head = 
+{
+  (*  hash : string; *)
+    previous : string;  (* could be a list pointer at my_head *) 
+    height : int;   (* if known? *)
+   (*  difficulty : int ; *) (* aggregated *)
+    (* bool requested *)
+    (* bool have *)
+}
+
+(*
+	- the blockchain (unlike connections) has to be an on-disk structure.
+
+	- we need to be able to serialize this head structure
+
+	- VERY IMPORTANT and an api (Lwt based) around the db, to manipulate
+	the on-disk data structures.
+	- eg. should wrap the db.
+*)
+
 type my_app_state =
 {
-  count : int;
-  lst :  myvar Lwt.t list ;
+(*  count : int; *)
+(* pending : pending_request SS.t; *)	
+(* heads : my_head SS.t;	*)
+
+  jobs :  my_action Lwt.t list ;
   connections : connection list ; 
+
+	heads : my_head SS.t ;	
+
+  (* we don't even need this - just use a single request to a random node for a random head
+  every 10 seconds or so - doesn't need to be specified here 
+
+    may only be used for fast downloading...
+  *)
+  download_head_last_time : float; (* change name _time *)
+
+(*
+  db : LevelDB.db ; 
+*)
+
 }
 
 let explode s =
@@ -278,17 +364,23 @@ let string_of_bytes s =
 *)
 
 (*
-- lst = jobs, tasks, threads, fibres
+- jobs = jobs, tasks, threads, fibres
 - within a task we can sequence as many sub tasks using >>= as we like
 - we only have to thread stuff through this main function, when the app state changes
    and we have to synchronize, 
 - app state is effectively a fold over the network events...
 *)
 
+let detach f = 
+  Lwt_preemptive.detach 
+    (fun () -> f ) () 
+
+
+
 let f state e =
 
   (* helpers *)
-  let add_jobs jobs state = { state with lst = jobs @ state.lst } in
+  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } in
   let remove_conn conn state = { state with 
       (* physical equality *)
       connections = List.filter (fun x -> x.fd != conn.fd) state.connections
@@ -333,14 +425,14 @@ let f state e =
       
       | GotConnectionError msg ->
         add_jobs [ 
-          log @@ "got connection error " ^ msg >> return Nop
+          log @@ "could not connect " ^ msg >> return Nop
           ] state 
 
       | GotReadError (conn, msg) ->
         state 
         |> remove_conn conn
         |> add_jobs [ 
-          log @@ "got error " ^ msg
+          log @@ "could not read message " ^ msg
           ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
           ;
           Lwt_unix.close conn.fd >> return Nop 
@@ -368,13 +460,142 @@ let f state e =
               get_message conn 
             ] state 
 
-          | "inv" -> 
+(*          | "inv" -> 
             let _, inv = decodeInv payload 0 in
             add_jobs [ 
               log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
               ;
               get_message conn 
             ] state
+*)
+
+          | "inv" ->
+(*
+    this is all wrong. 
+    - we don't care about a block unless it can advance a head ?   
+    except it might be a fork arising from further back.
+    ----
+    EXTREMELY IMPORTANT So the heads structure is not good enough because we need to deal with forks.
+      off blocks that are not the head.
+    So we 
+
+    tests,
+    1. we haven't already got it.
+    2. it advances on another block we know about (from anywhere in sequence - not just the tip, )  
+*)
+            let _, inv = decodeInv payload 0 in
+            (* select block types  *)
+            let needed_inv_type = 2 in
+            let block_hashes = inv
+              |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
+              |> List.map (fun (_,hash)->hash)
+              (* avoid blocks we already have *)
+              |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
+            in
+            if List.length block_hashes > 0 then
+              (* if have blocks *)
+              let encodeInventory jobs =
+                let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+                  (* encodeInv - move to Message  - and need to zip *)
+                  encodeVarInt (List.length jobs )
+                  ^ String.concat "" @@ List.map encodeInvItem jobs 
+              in
+              let payload = encodeInventory block_hashes in 
+              let header = encodeHeader {
+                magic = m ;
+                command = "getdata";
+                length = strlen payload;
+                checksum = checksum payload;
+              }
+              in 
+              add_jobs [ 
+                log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
+                send_message conn (header ^ payload); 
+                get_message conn ; 
+              ] state 
+
+            else
+              add_jobs [ 
+                get_message conn ; 
+              ] state
+
+            (* completely separate bit.  code can go anywhere peer.  *)
+            |> fun state -> 
+              (* round robin making requests to advance the head *)
+              let now = Unix.time () in
+              if now -. state.download_head_last_time  > 10. then 
+                (* create a set of all pointed-to block hashes *)
+                let previous = 
+                  SS.bindings state.heads 
+                  |> List.map (fun (_,head ) -> head.previous) 
+                  |> SSS.of_list
+                in
+                (* get the tips of the blockchain tree by filtering all block hashes against the set *)
+                let heads = 
+                  SS.filter (fun a b -> not @@ SSS.mem a previous ) state.heads 
+                  |> SS.bindings 
+                  |> List.map (fun (tip,_ ) -> tip) 
+                in
+                (* choose one at random *)
+                let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
+                let head = List.nth heads index in
+                add_jobs [
+                  log @@ "**** update download_head " 
+                  ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
+                  ^ "\n head " ^ hex_of_string head 
+                  ^ "\n from " ^ format_addr conn   
+                  >> send_message conn (initial_getblocks head)
+                ]
+                { state with download_head_last_time = now }  
+              else
+                 state
+(*
+    OK, now we have a single download head that we make requests too...
+    we can compute the download heads... in case of fork.
+*)
+
+          | "block" ->
+            (* let _, block = decodeBlock payload 0 in *)
+            let hash = (Message.strsub payload 0 80 |> Message.sha256d |> Message.strrev ) in
+            let _, header = decodeBlock payload 0 in 
+            (* if the header hash points at a head - update our head 
+              TODO - we are updating the head, before we update the db,
+              when it should be the otherway around. although if db fails
+              we probably have other issues
+
+              ok, rather than maintaining the download heads... lets compute 
+              when we need .
+            *)
+
+            if not (SS.mem hash state.heads )
+              && SS.mem header.previous state.heads then 
+              let heads =
+                SS.add hash { 
+                  previous = header.previous;  
+                  height = 0; (* head.height + 1;  *)
+                } state.heads
+              in
+              
+              add_jobs [ 
+                log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
+                get_message conn ; 
+              ] { state with heads = heads;  } 
+            else
+              add_jobs [ 
+                log "already have block or block doesn't change chain - ignored ";
+                get_message conn ; 
+              ] state 
+
+
+          | "tx" ->
+            (* at the moment we dont care about tx *)
+            (* let _, tx = decodeTx payload 0 in *)
+            add_jobs [ 
+              (let hash = (payload |> Message.sha256d |> Message.strrev ) in 
+              log  "got tx!!! " (* ^ hex_of_string hash *) )   ; 
+              get_message conn ; 
+            ] state
+
 
           | "addr" -> 
               let pos, count = decodeVarInt payload 0 in
@@ -422,16 +643,17 @@ let run f s =
   Lwt_main.run (
     let rec loop state =
       Lwt.catch (
-      fun () -> Lwt.nchoose_split state.lst
+      fun () -> Lwt.nchoose_split state.jobs 
 
         >>= fun (complete, incomplete) ->
-          Lwt_io.write_line Lwt_io.stdout  @@
+          (*Lwt_io.write_line Lwt_io.stdout  @@
             "complete " ^ (string_of_int @@ List.length complete )
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
-          let new_state = List.fold_left f { state with lst = incomplete } complete 
-          in if List.length new_state.lst > 0 then
+*)
+          let new_state = List.fold_left f { state with jobs = incomplete } complete 
+          in if List.length new_state.jobs > 0 then
             loop new_state 
           else
             Lwt_io.write_line Lwt_io.stdout "finishing - no more jobs to run!!" 
@@ -461,14 +683,36 @@ let run f s =
 
 
 let s = 
-  let lst = [
+  let jobs = [
     (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
     get_connection     "23.227.177.161" 8333;
     get_connection     "23.227.191.50" 8333;
     get_connection     "23.229.45.32" 8333;
     get_connection     "23.236.144.69" 8333;
   ] in
-  { count = 123 ; lst = lst; connections = []; } 
+  let genesis = string_of_hex "000000000000000010879e092119599612b57c6508b15b9b97a4862ab998c8cb" in 
+(*  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in *)
+  let heads = 
+      SS.empty 
+      |> SS.add genesis 
+       { 
+        previous = ""; 
+        height = 0; 
+        (* difficulty = 123; *)
+      }  in
+  { 
+    jobs = jobs; 
+    connections = []; 
+(*    pending = SS.empty ;  *)
+
+    heads = heads ; 
+    (* download_heads = [ genesis ] ; *) 
+    download_head_last_time = Unix.time (); (* now *)
+
+(*    db = LevelDB.open_db "mydb"; 
+*)
+
+  } 
 
 let () = run f s  
 

@@ -480,8 +480,27 @@ let encodeString (h : string) = enc 1 (strlen h) ^ h
 let encodeHash32 (h : string) = strrev h
 
 
-(* TODO FIXME!! *)
-let encodeVarInt = encodeInteger8
+(* TODO FIXME!! 
+pos in
+293   match first with 
+hash
+    | 0xfd -> decodeInteger16 s pos
+    | 0xfe -> decodeInteger32 s pos
+    | 0xff -> (pos, first) (* TODO uggh... this will need a 64 bit int return type *)
+    | _ -> (pos, first)
+
+
+*)
+let encodeVarInt x = 
+	if x < 0xfd then 
+		encodeInteger8 x
+	else if x < 0xffff then
+		encodeInteger8 0xfd ^ encodeInteger16 x 
+	else (*if x < 0xffffffff then *) 
+		encodeInteger8 0xfe ^ encodeInteger32 x 
+(*	else 
+		encodeInteger8 0xff ^ encodeInteger64 x 
+*)
 
 (*
 type tx_in =
