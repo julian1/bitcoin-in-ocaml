@@ -545,7 +545,7 @@ let f state e =
 
             add_jobs [ 
                 (
-                log "storing to db " 
+                log "storing hash to db " 
                 >> detach ( 
                   LevelDB.put state.db hash header.previous 
                 ) >> return Nop
