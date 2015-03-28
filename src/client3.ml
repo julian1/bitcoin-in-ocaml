@@ -723,9 +723,9 @@ let s =
     connections = []; 
 (*    pending = SS.empty ;  *)
 
-    download_head_last_time = Unix.time (); (* now *)
     heads = heads ; 
     download_head = genesis; 
+    download_head_last_time = Unix.time (); (* now *)
 
 (*    db = LevelDB.open_db "mydb"; 
 *)
