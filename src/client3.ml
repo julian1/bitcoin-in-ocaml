@@ -528,60 +528,41 @@ let f state e =
                  state
 
 
-
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
             let hash = (Message.strsub payload 0 80 |> Message.sha256d |> Message.strrev ) in
             let _, header = decodeBlock payload 0 in 
-
-            (* should be just remove and add, which is a map ... *)
-            let new_heads = List.map (fun x -> 
-              if header.previous = x.hash then
+            (* if the header hash points at a head - update our head *)
+            let new_heads = List.map (fun head -> 
+              if header.previous = head.hash then
                 { 
                   hash = hash; 
                   previous = header.previous;  
-                  height = x.height + 1; 
-                  (* last_request = Unix.time (); 
-                  difficulty = x.difficulty *)
+                  height = head.height + 1; 
               }  
-              else x 
+              else head 
             ) state.heads in 
 
-			(* Unless the block advances the head we shouldn't store it 
-				so it's sort of working.
-				it's not advancing because heads are out of sync with db records,
-				and block requests are being supressed. 
-			*)
-			(*
-				- ok, we have the issue that the head contains prev, 
-				accumulated difficulty etc. 
-
-				- it might be easier to use binary serialization to read
-				and write some of these structures...
-
-				- the blockchain has to become a disk structure.
-
-			*) 
             add_jobs [ 
-					(
-					log "storing to db " 
-					>> detach ( 
-						LevelDB.put state.db hash "whoot" 
-					) >> return Nop
-					)
-					;
-              log @@ "got " 
-				^ " block " ^ hex_of_string hash 
-				^ " from " ^ conn.addr ^ " " ^ string_of_int conn.port 
-                ^ " heads count " ^ string_of_int (List.length state.heads) 
-                ^ " heads " ^ String.concat " " @@ List.map ( fun x -> 
-					hex_of_string x.hash
-					^ " height " ^ string_of_int x.height 
-				) 
-				new_heads ; 
-
+                (
+                log "storing to db " 
+                >> detach ( 
+                  LevelDB.put state.db hash header.previous 
+                ) >> return Nop
+                )
+                ;
+                    log @@ "got " 
+              ^ " block " ^ hex_of_string hash 
+              ^ " from " ^ conn.addr ^ " " ^ string_of_int conn.port 
+                      ^ " heads count " ^ string_of_int (List.length state.heads) 
+                      ^ " heads " ^ String.concat " " @@ List.map ( fun x -> 
+                hex_of_string x.hash
+                ^ " height " ^ string_of_int x.height 
+              ) 
+              new_heads ; 
               get_message conn ; 
-            ] { state with heads = new_heads } 
+              (* need to update last time *) 
+            ] { state with heads = new_heads; last_head_request = Unix.time ()  } 
 
 
           | "tx" ->
