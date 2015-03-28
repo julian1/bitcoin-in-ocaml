@@ -462,6 +462,19 @@ let f state e =
 *)
 
           | "inv" ->
+(*
+    this is all wrong. 
+    - we don't care about a block unless it can advance a head ?   
+    except it might be a fork arising from further back.
+    ----
+    EXTREMELY IMPORTANT So the heads structure is not good enough because we need to deal with forks.
+      off blocks that are not the head.
+    So we 
+
+    tests,
+    1. we haven't already got it.
+    2. it advances on another block we know about (from anywhere in sequence - not just the tip, )  
+*)
             (* select blocks *)
             let needed_inv_type = 2 in
             let _, inv = decodeInv payload 0 in
