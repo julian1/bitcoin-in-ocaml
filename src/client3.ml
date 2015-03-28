@@ -488,25 +488,28 @@ let f state e =
             let block_hashes = inv
               |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
               |> List.map (fun (_,hash)->hash)
+
+              |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
             in
 
-            (* if have blocks *)
-            let encodeInventory jobs =
-                let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
-                (* encodeInv - move to Message  - and need to zip *)
-                encodeVarInt (List.length jobs )
-                ^ String.concat "" @@ List.map encodeInvItem jobs 
-              in
-              let payload = encodeInventory block_hashes in 
-              let header = encodeHeader {
-                magic = m ;
-                command = "getdata";
-                length = strlen payload;
-                checksum = checksum payload;
-              }
-            in 
- 
+
             if List.length block_hashes > 0 then
+              (* if have blocks *)
+              let encodeInventory jobs =
+                  let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+                  (* encodeInv - move to Message  - and need to zip *)
+                  encodeVarInt (List.length jobs )
+                  ^ String.concat "" @@ List.map encodeInvItem jobs 
+                in
+                let payload = encodeInventory block_hashes in 
+                let header = encodeHeader {
+                  magic = m ;
+                  command = "getdata";
+                  length = strlen payload;
+                  checksum = checksum payload;
+                }
+              in 
+   
               add_jobs [ 
                 log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
 
