@@ -554,7 +554,7 @@ let f state e =
               let now = Unix.time () in
               if now -. state.time_of_last_valid_block  > 10. then 
                 (* create a set of all pointed-to block hashes *)
-                (* watch out for non-tail call optimised functions here which might blow stack *)
+                (* watch out for non-tail call optimised functions here which might blow stack  *)
                 let previous = 
                   SS.bindings state.heads 
                   |> List.rev_map (fun (_,head ) -> head.previous) 
