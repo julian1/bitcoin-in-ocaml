@@ -660,14 +660,43 @@ let f state e =
   in new_state 
 
          
-let run f s =
+let run f =
+
   Lwt_main.run (
 
+    (* get initial state up *)
     Lwt_io.open_file Lwt_io.output "blocks.dat"  
-
     >>= fun fd -> return () 
-
     >>
+    let state = 
+      let jobs = [
+        (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
+        get_connection     "23.227.177.161" 8333;
+        get_connection     "23.227.191.50" 8333;
+        get_connection     "23.229.45.32" 8333;
+        get_connection     "23.236.144.69" 8333;
+      ] in
+      let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+      let heads = 
+          SS.empty 
+          |> SS.add genesis 
+           { 
+            previous = ""; 
+            height = 0; 
+            (* difficulty = 123; *)
+          }  in
+      { 
+        jobs = jobs; 
+        connections = []; 
+    (*    pending = SS.empty ;  *)
+        heads = heads ; 
+        (* download_heads = [ genesis ] ; *) 
+        last_download_block = 0.;  
+    (*    db = LevelDB.open_db "mydb"; *)
+        last_expected_block = "";
+      } 
+    in
+
 
     let rec loop state =
       Lwt.catch (
@@ -706,43 +735,13 @@ let run f s =
 *)
 
     in
-    loop s 
+      loop state 
   )
 
 
-let s = 
-  let jobs = [
-    (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
-    get_connection     "23.227.177.161" 8333;
-    get_connection     "23.227.191.50" 8333;
-    get_connection     "23.229.45.32" 8333;
-    get_connection     "23.236.144.69" 8333;
-  ] in
-  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
-  let heads = 
-      SS.empty 
-      |> SS.add genesis 
-       { 
-        previous = ""; 
-        height = 0; 
-        (* difficulty = 123; *)
-      }  in
-  { 
-    jobs = jobs; 
-    connections = []; 
-(*    pending = SS.empty ;  *)
 
-    heads = heads ; 
-    (* download_heads = [ genesis ] ; *) 
-    last_download_block = 0.;  
 
-(*    db = LevelDB.open_db "mydb"; 
-*)
-    last_expected_block = "";
-
-  } 
-
-let () = run f s  
+let () = run f 
 
 
 
