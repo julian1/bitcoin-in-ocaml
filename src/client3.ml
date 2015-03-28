@@ -489,10 +489,30 @@ let f state e =
               |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
               |> List.map (fun (_,hash)->hash)
             in
+
             (* if have blocks *)
+            let encodeInventory jobs =
+                let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+                (* encodeInv - move to Message  - and need to zip *)
+                encodeVarInt (List.length jobs )
+                ^ String.concat "" @@ List.map encodeInvItem jobs 
+              in
+              let payload = encodeInventory block_hashes in 
+              let header = encodeHeader {
+                magic = m ;
+                command = "getdata";
+                length = strlen payload;
+                checksum = checksum payload;
+              }
+            in 
+ 
             if List.length block_hashes > 0 then
               add_jobs [ 
                 log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
+
+                send_message conn (header ^ payload); 
+ 
+ 
 (*                ( 
                   (* filter against db *) 
                   detach @@ ( 
@@ -566,11 +586,13 @@ let f state e =
               in
 
               add_jobs [ 
+                log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
                 get_message conn ; 
-              ] state 
+              ] { state with heads = heads;  download_head = hash } 
 
             else
               add_jobs [ 
+                log "already have block or block doesn't change chain - ignored ";
                 get_message conn ; 
               ] state 
 (*
