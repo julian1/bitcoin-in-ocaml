@@ -693,14 +693,12 @@ Lwt.return block
         else None 
         )
     in
-
     let advance fd len =
         Lwt_unix.lseek fd len SEEK_CUR 
         >>= fun r -> 
-          (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+        (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
         return ()
     in
-
     let rec loop fd =
       read_bytes fd 24
       >>= fun x -> match x with 
@@ -726,38 +724,6 @@ Lwt.return block
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
     >>= fun fd -> 
       loop  fd
-
-(*
-    >>  let block = String.create 24 in
-      Lwt_unix.read fd block 0 24 >> return block 
-
-    >>= fun s ->
-        let _, header = decodeHeader s 0 in
-        Lwt_io.write_line Lwt_io.stdout header.command 
-*)
-
-
-(*
-    readChannel ic 24
-    >>= fun s ->
-        let _, header = decodeHeader s 0 in
-        Lwt_io.write_line Lwt_io.stdout header.command 
-        >> Lwt_io.write_line Lwt_io.stdout (string_of_int header.length ) 
-
-    >>  Lwt_unix.lseek fd (header.length   ) SEEK_CUR 
-
-    >>  Lwt_unix.read fd (header.length   ) SEEK_CUR 
-
-  
-      let ic = Lwt_io.of_fd ~mode:Lwt_io.input fd in
-      readChannel ic 24
-    >>= fun s ->
-        let _, header = decodeHeader s 0 in
-        Lwt_io.write_line Lwt_io.stdout header.command 
-        >> Lwt_io.write_line Lwt_io.stdout (string_of_int header.length ) 
-
-  >> Lwt_io.close ic  (* should close the fd ? *) 
-*)
 
  
 
