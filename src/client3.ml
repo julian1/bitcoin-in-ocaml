@@ -731,10 +731,12 @@ Lwt.return block
       loop  fd  SS.empty 
 
     >>= fun heads  -> 
-
       Lwt_io.write_line Lwt_io.stdout @@ "done " ^ string_of_int (SS.cardinal heads  )
-    
-      >> return () 
+
+    >> Lwt_unix.close fd 
+
+
+    >> return () 
 
  
 
