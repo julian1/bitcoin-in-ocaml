@@ -291,16 +291,19 @@ type pending_request =
 }
 *)
 
+(*
+	heads can be computed by scanning the indexes at startup.
+	there's no point maintaining fast lookup memory map and leveldb btree indexes.
+*)
 
 type my_head = 
 {
     hash : string;
     previous : string;  (* could be a list pointer at my_head *) 
     height : int;   (* if known? *)
-    difficulty : int ; (* aggregated *)
+   (*  difficulty : int ; *) (* aggregated *)
     (* bool requested *)
     (* bool have *)
-    last_request : float;
 }
 
 (*
@@ -323,6 +326,12 @@ type my_app_state =
   connections : connection list ; 
 
 	heads : my_head list ;	
+
+  (* we don't even need this - just use a single request to a random node for a random head
+  every 10 seconds or so - doesn't need to be specified here *)
+  last_head_request : float;
+
+
   db : LevelDB.db ; 
 
 }
@@ -591,11 +600,18 @@ let f state e =
             |> fun state -> 
 
               let now = Unix.time () in
-              let stale_test (x : my_head) = (now -. x.last_request) > 10. in
+              if now -. state.last_head_request  > 10. then 
+               (*add_jobs jobs  *)
+                 state 
+              else
+                 state
+
+(*
               let stale,ok = List.partition stale_test state.heads in 
               (* update timestamp *)
               let stale = List.map (fun x -> { x with last_request = now; } ) stale in
-              let state = { state with heads = ok @ stale } in 
+              let state = { state with heads = ok @ stale } 
+			in 
               let jobs = List.map (fun x -> 
                   log @@ " requesting head hash " ^ hex_of_string x.hash
                   ^ " from " ^ format_addr conn   
@@ -605,6 +621,8 @@ let f state e =
               add_jobs jobs 
                  state 
 
+
+*)
 
 
               (* check if pending or already have and request if not 
@@ -643,8 +661,8 @@ let f state e =
                   hash = hash; 
                   previous = header.previous;  
                   height = x.height + 1; 
-                  last_request = Unix.time ();
-                  difficulty = x.difficulty 
+                  (* last_request = Unix.time (); 
+                  difficulty = x.difficulty *)
               }  
               else x 
             ) state.heads in 
@@ -795,15 +813,17 @@ let s =
         hash = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"; 
         previous = ""; 
         height = 0; 
-        difficulty = 123; 
-        last_request = Unix.time (); (* now *)
+        (* difficulty = 123; *)
       } ] in
   { 
     jobs = jobs; 
     connections = []; 
 (*    pending = SS.empty ;  *)
+
+    last_head_request = Unix.time (); (* now *)
     heads = heads ; 
     db = LevelDB.open_db "mydb"; 
+
   } 
 
 let () = run f s  
