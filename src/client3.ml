@@ -713,6 +713,7 @@ Lwt.return block
               Lwt_io.write_line Lwt_io.stdout @@ 
                 hex_of_string hash 
                 ^ " " ^ hex_of_string block_header.previous 
+
               >> advance fd (header.length - 80 )
               >> let heads = SS.add hash { 
                   previous = block_header.previous;  
@@ -721,15 +722,14 @@ Lwt.return block
               in
               loop fd  heads  (* *)
             | None -> 
-              return heads 
+              return () 
           )
         | None -> 
-          return heads 
+          return () 
     in 
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
     >>= fun fd -> 
-      let heads = loop  fd  SS.empty in
-      return ()
+      loop  fd  SS.empty 
 
  
 
