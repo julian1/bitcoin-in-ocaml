@@ -540,21 +540,18 @@ let f state e =
                 let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
                 let head = List.nth heads index in
                 add_jobs [
-                log @@ "**** update download_head " 
-
-                ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
-                ^ "\n head " ^ hex_of_string head 
-                ^ "\n from " ^ format_addr conn   
-                >> send_message conn (initial_getblocks head)
+                  log @@ "**** update download_head " 
+                  ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
+                  ^ "\n head " ^ hex_of_string head 
+                  ^ "\n from " ^ format_addr conn   
+                  >> send_message conn (initial_getblocks head)
                 ]
                 { state with download_head_last_time = now }  
               else
                  state
 (*
     OK, now we have a single download head that we make requests too...
-
     we can compute the download heads... in case of fork.
-
 *)
 
           | "block" ->
