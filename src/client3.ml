@@ -678,30 +678,51 @@ assert (pos' = pos);
 let block = String.create bs in
 _read_buf fd block 0 bs >>= fun () ->
 Lwt.return block
+
+      (* let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in *)
 *)
 
 
-    Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
 
-    >>= fun fd -> 
-      (* let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in *)
+    let rec loop fd =
+
       let block = String.create 24 in
-      Lwt_unix.read fd block 0 24 >> return block 
+      Lwt_unix.read fd block 0 24 >>= 
 
-    >>= fun s ->
-        let _, header = decodeHeader s 0 in
-        Lwt_io.write_line Lwt_io.stdout header.command 
+      fun ret ->
+       Lwt_io.write_line Lwt_io.stdout @@ "read "  ^ string_of_int ret 
+      >> if ret > 0 then 
+          return Some block
+        else
+          return None 
 
+      >>= fun s ->
+        if String.length s > 0 then
+          let _, header = decodeHeader s 0 in
+          Lwt_io.write_line Lwt_io.stdout @@ header.command 
+            ^ " " ^ string_of_int header.length  
+            ^ " " ^ string_of_int @@ String.length s 
 
-    >>  Lwt_unix.lseek fd (header.length) SEEK_CUR 
+          >> Lwt_unix.lseek fd (header.length) SEEK_CUR 
+          >>= fun r -> 
+            Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r 
+ 
+            >> loop fd 
+        else
+          return ()
+    in 
+    Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
+    >>= fun fd -> 
+      loop  fd
 
+(*
     >>  let block = String.create 24 in
       Lwt_unix.read fd block 0 24 >> return block 
 
     >>= fun s ->
         let _, header = decodeHeader s 0 in
         Lwt_io.write_line Lwt_io.stdout header.command 
-
+*)
 
 
 (*
