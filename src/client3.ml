@@ -200,6 +200,10 @@ let readChannel inchan length (* timeout here *)  =
   >>= fun _ ->
     return @@ Bytes.to_string buf
 
+(*
+  hmmnn we want to use this thing again... when reading from file ...
+  without the network timeout...
+*)
 
 let get_message conn =
     Lwt.catch (
@@ -668,9 +672,21 @@ let run f =
 
   Lwt_main.run (
 
+    Lwt_io.open_file Lwt_io.input "blocks.dat"  
+    >>= fun ic -> 
+      readChannel ic 24
+    >>= fun s ->
+        let _, header = decodeHeader s 0 in
+
+        return ()
+   
+    >>
     (* get initial state up *)
     Lwt_io.open_file Lwt_io.output "blocks.dat"  
     >>= fun fd -> 
+    
+    (* we actually need to read it as well... as write it... *) 
+
 
     let state = 
       let jobs = [
