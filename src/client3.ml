@@ -526,13 +526,19 @@ let f state e =
                 { state with last_head_request = now }  
               else
                  state
-
+(*
+    ok, now we have to scan the blocks on startup to determine heads...
+*)
 
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
             let hash = (Message.strsub payload 0 80 |> Message.sha256d |> Message.strrev ) in
             let _, header = decodeBlock payload 0 in 
-            (* if the header hash points at a head - update our head *)
+            (* if the header hash points at a head - update our head 
+              TODO - we are updating the head, before we update the db,
+              when it should be the otherway around. although if db fails
+              we probably have other issues
+            *)
             let new_heads = List.map (fun head -> 
               if header.previous = head.hash then
                 { 
@@ -542,7 +548,6 @@ let f state e =
               }  
               else head 
             ) state.heads in 
-
             add_jobs [ 
                 (
                 log "storing hash to db " 
