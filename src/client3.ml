@@ -336,7 +336,7 @@ type my_app_state =
   *)
   download_head_last_time : float; (* change name _time *)
 
-  download_head : string;   (* that we know about - used to drive download requests *)
+  download_heads : string list;   (* that we know about - used to drive download requests *)
 (*
   db : LevelDB.db ; 
 *)
@@ -482,9 +482,9 @@ let f state e =
     1. we haven't already got it.
     2. it advances on another block we know about (from anywhere in sequence - not just the tip, )  
 *)
-            (* select blocks *)
-            let needed_inv_type = 2 in
             let _, inv = decodeInv payload 0 in
+            (* select block types  *)
+            let needed_inv_type = 2 in
             let block_hashes = inv
               |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
               |> List.map (fun (_,hash)->hash)
@@ -507,43 +507,11 @@ let f state e =
                 checksum = checksum payload;
               }
               in 
-   
               add_jobs [ 
                 log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
-
                 send_message conn (header ^ payload); 
- 
- 
-(*                ( 
-                  (* filter against db *) 
-                  detach @@ ( 
-                    List.fold_left (fun acc hash 
-                      -> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
-                    |> List.rev
-                  )
-                  (* request objects *) 
-                  >>= fun block_hashes ->  
-                     let encodeInventory jobs =
-                        let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
-                        (* encodeInv - move to Message  - and need to zip *)
-                        encodeVarInt (List.length jobs )
-                        ^ String.concat "" @@ List.map encodeInvItem jobs 
-                      in
-                      let payload = encodeInventory block_hashes in 
-                      let header = encodeHeader {
-                        magic = m ;
-                        command = "getdata";
-                        length = strlen payload;
-                        checksum = checksum payload;
-                      }
-                    in 
-                    log @@ "request count " ^ string_of_int  (List.length block_hashes) 
-                    >> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
-                    >> send_message conn (header ^ payload); 
-                  )
-                ;
- *)               get_message conn ; 
-            ] state 
+                get_message conn ; 
+              ] state 
 
             else
               add_jobs [ 
@@ -555,17 +523,23 @@ let f state e =
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
               if now -. state.download_head_last_time  > 10. then 
+                  let index = now |> int_of_float |> (fun x -> x mod List.length state.download_heads ) in 
+                  let head = List.nth state.download_heads index in
+
                   add_jobs [
                   log @@ "**** update " 
-                  ^ "\n" ^ hex_of_string state.download_head 
+                  ^ "\n" ^ hex_of_string head 
                   ^ "\n from " ^ format_addr conn   
-                  >> send_message conn (initial_getblocks state.download_head)
+                  >> send_message conn (initial_getblocks head)
                 ]
                 { state with download_head_last_time = now }  
               else
                  state
 (*
-    ok, now we have to scan the blocks on startup to determine heads...
+    OK, now we have a single download head that we make requests too...
+
+    we can compute the download heads... in case of fork.
+
 *)
 
           | "block" ->
@@ -578,56 +552,27 @@ let f state e =
               we probably have other issues
             *)
 
-            if SS.mem header.previous state.heads then 
+            if not (SS.mem hash state.heads )
+              && SS.mem header.previous state.heads then 
               let heads =
                 SS.add hash { 
                   previous = header.previous;  
                   height = 0; (* head.height + 1;  *)
                 } state.heads
               in
-
+              let download_heads = hash :: (List.filter ((!=) header.previous  ) state.download_heads ) 
+              
+              in
               add_jobs [ 
                 log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
                 get_message conn ; 
-              ] { state with heads = heads;  download_head = hash } 
-
+              ] { state with heads = heads;  download_heads = download_heads } 
             else
               add_jobs [ 
                 log "already have block or block doesn't change chain - ignored ";
                 get_message conn ; 
               ] state 
-(*
-            in
-            let new_heads = List.map (fun head -> 
-              if header.previous = head.hash then
-                { 
-                  hash = hash; 
-                  previous = header.previous;  
-                  height = head.height + 1; 
-              }  
-              else head 
-            ) state.heads in 
-            add_jobs [ 
-                (
-                log "storing hash to db " 
-                >> detach ( 
-                  LevelDB.put state.db hash header.previous 
-                ) >> return Nop
-                )
-                ;
-                    log @@ "got " 
-              ^ " block " ^ hex_of_string hash 
-              ^ " from " ^ conn.addr ^ " " ^ string_of_int conn.port 
-                      ^ " heads count " ^ string_of_int (List.length state.heads) 
-                      ^ " heads " ^ String.concat " " @@ List.map ( fun x -> 
-                hex_of_string x.hash
-                ^ " height " ^ string_of_int x.height 
-              ) 
-              new_heads ; 
-              get_message conn ; 
-              (* need to update last time *) 
-            ] { state with heads = new_heads; download_head_last_time = Unix.time ()  } 
-*)
+
 
           | "tx" ->
             (* at the moment we dont care about tx *)
