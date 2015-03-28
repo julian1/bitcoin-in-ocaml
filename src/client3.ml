@@ -672,19 +672,61 @@ let run f =
 
   Lwt_main.run (
 
+(*
+Lwt_unix.lseek fd pos Unix.SEEK_SET >>= fun pos' ->
+assert (pos' = pos);
+let block = String.create bs in
+_read_buf fd block 0 bs >>= fun () ->
+Lwt.return block
+*)
+
+
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
 
     >>= fun fd -> 
-      let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in
-      readChannel ic 24
+      (* let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in *)
+      let block = String.create 24 in
+      Lwt_unix.read fd block 0 24 >> return block 
 
     >>= fun s ->
         let _, header = decodeHeader s 0 in
+        Lwt_io.write_line Lwt_io.stdout header.command 
 
+
+    >>  Lwt_unix.lseek fd (header.length) SEEK_CUR 
+
+    >>  let block = String.create 24 in
+      Lwt_unix.read fd block 0 24 >> return block 
+
+    >>= fun s ->
+        let _, header = decodeHeader s 0 in
+        Lwt_io.write_line Lwt_io.stdout header.command 
+
+
+
+(*
+    readChannel ic 24
+    >>= fun s ->
+        let _, header = decodeHeader s 0 in
         Lwt_io.write_line Lwt_io.stdout header.command 
         >> Lwt_io.write_line Lwt_io.stdout (string_of_int header.length ) 
+
+    >>  Lwt_unix.lseek fd (header.length   ) SEEK_CUR 
+
+    >>  Lwt_unix.read fd (header.length   ) SEEK_CUR 
+
+  
+      let ic = Lwt_io.of_fd ~mode:Lwt_io.input fd in
+      readChannel ic 24
+    >>= fun s ->
+        let _, header = decodeHeader s 0 in
+        Lwt_io.write_line Lwt_io.stdout header.command 
+        >> Lwt_io.write_line Lwt_io.stdout (string_of_int header.length ) 
+
+  >> Lwt_io.close ic  (* should close the fd ? *) 
+*)
+
  
-     >> Lwt_io.close ic 
 
   (* 
     >>
