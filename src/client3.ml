@@ -298,6 +298,8 @@ type pending_request =
 
 module SS = Map.Make(struct type t = string let compare = compare end)
 
+module SSS = Set.Make(String);; 
+
 type my_head = 
 {
   (*  hash : string; *)
@@ -336,7 +338,6 @@ type my_app_state =
   *)
   download_head_last_time : float; (* change name _time *)
 
-  download_heads : string list;   (* that we know about - used to drive download requests *)
 (*
   db : LevelDB.db ; 
 *)
@@ -523,12 +524,36 @@ let f state e =
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
               if now -. state.download_head_last_time  > 10. then 
-                  let index = now |> int_of_float |> (fun x -> x mod List.length state.download_heads ) in 
-                  let head = List.nth state.download_heads index in
+
+                  (* hang on this isn't right 
+                    what we need is the map of previous items...
+                    and a substraction.
+
+                    - we need to compute a new map ...
+                    - need to bulk add... 
+                    - from_list
+                  *) 
+                  let previous = 
+                    SS.bindings state.heads 
+                    |> List.map (fun (_,head ) -> head.previous) 
+                    |> SSS.of_list
+                  in
+
+                  let x = SS.filter (fun a b -> true ) state.heads in 
+                  let previous = ["a"] in
+
+                  let index = now |> int_of_float |> (fun x -> x mod List.length previous) in 
+
+
+                
+
+                  let head = List.nth previous index in
 
                   add_jobs [
-                  log @@ "**** update " 
-                  ^ "\n" ^ hex_of_string head 
+                  log @@ "**** update download_head " 
+
+                  ^ "\n download_heads count " ^ (string_of_int @@ List.length previous )
+                  ^ "\n head " ^ hex_of_string head 
                   ^ "\n from " ^ format_addr conn   
                   >> send_message conn (initial_getblocks head)
                 ]
@@ -550,6 +575,9 @@ let f state e =
               TODO - we are updating the head, before we update the db,
               when it should be the otherway around. although if db fails
               we probably have other issues
+
+              ok, rather than maintaining the download heads... lets compute 
+              when we need .
             *)
 
             if not (SS.mem hash state.heads )
@@ -560,13 +588,11 @@ let f state e =
                   height = 0; (* head.height + 1;  *)
                 } state.heads
               in
-              let download_heads = hash :: (List.filter ((!=) header.previous  ) state.download_heads ) 
               
-              in
               add_jobs [ 
                 log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
                 get_message conn ; 
-              ] { state with heads = heads;  download_heads = download_heads } 
+              ] { state with heads = heads;  } 
             else
               add_jobs [ 
                 log "already have block or block doesn't change chain - ignored ";
@@ -692,7 +718,7 @@ let s =
 (*    pending = SS.empty ;  *)
 
     heads = heads ; 
-    download_head = genesis; 
+    (* download_heads = [ genesis ] ; *) 
     download_head_last_time = Unix.time (); (* now *)
 
 (*    db = LevelDB.open_db "mydb"; 
