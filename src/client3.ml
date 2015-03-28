@@ -710,11 +710,10 @@ Lwt.return block
             | Some ss -> 
               let hash = ss |> Message.sha256d |> Message.strrev  in
               let _, block_header = decodeBlock ss 0 in
-              Lwt_io.write_line Lwt_io.stdout @@ 
+              (* Lwt_io.write_line Lwt_io.stdout @@ 
                 hex_of_string hash 
                 ^ " " ^ hex_of_string block_header.previous 
-
-              >> advance fd (header.length - 80 )
+              >> *) advance fd (header.length - 80 )
               >> let heads = SS.add hash { 
                   previous = block_header.previous;  
                   height = 0; 
@@ -722,16 +721,20 @@ Lwt.return block
               in
               loop fd  heads  (* *)
             | None -> 
-              return () 
+              return heads 
           )
         | None -> 
-          return () 
+          return heads 
     in 
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
     >>= fun fd -> 
       loop  fd  SS.empty 
 
- 
+    >>= fun heads  -> 
+
+      Lwt_io.write_line Lwt_io.stdout @@ "done " ^ string_of_int (SS.cardinal heads  )
+    
+      >> return () 
 
  
 
