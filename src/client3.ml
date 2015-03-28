@@ -461,130 +461,22 @@ let f state e =
             ] state
 *)
 
-          (* - ok, so for each block we have to mark in pending 
-            - and we want to limit the number
-              - we might use a map record from who it's pending to make it easier to work with?
-              - or the request time
-          *)
-
-          (*
-            when analyzing the heads. 
-              - make a request...  if the block is not pending. 
-              - and put the time of request in the pending so we can see if 
-                  it was ever received.
-      
-              - actually we broadcast our getall blocks to all nodes...
-
-              update of pending is easy. if it's not received and pending shows it's
-              stale, then delete the entry from pending.
-
-              - are we sure we don't want to combine the head. 
-          *)
-          (*
-			- server only sent half the blocks and stopped. 
-			- requesting again ... 
-			- but blocks were marked as pending already so they're ignored , so 
- 
-			- when cleared pending we advanced furtuer 
-          *)
-
-		(*	
-			**** VERY IMPORTANT ****
-			if something is pending and isn't received after a minute, then 
-				we should clear it. pending can just be set to 30 secs or something...
-				to cover time between request and receive 
-				we do need the recieved list however.
-
-			- OK, we're probably getting 244, because of some truncation somewhere in how we're 
-			encoding the varInt request ... 
-			- if we can mark expected we're much better.
-			then we can mark the last item - so that we can immediately request again.
-	
-			- actually we could test that pending == received
-			- no just keep a last item.
-		*)
-
-	        (*
-            - actually the first thing we should do - is filter inv items
-            against leveldb.     
-            - either thread this through the main block
-            - ... 
-            - there's actually no reason why why can't run this through the 
-              job ...
-              leveldb -> have we got.
-              no send message.
--> -> 
-          *)	
           | "inv" ->
             let needed_inv_type = 2 in
-
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
               |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
               |> List.map (fun (_,hash)->hash)
             in
-
             if List.length block_hashes > 0 then
 
-              (* - ok, all this stuff wants to be moved into the job and only
-                done for items that don't exist in level db 
-                - but leveldb interface - expects one at a time? 
-                - no we can pass a list, and get back key/ responses
-              *)
-				add_jobs [ 
-
-                  (* - ok, we want to batch the jobs somehow - cause we have to get a list 
-                    at the end. is there something like a fold? 
-                    - even if we manage to get it to join(). we're not going to get 
-                    an aggregated response at the end 
-                    - ok, join may not be any good but choose will hoose one
-                    - pumping it non sequentially is going to loose the ordering...
-                    (input, output ) jj
-
-					- hang on we should be able to do a left fold... anyway
-                    List.fold_left (fun acc, x -> (detach @@ LevelDB.mem state.db x) :: acc ) block_hashes 
-						no it's not going to expose it. we need to bind >> the results
-						through... 
-                  *) 
-        (*         ( 
-                  Lwt.choose ( 
-                    List.map (fun hash -> detach @@ LevelDB.mem state.db hash ) block_hashes 
-                   ) 
-                    >>= fun v -> return Nop 
-                  ) ;
-*)
-				(                                  
-					detach @@ ( 
-					List.fold_left (fun acc hash 
-						-> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
-					|> List.rev
-					)
-					>>= fun block_hashes ->  
-					   let encodeInventory jobs =
-							let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
-							(* encodeInv - move to Message  - and need to zip *)
-							encodeVarInt (List.length jobs )
-							^ String.concat "" @@ List.map encodeInvItem jobs 
-						  in
-						  let payload = encodeInventory block_hashes in 
-						  let header = encodeHeader {
-							magic = m ;
-							command = "getdata";
-							length = strlen payload;
-							checksum = checksum payload;
-						  }
-						in 
-
-						log @@ "request count " ^ string_of_int  (List.length block_hashes) 
-						>> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
-						>> send_message conn (header ^ payload); 
-				)
-					;
-		(*
+              add_jobs [ 
+                  log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
+              (*
                   (detach @@ LevelDB.mem state.db "hash" >>= fun _ ->  return Nop ); 
                   log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
                   (* send_message conn (header ^ payload); *) 
-		*)
+    *)
                   get_message conn ; 
                 ] state 
 
@@ -601,8 +493,16 @@ let f state e =
 
               let now = Unix.time () in
               if now -. state.last_head_request  > 10. then 
-               (*add_jobs jobs  *)
-                 state 
+                let index = now |> int_of_float |> fun a -> a mod List.length state.heads  in
+                let head = List.nth state.heads index in
+                add_jobs [
+                  log @@ "**** update " 
+                  ^ "\n index " ^ string_of_int index    
+                  ^ "\n" ^ hex_of_string head.hash 
+                  ^ "\n from " ^ format_addr conn   
+                  >> send_message conn (initial_getblocks head.hash)
+                ]
+                { state with last_head_request = now }  
               else
                  state
 
@@ -620,10 +520,7 @@ let f state e =
               ) stale in 
               add_jobs jobs 
                  state 
-
-
 *)
-
 
               (* check if pending or already have and request if not 
                 don't bother to format message unless we've got.
