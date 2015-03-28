@@ -532,14 +532,21 @@ let f state e =
                     - we need to compute a new map ...
                     - need to bulk add... 
                     - from_list
+
+
+                  let previous = 
+                    SS.map (fun (a,b) -> a ) state.heads 
+                  in
+
+
                   *) 
                   let previous = 
                     SS.bindings state.heads 
                     |> List.map (fun (_,head ) -> head.previous) 
                     |> SSS.of_list
                   in
+                  let x = SS.filter (fun a b -> not @@ SSS.mem a previous ) state.heads in 
 
-                  let x = SS.filter (fun a b -> true ) state.heads in 
                   let previous = ["a"] in
 
                   let index = now |> int_of_float |> (fun x -> x mod List.length previous) in 
