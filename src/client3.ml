@@ -549,7 +549,19 @@ let f state e =
 
             (* completely separate bit.  code can go anywhere peer.  *)
             |> fun state -> 
-             
+            
+              (*
+                very importnat 
+                  - our approach for filling in tips heads can be leveraged
+                  to do parallel download. instead of always rejecting blocks
+                  we could always accept them. No 
+      
+                - No we can provisionally accept them - eg. they
+                - request 500 blocks
+                - mark that we will accept even if not sequential
+                - then divide up the 500 blocks amongst different conns - eg 10 x 50 
+              *) 
+ 
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
               if now -. state.time_of_last_valid_block  > 10. then 
@@ -641,8 +653,41 @@ let f state e =
               get_message conn ; 
             ] state
 
+(*
+  we can manage saving connections, the same as blocks - serializing into connections.dat
+  - always connect if unknown
+  - if verack then add to list of known peers and record 
+  - if we have less than the number of active conns we want then choose and connect 
+*)
+(*
+  - closing app ought to be easy - we don't need cancel on individual tasks.
+  - just wait till we get to choose (can have 1 sec timeout job), 
+  - then create a job to close all connections, and descriptors, using details in conn - join 
+  - could even have this outside the main loop. 
+*)
+(*
+    blocks - 
+      should only make inv requests for heads that trace to the main chain, not
+        disconnected sequences
+      but do request blocks from segments
 
-          | "addr" -> 
+      - this will keep it focused.
+    -------
+      -No inventory requests are relatively free.
+      -Do one every ten seconds on the main node (or all heads that trace to root). 
+      - then filter against blocks we have
+      - and filter against pending (with a timeout )
+      - and record new list as blocks that are pending and can be accepted
+      - then distribute block requests to different conns
+
+      - because intiail inv request is on the main chain forks, it concentrates
+      downloading around the tip.  (and not off in future)
+
+      - if seomthing is pending, we don't want to re-request it.
+      but, if something stalls we do.
+        - so we just record the time it was requested. 
+
+ *)         | "addr" -> 
               let pos, count = decodeVarInt payload 0 in
               (* should take more than the first *)
               let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
@@ -715,6 +760,7 @@ Lwt.return block
         (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
         return ()
     in
+    (* to scan the messages stored in file *)
     let rec loop fd heads =
       read_bytes fd 24
       >>= fun x -> match x with 
