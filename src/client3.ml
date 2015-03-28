@@ -284,7 +284,6 @@ let filterTerminated jobs =
 (* 
 	if we use this - then change name to expected 
 
-module SS = Map.Make(struct type t = string let compare = compare end)
 type pending_request =
 {
     addr1 : string  ; (* or conn? *)
@@ -296,9 +295,12 @@ type pending_request =
 	there's no point maintaining fast lookup memory map and leveldb btree indexes.
 *)
 
+
+module SS = Map.Make(struct type t = string let compare = compare end)
+
 type my_head = 
 {
-    hash : string;
+  (*  hash : string; *)
     previous : string;  (* could be a list pointer at my_head *) 
     height : int;   (* if known? *)
    (*  difficulty : int ; *) (* aggregated *)
@@ -325,14 +327,19 @@ type my_app_state =
   jobs :  my_action Lwt.t list ;
   connections : connection list ; 
 
-	heads : my_head list ;	
+	heads : my_head SS.t ;	
 
   (* we don't even need this - just use a single request to a random node for a random head
-  every 10 seconds or so - doesn't need to be specified here *)
-  last_head_request : float;
+  every 10 seconds or so - doesn't need to be specified here 
 
+    may only be used for fast downloading...
+  *)
+  download_head_last_time : float; (* change name _time *)
 
+  download_head : string;   (* that we know about - used to drive download requests *)
+(*
   db : LevelDB.db ; 
+*)
 
 }
 
@@ -486,7 +493,7 @@ let f state e =
             if List.length block_hashes > 0 then
               add_jobs [ 
                 log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
-                ( 
+(*                ( 
                   (* filter against db *) 
                   detach @@ ( 
                     List.fold_left (fun acc hash 
@@ -514,7 +521,7 @@ let f state e =
                     >> send_message conn (header ^ payload); 
                   )
                 ;
-                get_message conn ; 
+ *)               get_message conn ; 
             ] state 
 
             else
@@ -526,17 +533,14 @@ let f state e =
             |> fun state -> 
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
-              if now -. state.last_head_request  > 10. then 
-                let index = now |> int_of_float |> fun a -> a mod List.length state.heads  in
-                let head = List.nth state.heads index in
-                add_jobs [
+              if now -. state.download_head_last_time  > 10. then 
+                  add_jobs [
                   log @@ "**** update " 
-                  ^ "\n index " ^ string_of_int index    
-                  ^ "\n" ^ hex_of_string head.hash 
+                  ^ "\n" ^ hex_of_string state.download_head 
                   ^ "\n from " ^ format_addr conn   
-                  >> send_message conn (initial_getblocks head.hash)
+                  >> send_message conn (initial_getblocks state.download_head)
                 ]
-                { state with last_head_request = now }  
+                { state with download_head_last_time = now }  
               else
                  state
 (*
@@ -552,6 +556,25 @@ let f state e =
               when it should be the otherway around. although if db fails
               we probably have other issues
             *)
+
+            if SS.mem header.previous state.heads then 
+              let heads =
+                SS.add hash { 
+                  previous = header.previous;  
+                  height = 0; (* head.height + 1;  *)
+                } state.heads
+              in
+
+              add_jobs [ 
+                get_message conn ; 
+              ] state 
+
+            else
+              add_jobs [ 
+                get_message conn ; 
+              ] state 
+(*
+            in
             let new_heads = List.map (fun head -> 
               if header.previous = head.hash then
                 { 
@@ -580,8 +603,8 @@ let f state e =
               new_heads ; 
               get_message conn ; 
               (* need to update last time *) 
-            ] { state with heads = new_heads; last_head_request = Unix.time ()  } 
-
+            ] { state with heads = new_heads; download_head_last_time = Unix.time ()  } 
+*)
 
           | "tx" ->
             (* at the moment we dont care about tx *)
@@ -686,22 +709,26 @@ let s =
     get_connection     "23.229.45.32" 8333;
     get_connection     "23.236.144.69" 8333;
   ] in
+  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in
   let heads = 
-      (* as an exception - we add genesis even though it's not been downloaded it yet *)
-      [ { 
-        hash = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"; 
+      SS.empty 
+      |> SS.add genesis 
+       { 
         previous = ""; 
         height = 0; 
         (* difficulty = 123; *)
-      } ] in
+      }  in
   { 
     jobs = jobs; 
     connections = []; 
 (*    pending = SS.empty ;  *)
 
-    last_head_request = Unix.time (); (* now *)
+    download_head_last_time = Unix.time (); (* now *)
     heads = heads ; 
-    db = LevelDB.open_db "mydb"; 
+    download_head = genesis; 
+
+(*    db = LevelDB.open_db "mydb"; 
+*)
 
   } 
 
