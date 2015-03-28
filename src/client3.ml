@@ -336,7 +336,10 @@ type my_app_state =
 
     may only be used for fast downloading...
   *)
-  download_head_last_time : float; (* change name _time *)
+  last_download_block : float; (* change name _time *)
+  
+  (* from an inv request - to optimize downloads *)
+  last_expected_block : string;
 
 (*
   db : LevelDB.db ; 
@@ -471,17 +474,25 @@ let f state e =
 
           | "inv" ->
 (*
-    this is all wrong. 
     - we don't care about a block unless it can advance a head ?   
-    except it might be a fork arising from further back.
+    except it might be a fork arising from a point further back in the chain.
     ----
-    EXTREMELY IMPORTANT So the heads structure is not good enough because we need to deal with forks.
-      off blocks that are not the head.
-    So we 
-
-    tests,
+    tests, for performing block inv request
     1. we haven't already got it.
+  
+    tests for inclusion
     2. it advances on another block we know about (from anywhere in sequence - not just the tip, )  
+
+  - ok so we have a bunch of nodes telling us about blocks and we are forced to try and download them...
+    the way to avoid is to have all blocks...
+
+  - EXTREMELY IMPORTANT we need to encode older block-hashes in our getdata request. so that a node on a fork
+    can return it's latest if we 
+
+  - as a first pass lets just save the blockchain as we go, and see how fast/slow it is on startup
+    we can optimize later.
+
+    
 *)
             let _, inv = decodeInv payload 0 in
             (* select block types  *)
@@ -508,11 +519,13 @@ let f state e =
                 checksum = checksum payload;
               }
               in 
+                let last_expected_block = block_hashes |> List.rev |> List.hd
+              in 
               add_jobs [ 
-                log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
+                log @@ "requesting blocks\n" ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
                 send_message conn (header ^ payload); 
                 get_message conn ; 
-              ] state 
+              ] { state with last_expected_block = last_expected_block } 
 
             else
               add_jobs [ 
@@ -523,7 +536,7 @@ let f state e =
             |> fun state -> 
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
-              if now -. state.download_head_last_time  > 10. then 
+              if now -. state.last_download_block  > 10. then 
                 (* create a set of all pointed-to block hashes *)
                 let previous = 
                   SS.bindings state.heads 
@@ -546,7 +559,7 @@ let f state e =
                   ^ "\n from " ^ format_addr conn   
                   >> send_message conn (initial_getblocks head)
                 ]
-                { state with download_head_last_time = now }  
+                { state with last_download_block = now }  
               else
                  state
 (*
@@ -579,7 +592,15 @@ let f state e =
               add_jobs [ 
                 log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
                 get_message conn ; 
-              ] { state with heads = heads;  } 
+              ] { state with heads = heads;  
+    
+                  last_download_block = 
+                    if hash = state.last_expected_block then 
+                      0.
+                    else
+                      Unix.time ()
+
+                } 
             else
               add_jobs [ 
                 log "already have block or block doesn't change chain - ignored ";
@@ -690,8 +711,7 @@ let s =
     get_connection     "23.229.45.32" 8333;
     get_connection     "23.236.144.69" 8333;
   ] in
-  let genesis = string_of_hex "000000000000000010879e092119599612b57c6508b15b9b97a4862ab998c8cb" in 
-(*  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in *)
+  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
   let heads = 
       SS.empty 
       |> SS.add genesis 
@@ -707,10 +727,11 @@ let s =
 
     heads = heads ; 
     (* download_heads = [ genesis ] ; *) 
-    download_head_last_time = Unix.time (); (* now *)
+    last_download_block = 0.;  
 
 (*    db = LevelDB.open_db "mydb"; 
 *)
+    last_expected_block = "";
 
   } 
 
