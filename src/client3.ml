@@ -704,7 +704,7 @@ Lwt.return block
     let rec loop fd =
       read_bytes fd 24
       >>= fun x -> match x with 
-        | Some s -> 
+        | Some s -> ( 
           let _, header = decodeHeader s 0 in
           Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length  
           >> read_bytes fd 84  (* var int tx count is not part of block header *)  
@@ -717,6 +717,7 @@ Lwt.return block
               >> loop fd  (* *)
             | None -> 
               return ()
+          )
 
         | None -> 
           return ()
