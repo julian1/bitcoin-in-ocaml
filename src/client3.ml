@@ -699,7 +699,7 @@ Lwt.return block
         (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
         return ()
     in
-    let rec loop fd =
+    let rec loop fd heads =
       read_bytes fd 24
       >>= fun x -> match x with 
         | Some s -> ( 
@@ -714,16 +714,24 @@ Lwt.return block
                 hex_of_string hash 
                 ^ " " ^ hex_of_string block_header.previous 
               >> advance fd (header.length - 80 )
-              >> loop fd  (* *)
+              >> let heads = SS.add hash { 
+                  previous = block_header.previous;  
+                  height = 0; 
+                } heads 
+              in
+              loop fd  heads  (* *)
             | None -> 
-              return ()
+              return heads 
           )
         | None -> 
-          return ()
+          return heads 
     in 
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
     >>= fun fd -> 
-      loop  fd
+      let heads = loop  fd  SS.empty in
+      return ()
+
+ 
 
  
 
