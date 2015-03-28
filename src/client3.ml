@@ -462,44 +462,44 @@ let f state e =
 *)
 
           | "inv" ->
+            (* select blocks *)
             let needed_inv_type = 2 in
             let _, inv = decodeInv payload 0 in
             let block_hashes = inv
               |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
               |> List.map (fun (_,hash)->hash)
             in
+            (* if have blocks *)
             if List.length block_hashes > 0 then
-
               add_jobs [ 
-                  log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
-                  ( 
-                      (* filter for if we have object already *) 
-                      detach @@ ( 
-                      List.fold_left (fun acc hash 
-                        -> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
-                      |> List.rev
-                      )
-
-                      (* request objects *) 
-                      >>= fun block_hashes ->  
-                         let encodeInventory jobs =
-                          let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
-                          (* encodeInv - move to Message  - and need to zip *)
-                          encodeVarInt (List.length jobs )
-                          ^ String.concat "" @@ List.map encodeInvItem jobs 
-                          in
-                          let payload = encodeInventory block_hashes in 
-                          let header = encodeHeader {
-                          magic = m ;
-                          command = "getdata";
-                          length = strlen payload;
-                          checksum = checksum payload;
-                          }
-                        in 
-                        log @@ "request count " ^ string_of_int  (List.length block_hashes) 
-                        >> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
-                        >> send_message conn (header ^ payload); 
-                    )
+                log @@ "whoot got inv " ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
+                ( 
+                  (* filter against db *) 
+                  detach @@ ( 
+                    List.fold_left (fun acc hash 
+                      -> if LevelDB.mem state.db hash then acc else hash::acc ) [] block_hashes
+                    |> List.rev
+                  )
+                  (* request objects *) 
+                  >>= fun block_hashes ->  
+                     let encodeInventory jobs =
+                        let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
+                        (* encodeInv - move to Message  - and need to zip *)
+                        encodeVarInt (List.length jobs )
+                        ^ String.concat "" @@ List.map encodeInvItem jobs 
+                      in
+                      let payload = encodeInventory block_hashes in 
+                      let header = encodeHeader {
+                        magic = m ;
+                        command = "getdata";
+                        length = strlen payload;
+                        checksum = checksum payload;
+                      }
+                    in 
+                    log @@ "request count " ^ string_of_int  (List.length block_hashes) 
+                    >> log @@ "request " ^ String.concat "\n" (List.map hex_of_string block_hashes) 
+                    >> send_message conn (header ^ payload); 
+                  )
                 ;
                 get_message conn ; 
             ] state 
@@ -509,10 +509,7 @@ let f state e =
                 get_message conn ; 
               ] state
 
-            (* completely separate bit.
-                can be tacked on to any message response from a peer.
-                actually this code, is nice in how it round-robbins
-             *)
+            (* completely separate bit.  code can go anywhere peer.  *)
             |> fun state -> 
               (* round robin making requests to advance the head *)
               let now = Unix.time () in
@@ -530,45 +527,7 @@ let f state e =
               else
                  state
 
-(*
-              let stale,ok = List.partition stale_test state.heads in 
-              (* update timestamp *)
-              let stale = List.map (fun x -> { x with last_request = now; } ) stale in
-              let state = { state with heads = ok @ stale } 
-			in 
-              let jobs = List.map (fun x -> 
-                  log @@ " requesting head hash " ^ hex_of_string x.hash
-                  ^ " from " ^ format_addr conn   
-                  ^ " length heads " ^ string_of_int @@ List.length state.heads 
-                  >> send_message conn (initial_getblocks x.hash)
-              ) stale in 
-              add_jobs jobs 
-                 state 
-*)
 
-              (* check if pending or already have and request if not 
-                don't bother to format message unless we've got.
-                also write that it's pending...
-
-      let _, header = decodeBlock payload 0 in 
-
-      Lwt_io.write_line Lwt_io.stdout ( "* got block " ^ ( Message.hex_of_string hash) 
-        ^ " previous " ^  Message.hex_of_string header.previous ^ "\n" )
-
-      (* find() will throw if entry not found...  *)
-      >> 
-      (* does this block point at a head - if so we update the head! *)
-      if SS.mem header.previous state.heads then 
-        let old = SS.find header.previous state.heads in 
-        let new_ = { hash = hash; previous = header.previous; height = old.height + 1 ; difficulty = 123 } in 
-        let state = { 
-          state with 
-
- 
-              *)
-
-              
-              (* log @@ conn.addr ^ " " ^ string_of_int conn.port ^ " got inv !!! " ;  *)
 
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
