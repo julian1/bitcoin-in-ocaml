@@ -100,11 +100,23 @@ type connection =
 
 }
 
+
+type peer =
+{
+	conn : connection ; 
+
+	inv : string list ;  (* inv items to work through *) 
+
+	block_pending : bool ;
+}
+
+
+
 type my_action =
    | GotConnection of connection
-   | GotMessage of connection  * header * string * string
    | GotConnectionError of string
-   | GotReadError of connection * string (* change name MessageError - because *)
+   | GotMessage of peer * header * string * string
+   | GotMessageError of peer * string (* change name MessageError - because *)
    | Nop
 
 
@@ -205,29 +217,32 @@ let readChannel inchan length (* timeout here *)  =
   without the network timeout...
 *)
 
-let get_message conn =
+let get_message peer =
     Lwt.catch (
       fun () -> 
       (* read header *)
-      readChannel conn.ic 24
-      >>= fun s ->
-        let _, header = decodeHeader s 0 in
-        if header.length < 10*1000000 then
-          (* read payload *)
-          readChannel conn.ic header.length
-          >>= fun p -> 
-          return @@ GotMessage ( conn, header, s, p)
-        else
-          return @@ GotReadError (conn, "payload too big" ) 
+
+        let ic = peer.conn.ic in 
+        readChannel ic 24
+        >>= fun s ->
+          let _, header = decodeHeader s 0 in
+          if header.length < 10*1000000 then
+            (* read payload *)
+            readChannel ic header.length
+            >>= fun p -> 
+            return @@ GotMessage ( peer, header, s, p)
+          else
+            return @@ GotMessageError (peer, "payload too big" ) 
       ) 
       ( fun exn ->  
           let s = Printexc.to_string exn in
-          return @@ GotReadError (conn, "here2 " ^ s) 
+          return @@ GotMessageError (peer, "here2 " ^ s) 
       )
        
 
-let send_message conn s = 
-    Lwt_io.write conn.oc s >> return Nop 
+let send_message peer s = 
+    let oc = peer.conn.oc in
+    Lwt_io.write oc s >> return Nop  (* message sent *)
 
 
 (*
@@ -331,7 +346,11 @@ type my_app_state =
 (* heads : my_head SS.t;	*)
 
   jobs :  my_action Lwt.t list ;
-  connections : connection list ; 
+
+  peers : peer list ; 
+
+	(* do we do a mapping from connection to connections ? *)
+
 
 	heads : my_head SS.t ;	
 
@@ -391,13 +410,14 @@ let f state e =
 
   (* helpers *)
   let add_jobs jobs state = { state with jobs = jobs @ state.jobs } in
-  let remove_conn conn state = { state with 
+
+  let remove_peer peer state = { state with 
       (* physical equality *)
-      connections = List.filter (fun x -> x.fd != conn.fd) state.connections
+      peers = List.filter (fun x -> x.conn.fd != peer.conn.fd) state.peers
     } in
-  let add_conn conn state =  { state with connections = conn::state.connections } in
+  let add_peer peer state =  { state with peers = peer::state.peers } in
   let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
-  let format_addr conn = conn.addr ^ " " ^ string_of_int conn.port 
+  let format_addr peer = peer.addr ^ " " ^ string_of_int peer.port 
 
   (* maybe it's the choose() that fails ... *)
 (*
@@ -421,16 +441,18 @@ let f state e =
     match e with
       | Nop -> state 
       | GotConnection conn ->
+        let peer = { conn = conn; 	inv = [] ; block_pending  = false } in
         state
-        |> add_conn conn
+        |> add_peer  peer
+
         |> add_jobs [
           log @@ "whoot got connection " ^ format_addr conn   ^
-            "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
+            "\npeers now " ^ ( string_of_int @@ List.length state.peers)
           (* or separate? *) 
-          >> send_message conn initial_version 
-          >> log @@ "*** whoot wrote initial version " ^ format_addr conn
+          >> send_message peer initial_version 
+          >> log @@ "*** sent our version " ^ format_addr conn
           ;
-           get_message conn
+           get_message peer 
         ] 
       
       | GotConnectionError msg ->
@@ -438,48 +460,37 @@ let f state e =
           log @@ "could not connect " ^ msg >> return Nop
           ] state 
 
-      | GotReadError (conn, msg) ->
+      | GotMessageError (peer, msg) ->
         state 
-        |> remove_conn conn
+        |> remove_peer peer
         |> add_jobs [ 
           log @@ "could not read message " ^ msg
-          ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
+          ^ "\npeers now " ^ ( string_of_int @@ List.length state.peers)
           ;
-          Lwt_unix.close conn.fd >> return Nop 
+          Lwt_unix.close peer.conn.fd >> return Nop 
         ]
 
-      | GotMessage (conn, header, raw_header, payload) -> 
+      | GotMessage (peer, header, raw_header, payload) -> 
         match header.command with
           | "version" ->
             state
             |> add_jobs [ 
               (* should be 3 separate jobs? *)
               log "got version message"
-              >> send_message conn initial_verack
-              >> log @@ "*** whoot wrote verack " ^ format_addr conn
-              ;
-              get_message conn 
+              >> send_message peer initial_verack
+              >> log @@ "*** whoot wrote verack " ^ format_addr peer.conn;
+              get_message peer 
             ] 
 
           | "verack" ->
             add_jobs [ 
               (* should be 3 separate jobs? *)
               log "got verack - requesting addr"
-              >> send_message conn initial_getaddr
-              ;
-              get_message conn 
+              >> send_message peer initial_getaddr ;
+              get_message peer 
             ] state 
 
-(*          | "inv" -> 
-            let _, inv = decodeInv payload 0 in
-            add_jobs [ 
-              log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
-              ;
-              get_message conn 
-            ] state
-*)
 
-          | "inv" ->
 (*
     - we don't care about a block unless it can advance a head ?   
     except it might be a fork arising from a point further back in the chain.
@@ -498,9 +509,9 @@ let f state e =
 
   - as a first pass lets just save the blockchain as we go, and see how fast/slow it is on startup
     we can optimize later.
-
-    
 *)
+
+          | "inv" ->
             let _, inv = decodeInv payload 0 in
             (* select block types  *)
             let needed_inv_type = 2 in
@@ -538,13 +549,13 @@ let f state e =
                     ^ string_of_int (List.length block_hashes) 
                    (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
                     ; 
-                send_message conn (header ^ payload); 
-                get_message conn ; 
+                send_message peer (header ^ payload); 
+                get_message peer ; 
               ] { state with last_expected_block = last_expected_block } 
 
             else
               add_jobs [ 
-                get_message conn ; 
+                get_message peer ; 
               ] state
 
             (* completely separate bit.  code can go anywhere peer.  *)
@@ -554,18 +565,57 @@ let f state e =
                 very importnat 
                   - our approach for filling in tips heads can be leveraged
                   to do parallel download. instead of always rejecting blocks
-                  we could always accept them. No 
+                  we could always accept them. 
       
-                - No we can provisionally accept them - eg. they
+                - we can provisionally accept them - eg. they
                 - request 500 blocks
                 - mark that we will accept even if not sequential
                 - then divide up the 500 blocks amongst different conns - eg 10 x 50 
+
+				- yes keep a list of pending blocks.
+				- allow download in any order.
+				- but do an additional calculation to determine if can calculate root.
+
+				- i dont think we even need pending. (except as a count to trigger another inv ) 
+				rather than call it pending. call it requested - and record only when request.
+
+				- We can also issue block requests in a much better way. eg. just request a single
+				block receive, then issue request for the next etc.
+					- o
+				----------------------------------------
+
+					- so if the set of pending is < 100, then get next 500
+						- this won't work... because it will keep issuing requests - needs a timer as well. 
+					- whenevnever we get a block on a conn, issue a request for another one.
+						-- we need to record this against the conn...
+
+					- with 30 conns - we can be saturated with random blocks from random invs.
+
+					- there's a problem - trying to take inv from a node that may not have it.
+
+					-- ahhhh. 
+						- why not do an inv against a peer - and record for the peer. 
+						- then randomly work through the list and filter according to chain whether it has already 
+							been downloaded.
+						- we will sometimes download the same thing twice - but it's going to be rare.
+
+						- and it means we only requst inventory, if peer says it has it. 
+
+						- and we follow that nodes forks if it has them
+
+	
+					-- only issue is marking heads so they trace to root, we'll need to walk
+						everything. but that's only linear.gg 
               *) 
  
               (* round robin making requests to advance the head 
               - setting this to low value of 10 secs, meant it timed out a lot given large blocks
               whiich meant sending lots of spurious inv		
 				which appeared to led us to be rejected by other peers - with connections 30 down to 5.
+				--
+				if we haven't received a block for a long time, we shouldn't be doing an inv request
+				instead we should be requesting that block from someone else.
+				
               *)
               let now = Unix.time () in
               if now -. state.time_of_last_valid_block  > 60. then 
@@ -589,8 +639,8 @@ let f state e =
                   log @@ "**** update download_head " 
                   ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
                   ^ "\n head " ^ hex_of_string head 
-                  ^ "\n from " ^ format_addr conn   
-                  >> send_message conn (initial_getblocks head)
+                  ^ "\n from " ^ format_addr peer.conn   
+                  >> send_message peer (initial_getblocks head)
                 ]
                 { state with time_of_last_valid_block = now }  
               else
@@ -631,7 +681,7 @@ let f state e =
                   ^ string_of_int  (SS.cardinal heads )
                   ^ " len " ^ (string_of_int (String.length payload));
                 Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
-                get_message conn ; 
+                get_message peer ; 
               ] { state with heads = heads;  
     
                   time_of_last_valid_block = 
@@ -644,7 +694,7 @@ let f state e =
             else
               add_jobs [ 
                 log "got block - already have or cant build on - ignored ";
-                get_message conn ; 
+                get_message peer ; 
               ] state 
 
 
@@ -654,7 +704,7 @@ let f state e =
             add_jobs [ 
               (let hash = (payload |> Message.sha256d |> Message.strrev ) in 
               log @@ "got tx!!! "  ^ hex_of_string hash )   ; 
-              get_message conn ; 
+              get_message peer ; 
             ] state
 
 (*
@@ -701,30 +751,28 @@ let f state e =
                 ] (* ^ ":" ^ soi h.port *)
               in
               let a = formatAddress addr in
-              let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) 
-                  state.connections 
+              (* ignore, different instances on different ports *)
+              let already_got = List.exists (fun peer -> peer.conn.addr = a (* && peer.conn.port = addr.port *) ) 
+                  state.peers 
               in
-              if already_got || List.length state.connections > 30 then  
+              if already_got || List.length state.peers >= 30 then  
                 add_jobs [ 
                   log @@ "whoot new addr - already got or ignore " ^ a  
                   ;
-                  get_message conn  
+                  get_message peer 
                 ] state 
               else 
                 add_jobs [ 
                  log @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
-                  ^  " " ^ a ^ " port " ^ string_of_int addr.port 
-                 ;  
-                  get_connection (formatAddress addr) addr.port 
-                  ;
-                  get_message conn  
+                  ^  " " ^ a ^ " port " ^ string_of_int addr.port ;  
+                  get_connection (formatAddress addr) addr.port ;
+                  get_message peer
               ] state
 
           | s ->
             add_jobs [ 
-              log @@ "message " ^ s
-              ;
-              get_message conn 
+              log @@ "message " ^ s ;
+              get_message peer
             ] state
 
   in new_state 
@@ -844,7 +892,7 @@ Lwt.return block
 *)
       { 
         jobs = jobs; 
-        connections = []; 
+        peers = []; 
         heads = heads ; 
         time_of_last_valid_block = 0.;  
     (*    db = LevelDB.open_db "mydb"; *)
