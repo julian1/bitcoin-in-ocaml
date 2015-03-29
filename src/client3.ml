@@ -233,7 +233,9 @@ let get_message peer =
             >>= fun p -> 
             return @@ GotMessage ( peer, header, s, p)
           else
-            return @@ GotMessageError (peer, "payload too big" ) 
+            return @@ GotMessageError (peer, "payload too big - command is " 
+              ^ header.command 
+              ^ " size " ^ string_of_int header.length ) 
       ) 
       ( fun exn ->  
           let s = Printexc.to_string exn in
@@ -532,12 +534,12 @@ let f state e =
       | GotMessageError (peer, msg) ->
         state 
         |> remove_peer peer
-        |> add_jobs [ 
+        |> fun state -> add_jobs [ 
           log @@ "could not read message " ^ msg
           ^ "\npeers now " ^ ( string_of_int @@ List.length state.peers)
           ;
           Lwt_unix.close peer.conn.fd >> return Nop 
-        ]
+        ] state
 
       | GotMessage (peer, header, raw_header, payload) -> 
         match header.command with
@@ -686,16 +688,16 @@ let f state e =
 
                 { state with heads = heads;  } 
                              
-                |>  get_another_block peer 
+                |> fun state ->  get_another_block peer  state
 
-				        |> 
+				        |> fun state ->  
                 add_jobs [ 
                   log @@ "got block - updating chain " ^ hex_of_string hash
                     ^ string_of_int  (SS.cardinal heads )
                     ^ " len " ^ (string_of_int (String.length payload));
-                  Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
+               (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
                   get_message peer ; 
-                ] 
+                ] state 
 
 (* 
               add_jobs [ 
