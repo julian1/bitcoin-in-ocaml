@@ -658,7 +658,7 @@ let f state e =
               in
               
               add_jobs [ 
-                log @@ "got block - updated chain " 
+                log @@ "got block - updating chain " ^ hex_of_string hash
                   ^ string_of_int  (SS.cardinal heads )
                   ^ " len " ^ (string_of_int (String.length payload));
                 Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
@@ -674,7 +674,7 @@ let f state e =
                 } 
             else
               add_jobs [ 
-                log "got block - already have or cant build on - ignored ";
+                log @@ "got block - already have or cant build on - " ^ hex_of_string hash;
                 get_message peer ; 
               ] state 
 
