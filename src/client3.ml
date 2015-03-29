@@ -415,7 +415,7 @@ let detach f =
 
   let remove_peer peer state = { state with 
       (* physical equality *)
-      peers = List.filter (fun x -> x.conn.fd != peer.conn.fd) state.peers
+      peers = List.filter (fun x -> not (x.conn.fd == peer.conn.fd)) state.peers
     } 
   let add_peer peer state =  { state with peers = peer::state.peers } 
 
@@ -532,13 +532,23 @@ let f state e =
           ] state 
 
       | GotMessageError (peer, msg) ->
+
+        let fd = peer.conn.fd in
         state 
         |> remove_peer peer
-        |> fun state -> add_jobs [ 
+        |> fun state -> 
+          add_jobs [ 
           log @@ "could not read message " ^ msg
           ^ "\npeers now " ^ ( string_of_int @@ List.length state.peers)
           ;
-          Lwt_unix.close peer.conn.fd >> return Nop 
+
+          match Lwt_unix.state fd with
+            Opened -> ( Lwt_unix.close fd ) >> return Nop 
+            | _ -> return Nop 
+          (*in
+          log @@ "closing descriptor - state " ^ s
+          >> log "done closing descriptor " 
+          *)
         ] state
 
       | GotMessage (peer, header, raw_header, payload) -> 
@@ -588,6 +598,9 @@ let f state e =
     we can request one of the blocks at randome as well...
 *)
           | "inv" ->
+            state 
+    
+            |> fun state ->
             let _, inv = decodeInv payload 0 in
             (* add inventory blocks to list in peer *)
             let needed_inv_type = 2 in
@@ -597,7 +610,7 @@ let f state e =
               (* ignore blocks we already have *)
               |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
             in
-            remove_peer peer  state
+            remove_peer peer state 
             |> fun state -> let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
             add_peer peer state 
             
@@ -679,7 +692,8 @@ let f state e =
             |> fun state -> 
 
               if not (SS.mem hash state.heads ) then 
-                let heads =
+
+                (*let heads =
                   SS.add hash { 
                     previous = header.previous;  
                     height = 0; (* head.height + 1;  *)
@@ -688,12 +702,12 @@ let f state e =
 
                 { state with heads = heads;  } 
                              
-                |> fun state ->  get_another_block peer  state
+                |> fun state -> *) get_another_block peer  state
 
 				        |> fun state ->  
                 add_jobs [ 
                   log @@ "got block - updating chain " ^ hex_of_string hash
-                    ^ string_of_int  (SS.cardinal heads )
+                    (* ^ string_of_int  (SS.cardinal heads ) *)
                     ^ " len " ^ (string_of_int (String.length payload));
                (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
                   get_message peer ; 
