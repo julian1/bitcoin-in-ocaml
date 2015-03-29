@@ -541,9 +541,13 @@ let f state e =
             |> fun state ->  
              let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
             add_peer peer state  
-(*
-            if List.length block_hashes > 0 then
-              (* if have blocks *)
+
+          |> fun state ->  
+
+            (* code to request a block *) 
+            if List.length peer.block_inv > 0 then
+
+              (* request at randome *)
               let encodeInventory jobs =
                 let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
                   (* encodeInv - move to Message  - and need to zip *)
@@ -557,17 +561,14 @@ let f state e =
                 length = strlen payload;
                 checksum = checksum payload;
               }
-              in 
-                let last_expected_block = 
-                  (* we get a lot of peers trying to send single blocks which we don't care about yet *) 
-                  if List.length block_hashes > 10 then
-                    block_hashes |> List.rev |> List.hd
-                  else
-                    state.last_expected_block
-              in 
-*)
+              in
+              state
+              else
 
-          
+              state
+
+
+
           |> fun state ->  
               add_jobs [ 
                 log @@ "peer " ^ peer.conn.addr 
@@ -583,64 +584,17 @@ let f state e =
             (* completely separate bit.  code can go anywhere peer.  *)
             |> fun state -> 
             
-              (*
-                very importnat 
-                  - our approach for filling in tips heads can be leveraged
-                  to do parallel download. instead of always rejecting blocks
-                  we could always accept them. 
-      
-                - we can provisionally accept them - eg. they
-                - request 500 blocks
-                - mark that we will accept even if not sequential
-                - then divide up the 500 blocks amongst different conns - eg 10 x 50 
-
-				- yes keep a list of pending blocks.
-				- allow download in any order.
-				- but do an additional calculation to determine if can calculate root.
-
-				- i dont think we even need pending. (except as a count to trigger another inv ) 
-				rather than call it pending. call it requested - and record only when request.
-
-				- We can also issue block requests in a much better way. eg. just request a single
-				block receive, then issue request for the next etc.
-					- o
-				----------------------------------------
-
-					- so if the set of pending is < 100, then get next 500
-						- this won't work... because it will keep issuing requests - needs a timer as well. 
-					- whenevnever we get a block on a conn, issue a request for another one.
-						-- we need to record this against the conn...
-
-					- with 30 conns - we can be saturated with random blocks from random invs.
-
-					- there's a problem - trying to take inv from a node that may not have it.
-
-					-- ahhhh. 
-						- why not do an inv against a peer - and record for the peer. 
-						- then randomly work through the list and filter according to chain whether it has already 
-							been downloaded.
-						- we will sometimes download the same thing twice - but it's going to be rare.
-
-						- and it means we only requst inventory, if peer says it has it. 
-
-						- and we follow that nodes forks if it has them
-
-	
-					-- only issue is marking heads so they trace to root, we'll need to walk
-						everything. but that's only linear.gg 
-              *) 
- 
-              (* round robin making requests to advance the head 
-              - setting this to low value of 10 secs, meant it timed out a lot given large blocks
-              whiich meant sending lots of spurious inv		
-				which appeared to led us to be rejected by other peers - with connections 30 down to 5.
-				--
-				if we haven't received a block for a long time, we shouldn't be doing an inv request
-				instead we should be requesting that block from someone else.
-				
-              *)
-              let now = Unix.time () in
+              (*let now = Unix.time () in
               if now -. state.time_of_last_valid_block  > 60. then 
+              *)
+
+              if List.length peer.block_inv < 100 then  
+                (*
+                  this condition is easy
+                    if < 10 (we may be in sync )
+                    then only request if sufficient time has elapsed since last time. 
+
+                *)
                 (* create a set of all pointed-to block hashes *)
                 (* watch out for non-tail call optimised functions here which might blow stack  *)
                 let previous = 
@@ -654,7 +608,8 @@ let f state e =
                   |> SS.bindings 
                   |> List.rev_map (fun (tip,_ ) -> tip) 
                 in
-                (* choose one at random *)
+                (* choose a head at random *)
+                let now = Unix.time () in
                 let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
                 let head = List.nth heads index in
                 add_jobs [
@@ -664,9 +619,10 @@ let f state e =
                   ^ "\n from " ^ format_addr peer.conn   
                   >> send_message peer (initial_getblocks head)
                 ]
-                { state with time_of_last_valid_block = now }  
+                (* { state with time_of_last_valid_block = now }   *)
+                state
               else
-                 state
+                state
 (*
     OK, now we have a single download head that we make requests too...
     we can compute the download heads... in case of fork.
