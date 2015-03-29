@@ -538,14 +538,15 @@ let f state e =
               |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
             in
             remove_peer peer  state
-            |> fun state ->  
-             let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
-            add_peer peer state  
+            |> fun state -> let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
+            add_peer peer state 
+            
 
           |> fun state ->  
 
             (* code to request a block *) 
-            if List.length peer.block_inv > 0 then
+            if not peer.block_pending
+              && List.length peer.block_inv > 0 then
 
               let encodeInventory jobs =
                 let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
@@ -553,11 +554,9 @@ let f state e =
                   encodeVarInt (List.length jobs )
                   ^ String.concat "" @@ List.map encodeInvItem jobs 
               in
-
               let now = Unix.time () in
               let index = now |> int_of_float |> (fun x -> x mod List.length peer.block_inv) in 
               let hash = List.nth peer.block_inv index in
-
               let payload = encodeInventory [ hash ] in 
               let header = encodeHeader {
                 magic = m ;
@@ -572,31 +571,20 @@ let f state e =
                 ^ " now " ^ string_of_int (List.length peer.block_inv ) 
                    (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
                     ; 
-                (* send_message peer (header ^ payload);  *)
+                send_message peer (header ^ payload); 
                 get_message peer ; 
               ] state (* { state with last_expected_block = last_expected_block }  *)
 
+              |> remove_peer peer 
+              |> add_peer { peer with block_pending = true } 
 
-
-              else
-
-              state
-
-
-
-          |> fun state ->  
+            else
               add_jobs [ 
-                log @@ "peer " ^ peer.conn.addr 
-                ^ " got " ^ string_of_int (List.length block_hashes ) ^ " inv blocks " 
-                ^ " now " ^ string_of_int (List.length peer.block_inv ) 
-                   (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
-                    ; 
-                (* send_message peer (header ^ payload);  *)
                 get_message peer ; 
-              ] state (* { state with last_expected_block = last_expected_block }  *)
+              ] state 
 
 
-            (* completely separate bit.  code can go anywhere peer.  *)
+            (* code to keep the inventory full for the peer *)
             |> fun state -> 
             
               (*let now = Unix.time () in
