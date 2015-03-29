@@ -447,18 +447,23 @@ let detach f =
         checksum = checksum payload;
       }
       in
-      add_jobs [ 
-        log @@ "requesting block " ^ peer.conn.addr ^ " " ^ hash ; 
-        send_message peer (header ^ payload); 
-        get_message peer ; 
-      ] state (* { state with last_expected_block = last_expected_block }  *)
-
+      state
       |> remove_peer peer 
       |> add_peer { 
         peer with 
           block_inv = List.filter (fun x -> x != hash ) peer.block_inv;
           block_pending = hash :: peer.block_pending;
       } 
+
+      |> add_jobs [ 
+        log @@ "requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash 
+          ^ " inv count " ^ (string_of_int (List.length peer.block_inv ) ) 
+          ^ " pend count " ^ (string_of_int (List.length peer.block_pending ) ) 
+        ; 
+        send_message peer (header ^ payload); 
+        get_message peer ; 
+      ] (* { state with last_expected_block = last_expected_block }  *)
+
     else
       add_jobs [ 
         get_message peer ; 
@@ -665,7 +670,7 @@ let f state e =
 
 
             remove_peer peer state 
-            |> fun state -> let peer = { peer with block_pending = List.filter ((=)hash) peer.block_pending } in
+            |> fun state -> let peer = { peer with block_pending = List.filter ((!=)hash) peer.block_pending } in
             add_peer peer state 
 
             |> fun state -> 
