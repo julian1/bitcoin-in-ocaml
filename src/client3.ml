@@ -427,7 +427,8 @@ let detach f =
 *)
 
   let get_another_block peer state =
-    if List.length peer.block_inv > 0 then
+    if List.length peer.block_inv > 0 
+      && List.length peer.block_pending = 0   then
 
       let encodeInventory jobs =
         let encodeInvItem hash = encodeInteger32   2 ^ encodeHash32 hash in 
@@ -594,52 +595,52 @@ let f state e =
             
 
           |> fun state ->  
-            (* code to request a block *) 
+            (* maybe kick off another block request *) 
             get_another_block peer state 
 
 
-            (* code to keep the inventory full for the peer *)
-            |> fun state -> 
-            
-              (*let now = Unix.time () in
-              if now -. state.time_of_last_valid_block  > 60. then 
+          (* code to keep the inventory full for the peer *)
+          |> fun state -> 
+          
+            (*let now = Unix.time () in
+            if now -. state.time_of_last_valid_block  > 60. then 
+            *)
+
+            if List.length peer.block_inv < 100 then  
+              (*
+                this condition is easy
+                  if < 10 (we may be in sync )
+                  then only request if sufficient time has elapsed since last time. 
+
               *)
-
-              if List.length peer.block_inv < 100 then  
-                (*
-                  this condition is easy
-                    if < 10 (we may be in sync )
-                    then only request if sufficient time has elapsed since last time. 
-
-                *)
-                (* create a set of all pointed-to block hashes *)
-                (* watch out for non-tail call optimised functions here which might blow stack  *)
-                let previous = 
-                  SS.bindings state.heads 
-                  |> List.rev_map (fun (_,head ) -> head.previous) 
-                  |> SSS.of_list
-                in
-                (* get the tips of the blockchain tree by filtering all block hashes against the set *)
-                let heads = 
-                  SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
-                  |> SS.bindings 
-                  |> List.rev_map (fun (tip,_ ) -> tip) 
-                in
-                (* choose a head at random *)
-                let now = Unix.time () in
-                let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
-                let head = List.nth heads index in
-                add_jobs [
-                  log @@ "**** update download_head " 
-                  ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
-                  ^ "\n head " ^ hex_of_string head 
-                  ^ "\n from " ^ format_addr peer.conn   
-                  >> send_message peer (initial_getblocks head)
-                ]
-                (* { state with time_of_last_valid_block = now }   *)
-                state
-              else
-                state
+              (* create a set of all pointed-to block hashes *)
+              (* watch out for non-tail call optimised functions here which might blow stack  *)
+              let previous = 
+                SS.bindings state.heads 
+                |> List.rev_map (fun (_,head ) -> head.previous) 
+                |> SSS.of_list
+              in
+              (* get the tips of the blockchain tree by filtering all block hashes against the set *)
+              let heads = 
+                SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
+                |> SS.bindings 
+                |> List.rev_map (fun (tip,_ ) -> tip) 
+              in
+              (* choose a head at random *)
+              let now = Unix.time () in
+              let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
+              let head = List.nth heads index in
+              add_jobs [
+                log @@ "**** update download_head " 
+                ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
+                ^ "\n head " ^ hex_of_string head 
+                ^ "\n from " ^ format_addr peer.conn   
+                >> send_message peer (initial_getblocks head)
+              ]
+              (* { state with time_of_last_valid_block = now }   *)
+              state
+            else
+              state
 (*
     OK, now we have a single download head that we make requests too...
     we can compute the download heads... in case of fork.
@@ -662,25 +663,36 @@ let f state e =
                 it gets updated. 
             *)
 
-            if not (SS.mem hash state.heads ) then 
-              let heads =
-                SS.add hash { 
-                  previous = header.previous;  
-                  height = 0; (* head.height + 1;  *)
-                } state.heads
-              in
-              
+
+            remove_peer peer state 
+            |> fun state -> let peer = { peer with block_pending = List.filter ((=)hash) peer.block_pending } in
+            add_peer peer state 
+
+            |> fun state -> 
+
+              if not (SS.mem hash state.heads ) then 
+                let heads =
+                  SS.add hash { 
+                    previous = header.previous;  
+                    height = 0; (* head.height + 1;  *)
+                  } state.heads
+                in
+
+                { state with heads = heads;  } 
+                             
+                |>  get_another_block peer 
+
+
+(* 
               add_jobs [ 
                 log @@ "got block - updating chain " ^ hex_of_string hash
                   ^ string_of_int  (SS.cardinal heads )
                   ^ " len " ^ (string_of_int (String.length payload));
                 Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
                 get_message peer ; 
-              ] { 
-      
-              state with heads = heads;  
-    
-            } 
+              ] 
+*)
+
             else
               add_jobs [ 
                 log @@ "already have block ignore - " ^ hex_of_string hash;
