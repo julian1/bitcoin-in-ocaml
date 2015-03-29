@@ -105,9 +105,10 @@ type peer =
 {
 	conn : connection ; 
 
+  (* use sets? also probably need timestamps to refresh *)
 	block_inv : string list ;  (* inv items to work through *) 
+	block_pending : string list ;  
 
-	block_pending : bool ;
 }
 
 
@@ -418,7 +419,11 @@ let detach f =
 
 
 (*
-    i think we should maintain two lists. one pending 
+    - i think we should maintain two lists. one pending 
+  
+    - when we get a block we can request another one...
+      but if do this from several sources then we'll hae too many
+    therefore need to keep a count
 *)
 
   let get_another_block peer state =
@@ -448,7 +453,11 @@ let detach f =
       ] state (* { state with last_expected_block = last_expected_block }  *)
 
       |> remove_peer peer 
-      |> add_peer { peer with block_pending = true } 
+      |> add_peer { 
+        peer with 
+          block_inv = List.filter (fun x -> x != hash ) peer.block_inv;
+          block_pending = hash :: peer.block_pending;
+      } 
     else
       add_jobs [ 
         get_message peer ; 
@@ -494,7 +503,7 @@ let f state e =
     match e with
       | Nop -> state 
       | GotConnection conn ->
-        let peer = { conn = conn; block_inv = [] ; block_pending  = false } in
+        let peer = { conn = conn; block_inv = [] ; block_pending  = []} in
         state
         |> add_peer  peer
 
