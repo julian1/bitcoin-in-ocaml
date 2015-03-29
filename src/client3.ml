@@ -537,10 +537,10 @@ let f state e =
               (* ignore blocks we already have *)
               |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
             in
-            let new_peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
-
             remove_peer peer  state
-            |> add_peer new_peer  
+            |> fun state ->  
+             let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
+            add_peer peer state  
 (*
             if List.length block_hashes > 0 then
               (* if have blocks *)
