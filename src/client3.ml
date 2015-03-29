@@ -613,12 +613,19 @@ let f state e =
             remove_peer peer state 
             |> fun state -> let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
             add_peer peer state 
-            
 
+            |>  add_jobs [ 
+                  log @@ "got inv " ^ peer.conn.addr; 
+                  get_message peer ; 
+                ] 
+
+
+            
+(*
           |> fun state ->  
             (* maybe kick off another block request *) 
             get_another_block peer state 
-
+*)
 
           (* code to keep the inventory full for the peer *)
           |> fun state -> 
@@ -627,7 +634,7 @@ let f state e =
             if now -. state.time_of_last_valid_block  > 60. then 
             *)
 
-            if List.length peer.block_inv < 100 then  
+            if false && List.length peer.block_inv < 100 then  
               (*
                 this condition is easy
                   if < 10 (we may be in sync )
@@ -702,9 +709,9 @@ let f state e =
 
                 { state with heads = heads;  } 
                              
-                |> fun state -> *) get_another_block peer  state
+                |> fun state -> *) (*get_another_block peer  state
 
-				        |> fun state ->  
+				        |> fun state -> *) 
                 add_jobs [ 
                   log @@ "got block - updating chain " ^ hex_of_string hash
                     (* ^ string_of_int  (SS.cardinal heads ) *)
