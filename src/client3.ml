@@ -406,16 +406,59 @@ let detach f =
 
 
 
-let f state e =
+  let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
 
-  (* helpers *)
-  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } in
+  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } 
 
   let remove_peer peer state = { state with 
       (* physical equality *)
       peers = List.filter (fun x -> x.conn.fd != peer.conn.fd) state.peers
-    } in
-  let add_peer peer state =  { state with peers = peer::state.peers } in
+    } 
+  let add_peer peer state =  { state with peers = peer::state.peers } 
+
+
+(*
+    i think we should maintain two lists. one pending 
+*)
+
+  let get_another_block peer state =
+    if List.length peer.block_inv > 0 then
+
+      let encodeInventory jobs =
+        let encodeInvItem hash = encodeInteger32   2 ^ encodeHash32 hash in 
+          (* encodeInv - move to Message  - and need to zip *)
+          encodeVarInt (List.length jobs )
+          ^ String.concat "" @@ List.map encodeInvItem jobs 
+      in
+      let now = Unix.time () in
+      let index = now |> int_of_float |> (fun x -> x mod List.length peer.block_inv) in 
+      let hash = List.nth peer.block_inv index in
+      let payload = encodeInventory [ hash ] in 
+      let header = encodeHeader {
+        magic = m ;
+        command = "getdata";
+        length = strlen payload;
+        checksum = checksum payload;
+      }
+      in
+      add_jobs [ 
+        log @@ "requesting block " ^ peer.conn.addr ^ " " ^ hash ; 
+        send_message peer (header ^ payload); 
+        get_message peer ; 
+      ] state (* { state with last_expected_block = last_expected_block }  *)
+
+      |> remove_peer peer 
+      |> add_peer { peer with block_pending = true } 
+    else
+      add_jobs [ 
+        get_message peer ; 
+      ] state 
+
+
+
+let f state e =
+
+  (* helpers *)
 
   (* this is horrible, use a Map or something ? 
   let peer_compare a b = a.conn.fd = b.conn.fd  in
@@ -427,7 +470,6 @@ let f state e =
   *)
 
 
-  let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
   let format_addr peer = peer.addr ^ " " ^ string_of_int peer.port 
 
   (* maybe it's the choose() that fails ... *)
@@ -543,45 +585,8 @@ let f state e =
             
 
           |> fun state ->  
-
             (* code to request a block *) 
-            if not peer.block_pending
-              && List.length peer.block_inv > 0 then
-
-              let encodeInventory jobs =
-                let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
-                  (* encodeInv - move to Message  - and need to zip *)
-                  encodeVarInt (List.length jobs )
-                  ^ String.concat "" @@ List.map encodeInvItem jobs 
-              in
-              let now = Unix.time () in
-              let index = now |> int_of_float |> (fun x -> x mod List.length peer.block_inv) in 
-              let hash = List.nth peer.block_inv index in
-              let payload = encodeInventory [ hash ] in 
-              let header = encodeHeader {
-                magic = m ;
-                command = "getdata";
-                length = strlen payload;
-                checksum = checksum payload;
-              }
-              in
-              add_jobs [ 
-                log @@ "peer " ^ peer.conn.addr 
-                ^ " got " ^ string_of_int (List.length block_hashes ) ^ " inv blocks " 
-                ^ " now " ^ string_of_int (List.length peer.block_inv ) 
-                   (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
-                    ; 
-                send_message peer (header ^ payload); 
-                get_message peer ; 
-              ] state (* { state with last_expected_block = last_expected_block }  *)
-
-              |> remove_peer peer 
-              |> add_peer { peer with block_pending = true } 
-
-            else
-              add_jobs [ 
-                get_message peer ; 
-              ] state 
+            get_another_block peer state 
 
 
             (* code to keep the inventory full for the peer *)
@@ -648,8 +653,7 @@ let f state e =
                 it gets updated. 
             *)
 
-            if not (SS.mem hash state.heads )
-              && SS.mem header.previous state.heads then 
+            if not (SS.mem hash state.heads ) then 
               let heads =
                 SS.add hash { 
                   previous = header.previous;  
@@ -663,18 +667,14 @@ let f state e =
                   ^ " len " ^ (string_of_int (String.length payload));
                 Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
                 get_message peer ; 
-              ] { state with heads = heads;  
+              ] { 
+      
+              state with heads = heads;  
     
-                  time_of_last_valid_block = 
-                    if hash = state.last_expected_block then 
-                      0.
-                    else
-                      Unix.time ()
-
-                } 
+            } 
             else
               add_jobs [ 
-                log @@ "got block - already have or cant build on - " ^ hex_of_string hash;
+                log @@ "already have block ignore - " ^ hex_of_string hash;
                 get_message peer ; 
               ] state 
 
