@@ -529,7 +529,7 @@ let f state e =
 *)
           | "inv" ->
             let _, inv = decodeInv payload 0 in
-            (* select block types  *)
+            (* add inventory blocks to list in peer *)
             let needed_inv_type = 2 in
             let block_hashes = inv
               |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
@@ -547,14 +547,18 @@ let f state e =
             (* code to request a block *) 
             if List.length peer.block_inv > 0 then
 
-              (* request at randome *)
               let encodeInventory jobs =
                 let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
                   (* encodeInv - move to Message  - and need to zip *)
                   encodeVarInt (List.length jobs )
                   ^ String.concat "" @@ List.map encodeInvItem jobs 
               in
-              let payload = encodeInventory block_hashes in 
+
+              let now = Unix.time () in
+              let index = now |> int_of_float |> (fun x -> x mod List.length peer.block_inv) in 
+              let hash = List.nth peer.block_inv index in
+
+              let payload = encodeInventory [ hash ] in 
               let header = encodeHeader {
                 magic = m ;
                 command = "getdata";
