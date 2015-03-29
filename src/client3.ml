@@ -570,7 +570,9 @@ let f state e =
           
           |> fun state ->  
               add_jobs [ 
-                log @@ "peer " ^ peer.conn.addr ^ " got some inv blocks - " ^ string_of_int (List.length block_hashes) 
+                log @@ "peer " ^ peer.conn.addr 
+                ^ " got " ^ string_of_int (List.length block_hashes ) ^ " inv blocks " 
+                ^ " now " ^ string_of_int (List.length peer.block_inv ) 
                    (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
                     ; 
                 (* send_message peer (header ^ payload);  *)
