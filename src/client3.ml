@@ -417,8 +417,14 @@ let f state e =
     } in
   let add_peer peer state =  { state with peers = peer::state.peers } in
 
-
-  let update_peer  peer state = { state with peers = List.map (fun peer -> peer )  state.peers } in
+  (* this is horrible, use a Map or something ? 
+  let peer_compare a b = a.conn.fd = b.conn.fd  in
+  let update_peer new_peer state = { 
+    state with peers = List.map (fun peer -> 
+     if peer_compare peer new_peer then new_peer else peer 
+    )  
+  state.peers } in
+  *)
 
 
   let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
@@ -531,8 +537,10 @@ let f state e =
               (* ignore blocks we already have *)
               |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
             in
-            let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
-            update_peer peer  state
+            let new_peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
+
+            remove_peer peer  state
+            |> add_peer new_peer  
 (*
             if List.length block_hashes > 0 then
               (* if have blocks *)
@@ -559,21 +567,16 @@ let f state e =
               in 
 *)
 
-(*          
-          |> 
+          
+          |> fun state ->  
               add_jobs [ 
-                log @@ "got some inv blocks " ^ string_of_int (List.length block_hashes) 
+                log @@ "peer " ^ peer.conn.addr ^ " got some inv blocks - " ^ string_of_int (List.length block_hashes) 
                    (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
                     ; 
                 (* send_message peer (header ^ payload);  *)
                 get_message peer ; 
               ] state (* { state with last_expected_block = last_expected_block }  *)
 
-            else
-              add_jobs [ 
-                get_message peer ; 
-              ] state
-*)
 
             (* completely separate bit.  code can go anywhere peer.  *)
             |> fun state -> 
@@ -854,12 +857,14 @@ Lwt.return block
         | None -> 
           return heads 
     in 
+
+    (* this bloody thing throws - if it can't open *)
     Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
     >>= fun fd -> 
       let u =  (* very strange that this var is needed to typecheck *)
       match Lwt_unix.state fd with 
         Opened -> 
-          Lwt_io.write_line Lwt_io.stdout "scanning blocks!!" 
+          Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
           >> loop fd SS.empty  
           >>= fun heads -> Lwt_unix.close fd
           >> return heads
@@ -882,6 +887,9 @@ Lwt.return block
       uggh opening the file, non truncate ... 
     *)
 (*     Lwt_io.open_file ~flags: [O_WRONLY ] Lwt_io.output       "blocks.dat"  *)  
+
+
+
     Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0  
  
     >>= fun fd -> 
