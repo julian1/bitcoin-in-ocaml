@@ -105,7 +105,7 @@ type peer =
 {
 	conn : connection ; 
 
-	inv : string list ;  (* inv items to work through *) 
+	block_inv : string list ;  (* inv items to work through *) 
 
 	block_pending : bool ;
 }
@@ -416,6 +416,11 @@ let f state e =
       peers = List.filter (fun x -> x.conn.fd != peer.conn.fd) state.peers
     } in
   let add_peer peer state =  { state with peers = peer::state.peers } in
+
+
+  let update_peer  peer state = { state with peers = List.map (fun peer -> peer )  state.peers } in
+
+
   let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
   let format_addr peer = peer.addr ^ " " ^ string_of_int peer.port 
 
@@ -441,7 +446,7 @@ let f state e =
     match e with
       | Nop -> state 
       | GotConnection conn ->
-        let peer = { conn = conn; 	inv = [] ; block_pending  = false } in
+        let peer = { conn = conn; block_inv = [] ; block_pending  = false } in
         state
         |> add_peer  peer
 
@@ -511,6 +516,11 @@ let f state e =
     we can optimize later.
 *)
 
+(*
+    - so peer gives us inventory...
+    we should store it. and that's about it.   
+    we can request one of the blocks at randome as well...
+*)
           | "inv" ->
             let _, inv = decodeInv payload 0 in
             (* select block types  *)
@@ -518,9 +528,12 @@ let f state e =
             let block_hashes = inv
               |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
               |> List.map (fun (_,hash)->hash)
-              (* avoid blocks we already have *)
+              (* ignore blocks we already have *)
               |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
             in
+            let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
+            update_peer peer  state
+(*
             if List.length block_hashes > 0 then
               (* if have blocks *)
               let encodeInventory jobs =
@@ -544,19 +557,23 @@ let f state e =
                   else
                     state.last_expected_block
               in 
+*)
+
+(*          
+          |> 
               add_jobs [ 
-                log @@ "requesting blocks " 
-                    ^ string_of_int (List.length block_hashes) 
+                log @@ "got some inv blocks " ^ string_of_int (List.length block_hashes) 
                    (* ^ "\n" ^ String.concat "\n" (List.map hex_of_string block_hashes)  *)
                     ; 
-                send_message peer (header ^ payload); 
+                (* send_message peer (header ^ payload);  *)
                 get_message peer ; 
-              ] { state with last_expected_block = last_expected_block } 
+              ] state (* { state with last_expected_block = last_expected_block }  *)
 
             else
               add_jobs [ 
                 get_message peer ; 
               ] state
+*)
 
             (* completely separate bit.  code can go anywhere peer.  *)
             |> fun state -> 
