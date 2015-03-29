@@ -449,11 +449,12 @@ let detach f =
       in
       state
       |> remove_peer peer 
-      |> add_peer { 
-        peer with 
+      |> fun state -> 
+        let peer = { peer with 
           block_inv = List.filter (fun x -> x != hash ) peer.block_inv;
           block_pending = hash :: peer.block_pending;
-      } 
+		} in
+        add_peer peer state 
 
       |> add_jobs [ 
         log @@ "requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash 
