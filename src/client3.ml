@@ -688,6 +688,14 @@ let f state e =
                              
                 |>  get_another_block peer 
 
+				        |> 
+                add_jobs [ 
+                  log @@ "got block - updating chain " ^ hex_of_string hash
+                    ^ string_of_int  (SS.cardinal heads )
+                    ^ " len " ^ (string_of_int (String.length payload));
+                  Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
+                  get_message peer ; 
+                ] 
 
 (* 
               add_jobs [ 
