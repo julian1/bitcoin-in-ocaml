@@ -562,9 +562,13 @@ let f state e =
                 - then divide up the 500 blocks amongst different conns - eg 10 x 50 
               *) 
  
-              (* round robin making requests to advance the head *)
+              (* round robin making requests to advance the head 
+              - setting this to low value of 10 secs, meant it timed out a lot given large blocks
+              whiich meant sending lots of spurious inv		
+				which appeared to led us to be rejected by other peers - with connections 30 down to 5.
+              *)
               let now = Unix.time () in
-              if now -. state.time_of_last_valid_block  > 10. then 
+              if now -. state.time_of_last_valid_block  > 60. then 
                 (* create a set of all pointed-to block hashes *)
                 (* watch out for non-tail call optimised functions here which might blow stack  *)
                 let previous = 
@@ -671,7 +675,7 @@ let f state e =
         disconnected sequences
       but do request blocks from segments
 
-      - this will keep it focused.
+      - this will keep it focused downloading around tip.
     -------
       -No inventory requests are relatively free.
       -Do one every ten seconds on the main node (or all heads that trace to root). 
@@ -679,9 +683,6 @@ let f state e =
       - and filter against pending (with a timeout )
       - and record new list as blocks that are pending and can be accepted
       - then distribute block requests to different conns
-
-      - because intiail inv request is on the main chain forks, it concentrates
-      downloading around the tip.  (and not off in future)
 
       - if seomthing is pending, we don't want to re-request it.
       but, if something stalls we do.
