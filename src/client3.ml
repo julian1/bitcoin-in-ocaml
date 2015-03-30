@@ -428,6 +428,8 @@ let detach f =
     - when we get a block we can request another one...
       but if do this from several sources then we'll hae too many
     therefore need to keep a count
+
+    - it's quite weird. we only have one inv ...  
 *)
 
   let get_another_block peer state =
@@ -463,9 +465,11 @@ let detach f =
 (*    -- are there two read messages ??? *)
 
       |> add_jobs [ 
-        log @@ "requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash 
+        log @@ 
+          "get_another_block - peers " ^ (string_of_int (List.length state.peers ))
           ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
-          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) ; 
+          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) )  
+          ^ " requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash ; 
 (*        send_message peer (header ^ payload);  *)
       
 (*  get_message peer ;  *)
@@ -607,73 +611,75 @@ let f state e =
     
             |> fun state ->
 
-
               let now = Unix.time () in
-
-            let _, inv = decodeInv payload 0 in
-            (* add inventory blocks to list in peer *)
-            let needed_inv_type = 2 in
-            let block_hashes = inv
-              |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
-              |> List.map (fun (_,hash)->hash)
-              (* ignore blocks we already have *)
-              |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
-            in
-            remove_peer peer state 
-            |> fun state -> let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
-            add_peer peer state 
+              let _, inv = decodeInv payload 0 in
+              (* add inventory blocks to list in peer *)
+              let needed_inv_type = 2 in
+              let block_hashes = inv
+                |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
+                |> List.map (fun (_,hash)->hash)
+                (* ignore blocks we already have *)
+                |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
+              in
+              remove_peer peer state 
+              |> fun state -> let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
+              add_peer peer state 
 
             |>  add_jobs [ 
-                  log @@ "got inv " ^ peer.conn.addr ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) ; 
+                  log @@ "\ngot inv " ^ peer.conn.addr 
+                    ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
+                    ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) ; 
+           
                   get_message peer ; 
                 ] 
 
-          (* code to keep the inventory full for the peer *)
-          |> fun state -> 
-              (*
-                this condition is not quite right 
-                  if < 10 (we may be in sync )
-                  then only request if sufficient time has elapsed since last time. 
+            (* code to keep the inventory full for the peer *)
+            |> fun state -> 
+                (*
+                  this condition is not quite right 
+                    if < 10 (we may be in sync )
+                    then only request if sufficient time has elapsed since last time. 
 
-                - it should be or. so that we still request blocks if we're near the end.
-                - but then it will request too often
-              *)
-            if List.length peer.blocks_inv < 100 
-              && now -. peer.blocks_inv_last_request_time > 60.
-              then  
-              (* create a set of all pointed-to block hashes *)
-              (* watch out for non-tail call optimised functions here which might blow stack  *)
-              let previous = 
-                SS.bindings state.heads 
-                |> List.rev_map (fun (_,head ) -> head.previous) 
-                |> SSS.of_list
-              in
-              (* get the tips of the blockchain tree by filtering all block hashes against the set *)
-              let heads = 
-                SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
-                |> SS.bindings 
-                |> List.rev_map (fun (tip,_ ) -> tip) 
-              in
-              (* choose a head at random *)
-              let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
-              let head = List.nth heads index in
-              add_jobs [
-                log @@ "**** doing block inv request " 
-                ^ " head count " ^ (string_of_int @@ List.length heads )
-                ^ " head " ^ hex_of_string head 
-                ^ " from " ^ format_addr peer.conn   
-                >> send_message peer (initial_getblocks head)
-              ] state
-              (* { state with time_of_last_valid_block = now }   *)
-              |> remove_peer peer 
-              |> add_peer { peer  with blocks_inv_last_request_time = now } 
-          
-            else
-              state
+                  - it should be or. so that we still request blocks if we're near the end.
+                  - but then it will request too often
+                  - we might also issue a request for inventory....
+                *)
+              if List.length peer.blocks_inv < 100 
+                && now -. peer.blocks_inv_last_request_time > 60.
+                then  
+                (* create a set of all pointed-to block hashes *)
+                (* watch out for non-tail call optimised functions here which might blow stack  *)
+                let previous = 
+                  SS.bindings state.heads 
+                  |> List.rev_map (fun (_,head ) -> head.previous) 
+                  |> SSS.of_list
+                in
+                (* get the tips of the blockchain tree by filtering all block hashes against the set *)
+                let heads = 
+                  SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
+                  |> SS.bindings 
+                  |> List.rev_map (fun (tip,_ ) -> tip) 
+                in
+                (* choose a head at random *)
+                let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
+                let head = List.nth heads index in
+                add_jobs [
+                  log @@ "**** requesting more blocks " 
+                  ^ " head count " ^ (string_of_int @@ List.length heads )
+                  ^ " head " ^ hex_of_string head 
+                  ^ " from " ^ format_addr peer.conn   
+                  >> send_message peer (initial_getblocks head)
+                ] state
+                (* { state with time_of_last_valid_block = now }   *)
+                |> remove_peer peer 
+                |> add_peer { peer  with blocks_inv_last_request_time = now } 
+            
+              else
+                state
 
-          |> fun state ->  
-            (* maybe download a block *) 
-            get_another_block peer state 
+            |> fun state ->  
+              (* maybe download a block *) 
+              get_another_block peer state 
 
 
 (*
