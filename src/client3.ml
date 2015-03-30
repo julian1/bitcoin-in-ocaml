@@ -103,8 +103,10 @@ type connection =
 
 type peer =
 {
-	conn : connection ; 
-
+	 conn : connection ;   
+(*
+  maybe move the addr and port of the connection in here?
+*)
   (* use sets? also probably need timestamps to refresh *)
 	blocks_inv : string list ;  (* inv items to work through - may be out of date*) 
 	blocks_pending : string list ;  
@@ -118,8 +120,8 @@ type peer =
 type my_action =
    | GotConnection of connection
    | GotConnectionError of string
-   | GotMessage of peer * header * string * string
-   | GotMessageError of peer * string (* change name MessageError - because *)
+   | GotMessage of connection * header * string * string
+   | GotMessageError of connection * string (* change name MessageError - because *)
    | Nop
 
 
@@ -220,12 +222,12 @@ let readChannel inchan length (* timeout here *)  =
   without the network timeout...
 *)
 
-let get_message peer =
+let get_message conn =
     Lwt.catch (
       fun () -> 
       (* read header *)
 
-        let ic = peer.conn.ic in 
+        let ic = conn.ic in 
         readChannel ic 24
         >>= fun s ->
           let _, header = decodeHeader s 0 in
@@ -233,20 +235,20 @@ let get_message peer =
             (* read payload *)
             readChannel ic header.length
             >>= fun p -> 
-            return @@ GotMessage ( peer, header, s, p)
+            return @@ GotMessage ( conn, header, s, p)
           else
-            return @@ GotMessageError (peer, "payload too big - command is " 
+            return @@ GotMessageError (conn, "payload too big - command is " 
               ^ header.command 
               ^ " size " ^ string_of_int header.length ) 
       ) 
       ( fun exn ->  
           let s = Printexc.to_string exn in
-          return @@ GotMessageError (peer, "here2 " ^ s) 
+          return @@ GotMessageError (conn, "here2 " ^ s) 
       )
        
 
-let send_message peer s = 
-    let oc = peer.conn.oc in
+let send_message conn s = 
+    let oc = conn.oc in
     Lwt_io.write oc s >> return Nop  (* message sent *)
 
 
@@ -420,21 +422,29 @@ let detach f =
       peers = List.filter (fun x -> not (x.conn.fd == peer.conn.fd)) state.peers
     } 
   let add_peer peer state =  { state with peers = peer::state.peers } 
+ 
+  (* will throw *) 
+  let peer_of_conn conn state =  List.find(fun peer -> peer.conn.fd ==  conn.fd ) state.peers
 
 
 (*
-    - i think we should maintain two lists. one pending 
-  
-    - when we get a block we can request another one...
-      but if do this from several sources then we'll hae too many
-    therefore need to keep a count
+ 
+    - the guards on the peers aren't working - we're doing multiple request more inv 
+    and get another block
 
-    - it's quite weird. we only have one inv ...  
+    VERY IMPORTANT
+    - i think because the peer we bind into the read-message earlier is different to 
+    the peer after other actions.  
+
+    - and we are not correctly shadowing the peers...
+
+    that returns in the read-message.
 *)
 
   let get_another_block peer state =
+
     if List.length peer.blocks_inv > 0 
-      && List.length peer.blocks_pending = 0   then
+    && List.length peer.blocks_pending = 0   then
 
       let encodeInventory jobs =
         let encodeInvItem hash = encodeInteger32   2 ^ encodeHash32 hash in 
@@ -470,15 +480,13 @@ let detach f =
           ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
           ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) )  
           ^ " requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash ; 
-(*        send_message peer (header ^ payload);  *)
+        send_message peer.conn (header ^ payload);  
       
 (*  get_message peer ;  *)
       ] (* { state with last_expected_block = last_expected_block }  *)
 
     else
-      add_jobs [ 
-        get_message peer ; 
-      ] state 
+       state 
 
 (*
   what happens if we do the peer change, but don't send the message?
@@ -524,15 +532,14 @@ let f state e =
         let peer = { conn = conn; blocks_inv = [] ; blocks_pending  = [] ;   blocks_inv_last_request_time = 0. } in
         state
         |> add_peer  peer
-
         |> add_jobs [
           log @@ "whoot got connection " ^ format_addr conn   ^
             "\npeers now " ^ ( string_of_int @@ List.length state.peers)
           (* or separate? *) 
-          >> send_message peer initial_version 
+          >> send_message peer.conn initial_version 
           >> log @@ "*** sent our version " ^ format_addr conn
           ;
-           get_message peer 
+           get_message peer.conn
         ] 
       
       | GotConnectionError msg ->
@@ -540,9 +547,11 @@ let f state e =
           log @@ "could not connect " ^ msg >> return Nop
           ] state 
 
-      | GotMessageError (peer, msg) ->
+      | GotMessageError (conn, msg) ->
 
-        let fd = peer.conn.fd in
+        let peer = peer_of_conn conn state in
+
+        let fd = conn.fd in
         state 
         |> remove_peer peer
         |> fun state -> 
@@ -560,24 +569,25 @@ let f state e =
           *)
         ] state
 
-      | GotMessage (peer, header, raw_header, payload) -> 
+      | GotMessage (conn, header, raw_header, payload) -> 
         match header.command with
           | "version" ->
+            (* let peer = peer_of_conn conn state in  *)
             state
             |> add_jobs [ 
               (* should be 3 separate jobs? *)
               log "got version message"
-              >> send_message peer initial_verack
-              >> log @@ "*** whoot wrote verack " ^ format_addr peer.conn;
-              get_message peer 
+              >> send_message conn initial_verack
+              >> log @@ "*** whoot wrote verack " ^ format_addr conn;
+              get_message conn 
             ] 
 
           | "verack" ->
             add_jobs [ 
               (* should be 3 separate jobs? *)
               log "got verack - requesting addr"
-              >> send_message peer initial_getaddr ;
-              get_message peer 
+              >> send_message conn initial_getaddr ;
+              get_message conn 
             ] state 
 
 
@@ -605,11 +615,37 @@ let f state e =
     - so peer gives us inventory...
     we should store it. and that's about it.   
     we can request one of the blocks at randome as well...
+
+    OK, the peer count should be coming down as we pull off the blocks
+    and download them...
 *)
+                  (* VERY IMPORTANT - when we bind in the peer here, it means that we don't
+                  get the changes to the peer made later
+                  - to make it atomic we can only do the add_jobs once - right at the end.
+                  - and the state peers are a copy of the real peers bound into jobs - which 
+                    is terrible.
+
+                  - the peer stuff should only be in one place. we can compute stats for the
+                  app state if we want..  
+
+                  - getting rid of this ought to simplify...
+
+                  - alternatively we only bind the file descriptor into the read and keep everything 
+                  else in the main state. (so it's only recorded once ). means there's a lookup. 
+                  - eg. there might be several events on the peer...
+
+                  - we're also binding far too much information into the message handlers
+                  that don't really need it. 
+
+                  - does this also mean we can flatten out the peer and conn stuff ?
+  
+                  - ok, as a first pass lets just move the peer information into state
+                  *)    
           | "inv" ->
             state 
-    
             |> fun state ->
+
+              let peer = peer_of_conn conn state in  
 
               let now = Unix.time () in
               let _, inv = decodeInv payload 0 in
@@ -622,15 +658,15 @@ let f state e =
                 |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
               in
               remove_peer peer state 
-              |> fun state -> let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
-              add_peer peer state 
 
-            |>  add_jobs [ 
-                  log @@ "\ngot inv " ^ peer.conn.addr 
+              |> fun state -> let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
+                add_peer peer state  
+
+              |> add_jobs [ 
+                  log @@ "\ngot inv " ^ conn.addr 
                     ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
                     ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) ; 
-           
-                  get_message peer ; 
+                  get_message conn; 
                 ] 
 
             (* code to keep the inventory full for the peer *)
@@ -668,12 +704,14 @@ let f state e =
                   ^ " head count " ^ (string_of_int @@ List.length heads )
                   ^ " head " ^ hex_of_string head 
                   ^ " from " ^ format_addr peer.conn   
-                  >> send_message peer (initial_getblocks head)
+                  >> send_message conn (initial_getblocks head)
                 ] state
                 (* { state with time_of_last_valid_block = now }   *)
                 |> remove_peer peer 
-                |> add_peer { peer  with blocks_inv_last_request_time = now } 
-            
+
+                |> fun state -> let peer = { peer  with blocks_inv_last_request_time = now } in 
+                  add_peer peer state 
+               
               else
                 state
 
@@ -704,6 +742,7 @@ let f state e =
                 it gets updated. 
             *)
 
+            let peer = peer_of_conn conn state in  
 
             remove_peer peer state 
             |> fun state -> let peer = { peer with blocks_pending = List.filter ((!=)hash) peer.blocks_pending } in
@@ -730,7 +769,7 @@ let f state e =
                     (* ^ string_of_int  (SS.cardinal heads ) *)
                     ^ " len " ^ (string_of_int (String.length payload));
                (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
-                  get_message peer ; 
+                  get_message conn ; 
                 ] state 
 
 (* 
@@ -746,7 +785,7 @@ let f state e =
             else
               add_jobs [ 
                 log @@ "already have block ignore - " ^ hex_of_string hash;
-                get_message peer ; 
+                get_message conn ; 
               ] state 
 
 
@@ -756,7 +795,7 @@ let f state e =
             add_jobs [ 
               (let hash = (payload |> Message.sha256d |> Message.strrev ) in 
               log @@ "got tx!!! "  ^ hex_of_string hash )   ; 
-              get_message peer ; 
+              get_message conn ; 
             ] state
 
 (*
@@ -811,20 +850,20 @@ let f state e =
                 add_jobs [ 
                   log @@ "whoot new addr - already got or ignore " ^ a  
                   ;
-                  get_message peer 
+                  get_message conn 
                 ] state 
               else 
                 add_jobs [ 
                  log @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
                   ^  " " ^ a ^ " port " ^ string_of_int addr.port ;  
                   get_connection (formatAddress addr) addr.port ;
-                  get_message peer
+                  get_message conn 
               ] state
 
           | s ->
             add_jobs [ 
               log @@ "message " ^ s ;
-              get_message peer
+              get_message conn 
             ] state
 
   in new_state 
