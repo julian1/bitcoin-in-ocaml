@@ -452,21 +452,23 @@ let detach f =
       }
       in
       state
+
       |> remove_peer peer 
       |> fun state -> 
         let peer = { peer with 
           blocks_inv = List.filter (fun x -> x != hash ) peer.blocks_inv;
           blocks_pending = hash :: peer.blocks_pending;
-		} in
-        add_peer peer state 
+		  }  in add_peer peer state 
+
+(*    -- are there two read messages ??? *)
 
       |> add_jobs [ 
         log @@ "requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash 
           ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
-          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) 
-        ; 
-        send_message peer (header ^ payload); 
-        get_message peer ; 
+          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) ; 
+(*        send_message peer (header ^ payload);  *)
+      
+(*  get_message peer ;  *)
       ] (* { state with last_expected_block = last_expected_block }  *)
 
     else
@@ -474,8 +476,9 @@ let detach f =
         get_message peer ; 
       ] state 
 
-
-
+(*
+  what happens if we do the peer change, but don't send the message?
+*)
 let f state e =
 
   (* helpers *)
@@ -625,29 +628,19 @@ let f state e =
                   get_message peer ; 
                 ] 
 
-            
-(*
-          |> fun state ->  
-            (* maybe kick off another block request *) 
-            get_another_block peer state 
-*)
-
           (* code to keep the inventory full for the peer *)
           |> fun state -> 
-          
-            (*let now = Unix.time () in
-            if now -. state.time_of_last_valid_block  > 60. then 
-            *)
-
-            if List.length peer.blocks_inv < 100 
-              && now -. peer.blocks_inv_last_request_time > 60.
-              then  
               (*
-                this condition is easy
+                this condition is not quite right 
                   if < 10 (we may be in sync )
                   then only request if sufficient time has elapsed since last time. 
 
+                - it should be or. so that we still request blocks if we're near the end.
+                - but then it will request too often
               *)
+            if List.length peer.blocks_inv < 100 
+              && now -. peer.blocks_inv_last_request_time > 60.
+              then  
               (* create a set of all pointed-to block hashes *)
               (* watch out for non-tail call optimised functions here which might blow stack  *)
               let previous = 
@@ -677,6 +670,12 @@ let f state e =
           
             else
               state
+
+          |> fun state ->  
+            (* maybe download a block *) 
+            get_another_block peer state 
+
+
 (*
     OK, now we have a single download head that we make requests too...
     we can compute the download heads... in case of fork.
