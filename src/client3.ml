@@ -677,15 +677,7 @@ let f state e =
 
             (* code to keep the inventory full for the peer *)
             |> fun state -> 
-                (*
-                  this condition is not quite right 
-                    if < 10 (we may be in sync )
-                    then only request if sufficient time has elapsed since last time. 
-
-                  - it should be or. so that we still request blocks if we're near the end.
-                  - but then it will request too often
-                  - we might also issue a request for inventory....
-                *)
+              (* this condition is right. if less than 100, we always do it, on timer *)
               if List.length peer.blocks_inv < 100 
                 && now -. peer.blocks_inv_last_request_time > 60.
                 then  
