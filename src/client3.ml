@@ -476,11 +476,10 @@ let detach f =
 
       |> add_jobs [ 
         log @@ 
-          "get_another_block - peers " ^ (string_of_int (List.length state.peers ))
+          "requesting block " ^ (hex_of_string hash ) ^ " from " ^ peer.conn.addr 
           ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
-          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) )  
-          ^ " requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash ; 
-        send_message peer.conn (header ^ payload);  
+          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) 
+        >> send_message peer.conn (header ^ payload);  
       
 (*  get_message peer ;  *)
       ] (* { state with last_expected_block = last_expected_block }  *)
@@ -700,10 +699,10 @@ let f state e =
                 let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
                 let head = List.nth heads index in
                 add_jobs [
-                  log @@ "**** requesting more blocks " 
+                  log @@ "**** requesting blocks inv " 
+                  ^ " from " ^ format_addr peer.conn   
                   ^ " head count " ^ (string_of_int @@ List.length heads )
                   ^ " head " ^ hex_of_string head 
-                  ^ " from " ^ format_addr peer.conn   
                   >> send_message conn (initial_getblocks head)
                 ] state
                 (* { state with time_of_last_valid_block = now }   *)
@@ -745,7 +744,8 @@ let f state e =
             let peer = peer_of_conn conn state in  
 
             remove_peer peer state 
-            |> fun state -> let peer = { peer with blocks_pending = List.filter ((!=)hash) peer.blocks_pending } in
+            (*|> fun state -> let peer = { peer with blocks_pending = List.filter ((!=)hash) peer.blocks_pending } in *)
+            |> fun state -> let peer = { peer with blocks_pending = [] } in
             add_peer peer state 
 
             |> fun state -> 
@@ -765,7 +765,7 @@ let f state e =
 
 				        |> fun state -> *) 
                 add_jobs [ 
-                  log @@ "got block - updating chain " ^ hex_of_string hash
+                  log @@ "got block  " ^ hex_of_string hash
                     (* ^ string_of_int  (SS.cardinal heads ) *)
                     ^ " len " ^ (string_of_int (String.length payload));
                (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
