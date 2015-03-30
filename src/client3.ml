@@ -744,8 +744,8 @@ let f state e =
             let peer = peer_of_conn conn state in  
 
             remove_peer peer state 
-            (*|> fun state -> let peer = { peer with blocks_pending = List.filter ((!=)hash) peer.blocks_pending } in *)
-            |> fun state -> let peer = { peer with blocks_pending = [] } in
+            |> fun state -> let peer = { peer with blocks_pending = List.filter (fun pend -> pend <> hash) peer.blocks_pending } in 
+            (* |> fun state -> let peer = { peer with blocks_pending = [] } in*)
             add_peer peer state 
 
             |> fun state -> 
