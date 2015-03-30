@@ -665,10 +665,10 @@ let f state e =
               let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
               let head = List.nth heads index in
               add_jobs [
-                log @@ "**** update download_head " 
-                ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
-                ^ "\n head " ^ hex_of_string head 
-                ^ "\n from " ^ format_addr peer.conn   
+                log @@ "**** doing block inv request " 
+                ^ " head count " ^ (string_of_int @@ List.length heads )
+                ^ " head " ^ hex_of_string head 
+                ^ " from " ^ format_addr peer.conn   
                 >> send_message peer (initial_getblocks head)
               ] state
               (* { state with time_of_last_valid_block = now }   *)
