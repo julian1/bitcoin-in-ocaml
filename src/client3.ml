@@ -651,8 +651,8 @@ let f state e =
                   - ok, as a first pass lets just move the peer information into state
                   *)    
           | "inv" ->
-            
-
+            state
+            |> fun state -> 
               let now = Unix.time () in
               let _, inv = decodeInv payload 0 in
               (* add inventory blocks to list in peer *)
@@ -667,11 +667,6 @@ let f state e =
               let peer = peer_of_conn conn state in  
               let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
               update_peer peer state
-(*
-              remove_peer peer state 
-              |> fun state -> let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
-                add_peer peer state  
-*)
 
               |> add_jobs [ 
                   log @@ "\ngot inv " ^ conn.addr 
@@ -717,15 +712,9 @@ let f state e =
                   ^ " head " ^ hex_of_string head 
                   >> send_message conn (initial_getblocks head)
                 ] state
-                (* { state with time_of_last_valid_block = now }   *)
-
-                |> fun state -> let peer = { peer  with blocks_inv_last_request_time = now } in
+                |> fun state -> let peer = { peer with blocks_inv_last_request_time = now } in
                 update_peer peer state
-(*
-                |> remove_peer peer 
-                |> fun state -> let peer = { peer  with blocks_inv_last_request_time = now } in 
-                  add_peer peer state 
- *)              
+              
               else
                 state
 
@@ -758,12 +747,10 @@ let f state e =
             *)
 
             let peer = peer_of_conn conn state in  
-
-            remove_peer peer state 
-            |> fun state -> let peer = { peer with blocks_pending = List.filter (fun pend -> pend <> hash) peer.blocks_pending } in 
-            (* |> fun state -> let peer = { peer with blocks_pending = [] } in*)
-            add_peer peer state 
-
+            let peer = { peer with blocks_pending = List.filter (fun pend -> pend <> hash) peer.blocks_pending } in 
+            update_peer peer state
+              
+            
             |> fun state -> 
 
               if not (SS.mem hash state.heads ) then 
@@ -781,23 +768,10 @@ let f state e =
 
 				        |> fun state -> *) 
                 add_jobs [ 
-                  log @@ "got block  " ^ hex_of_string hash
-                    (* ^ string_of_int  (SS.cardinal heads ) *)
-                    ^ " len " ^ (string_of_int (String.length payload));
-               (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
+                  log @@ "got block  " ^ conn.addr ^ " " ^  hex_of_string hash; 
+                  (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
                   get_message conn ; 
                 ] state 
-
-(* 
-              add_jobs [ 
-                log @@ "got block - updating chain " ^ hex_of_string hash
-                  ^ string_of_int  (SS.cardinal heads )
-                  ^ " len " ^ (string_of_int (String.length payload));
-                Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; 
-                get_message peer ; 
-              ] 
-*)
-
             else
               add_jobs [ 
                 log @@ "already have block ignore - " ^ hex_of_string hash;
