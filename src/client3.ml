@@ -422,6 +422,16 @@ let detach f =
       peers = List.filter (fun x -> not (x.conn.fd == peer.conn.fd)) state.peers
     } 
   let add_peer peer state =  { state with peers = peer::state.peers } 
+
+  let update_peer new_peer state =  { 
+        state with 
+
+        peers = List.map (fun peer -> if peer.conn.fd == new_peer.conn.fd then new_peer else peer ) state.peers 
+          
+    } 
+
+
+
  
   (* will throw *) 
   let peer_of_conn conn state =  List.find(fun peer -> peer.conn.fd ==  conn.fd ) state.peers
@@ -641,10 +651,7 @@ let f state e =
                   - ok, as a first pass lets just move the peer information into state
                   *)    
           | "inv" ->
-            state 
-            |> fun state ->
-
-              let peer = peer_of_conn conn state in  
+            
 
               let now = Unix.time () in
               let _, inv = decodeInv payload 0 in
@@ -656,10 +663,15 @@ let f state e =
                 (* ignore blocks we already have *)
                 |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
               in
-              remove_peer peer state 
 
+              let peer = peer_of_conn conn state in  
+              let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
+              update_peer peer state
+(*
+              remove_peer peer state 
               |> fun state -> let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
                 add_peer peer state  
+*)
 
               |> add_jobs [ 
                   log @@ "\ngot inv " ^ conn.addr 
@@ -706,11 +718,14 @@ let f state e =
                   >> send_message conn (initial_getblocks head)
                 ] state
                 (* { state with time_of_last_valid_block = now }   *)
-                |> remove_peer peer 
 
+                |> fun state -> let peer = { peer  with blocks_inv_last_request_time = now } in
+                update_peer peer state
+(*
+                |> remove_peer peer 
                 |> fun state -> let peer = { peer  with blocks_inv_last_request_time = now } in 
                   add_peer peer state 
-               
+ *)              
               else
                 state
 
@@ -736,9 +751,10 @@ let f state e =
               ok, rather than maintaining the download heads... lets compute 
               when we need .
               ----
-                
                 our optimiser isn't working very well. everytime we get a random block
                 it gets updated. 
+
+                it would be really nice to see how this performs at the start when blocks are small...
             *)
 
             let peer = peer_of_conn conn state in  
