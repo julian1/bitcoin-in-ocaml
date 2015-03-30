@@ -615,7 +615,7 @@ let f state e =
             add_peer peer state 
 
             |>  add_jobs [ 
-                  log @@ "got inv " ^ peer.conn.addr; 
+                  log @@ "got inv " ^ peer.conn.addr ^ " inv count " ^ (string_of_int (List.length peer.block_inv ) ) ; 
                   get_message peer ; 
                 ] 
 
