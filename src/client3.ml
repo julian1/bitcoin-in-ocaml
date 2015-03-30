@@ -106,8 +106,10 @@ type peer =
 	conn : connection ; 
 
   (* use sets? also probably need timestamps to refresh *)
-	block_inv : string list ;  (* inv items to work through *) 
-	block_pending : string list ;  
+	blocks_inv : string list ;  (* inv items to work through - may be out of date*) 
+	blocks_pending : string list ;  
+
+  blocks_inv_last_request_time : float;
 
 }
 
@@ -429,8 +431,8 @@ let detach f =
 *)
 
   let get_another_block peer state =
-    if List.length peer.block_inv > 0 
-      && List.length peer.block_pending = 0   then
+    if List.length peer.blocks_inv > 0 
+      && List.length peer.blocks_pending = 0   then
 
       let encodeInventory jobs =
         let encodeInvItem hash = encodeInteger32   2 ^ encodeHash32 hash in 
@@ -439,8 +441,8 @@ let detach f =
           ^ String.concat "" @@ List.map encodeInvItem jobs 
       in
       let now = Unix.time () in
-      let index = now |> int_of_float |> (fun x -> x mod List.length peer.block_inv) in 
-      let hash = List.nth peer.block_inv index in
+      let index = now |> int_of_float |> (fun x -> x mod List.length peer.blocks_inv) in 
+      let hash = List.nth peer.blocks_inv index in
       let payload = encodeInventory [ hash ] in 
       let header = encodeHeader {
         magic = m ;
@@ -453,15 +455,15 @@ let detach f =
       |> remove_peer peer 
       |> fun state -> 
         let peer = { peer with 
-          block_inv = List.filter (fun x -> x != hash ) peer.block_inv;
-          block_pending = hash :: peer.block_pending;
+          blocks_inv = List.filter (fun x -> x != hash ) peer.blocks_inv;
+          blocks_pending = hash :: peer.blocks_pending;
 		} in
         add_peer peer state 
 
       |> add_jobs [ 
         log @@ "requesting block " ^ peer.conn.addr ^ " " ^ hex_of_string hash 
-          ^ " inv count " ^ (string_of_int (List.length peer.block_inv ) ) 
-          ^ " pend count " ^ (string_of_int (List.length peer.block_pending ) ) 
+          ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
+          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) 
         ; 
         send_message peer (header ^ payload); 
         get_message peer ; 
@@ -512,7 +514,7 @@ let f state e =
     match e with
       | Nop -> state 
       | GotConnection conn ->
-        let peer = { conn = conn; block_inv = [] ; block_pending  = []} in
+        let peer = { conn = conn; blocks_inv = [] ; blocks_pending  = [] ;   blocks_inv_last_request_time = 0. } in
         state
         |> add_peer  peer
 
@@ -601,6 +603,10 @@ let f state e =
             state 
     
             |> fun state ->
+
+
+              let now = Unix.time () in
+
             let _, inv = decodeInv payload 0 in
             (* add inventory blocks to list in peer *)
             let needed_inv_type = 2 in
@@ -611,14 +617,13 @@ let f state e =
               |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
             in
             remove_peer peer state 
-            |> fun state -> let peer = { peer with block_inv = block_hashes @ peer.block_inv  } in
+            |> fun state -> let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
             add_peer peer state 
 
             |>  add_jobs [ 
-                  log @@ "got inv " ^ peer.conn.addr ^ " inv count " ^ (string_of_int (List.length peer.block_inv ) ) ; 
+                  log @@ "got inv " ^ peer.conn.addr ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) ; 
                   get_message peer ; 
                 ] 
-
 
             
 (*
@@ -634,7 +639,9 @@ let f state e =
             if now -. state.time_of_last_valid_block  > 60. then 
             *)
 
-            if false && List.length peer.block_inv < 100 then  
+            if List.length peer.blocks_inv < 100 
+              && now -. peer.blocks_inv_last_request_time > 60.
+              then  
               (*
                 this condition is easy
                   if < 10 (we may be in sync )
@@ -655,7 +662,6 @@ let f state e =
                 |> List.rev_map (fun (tip,_ ) -> tip) 
               in
               (* choose a head at random *)
-              let now = Unix.time () in
               let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
               let head = List.nth heads index in
               add_jobs [
@@ -664,9 +670,11 @@ let f state e =
                 ^ "\n head " ^ hex_of_string head 
                 ^ "\n from " ^ format_addr peer.conn   
                 >> send_message peer (initial_getblocks head)
-              ]
+              ] state
               (* { state with time_of_last_valid_block = now }   *)
-              state
+              |> remove_peer peer 
+              |> add_peer { peer  with blocks_inv_last_request_time = now } 
+          
             else
               state
 (*
@@ -693,7 +701,7 @@ let f state e =
 
 
             remove_peer peer state 
-            |> fun state -> let peer = { peer with block_pending = List.filter ((!=)hash) peer.block_pending } in
+            |> fun state -> let peer = { peer with blocks_pending = List.filter ((!=)hash) peer.blocks_pending } in
             add_peer peer state 
 
             |> fun state -> 
