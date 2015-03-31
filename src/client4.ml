@@ -12,7 +12,7 @@ Lwt_main.run (
     fun ret ->
       (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
     return (
-      if ret > 0 then Some ( Bytes.to_string block )
+      if ret = len then Some ( Bytes.to_string block )
       else None 
       )
   in
@@ -27,7 +27,7 @@ Lwt_main.run (
     don't we want to be able to compute something...
     perhaps monadically...
   *)
-  let rec loop fd =
+  let rec loop fd f =
     read_bytes fd 24
     >>= fun x -> match x with 
       | Some s -> ( 
@@ -36,10 +36,9 @@ Lwt_main.run (
         read_bytes fd 80 
         >>= fun u -> match u with 
           | Some payload -> 
-            let hash = payload |> Message.sha256d |> Message.strrev in
-            let _, block_header = Message.decodeBlock payload 0 in
-              advance fd (header.length - 80 )
-              >> loop fd  
+              f payload 
+              >> advance fd (header.length - 80 )
+              >> loop fd f 
           | None -> 
             return () 
         )
@@ -47,12 +46,18 @@ Lwt_main.run (
         return () 
   in 
 
+  let f payload = 
+    let hash = payload |> Message.sha256d |> Message.strrev in
+    let _, block_header = Message.decodeBlock payload 0 in
+    return ()
+  in
+
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
   >>= fun fd -> 
     match Lwt_unix.state fd with 
       Opened -> 
         Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
-        >> loop fd 
+        >> loop fd f 
         >> Lwt_unix.close fd
 (**)
 )
