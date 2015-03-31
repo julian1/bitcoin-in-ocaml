@@ -1,5 +1,4 @@
  
-open Message
 open Script
 
 
@@ -25,18 +24,22 @@ Lwt_main.run (
       (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
       return ()
   in
-  (* to scan the messages stored in file *)
+  (* to scan the messages stored in file 
+    this thing is effectively a fold. 
+    don't we want to be able to compute something...
+    perhaps monadically...
+  *)
   let rec loop fd =
     read_bytes fd 24
     >>= fun x -> match x with 
       | Some s -> ( 
-        let _, header = decodeHeader s 0 in
+        let _, header = Message.decodeHeader s 0 in
         (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
         read_bytes fd 80 
         >>= fun u -> match u with 
-          | Some ss -> 
-            let hash = ss |> Message.sha256d |> Message.strrev  in
-            let _, block_header = decodeBlock ss 0 in
+          | Some payload -> 
+            let hash = payload |> Message.sha256d |> Message.strrev in
+            let _, block_header = Message.decodeBlock payload 0 in
               advance fd (header.length - 80 )
               >> loop fd  
           | None -> 
