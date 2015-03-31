@@ -675,7 +675,10 @@ let f state e =
                   get_message conn; 
                 ] 
 
-            (* code to keep the inventory full for the peer *)
+            (* code to keep the inventory full for the peer 
+				change this code to return a tuple of the new heads and new jobs
+
+			*)
             |> fun state -> 
               (* this condition is right. if less than 100, we always do it, on timer *)
               if List.length peer.blocks_inv < 100 
@@ -720,6 +723,17 @@ let f state e =
     we can compute the download heads... in case of fork.
 *)
 
+(*
+	VERY IMPORTNAT
+  ok, i think this might be done a lot easier by just shadowing everything
+	peer, heads, jobs . rather than our piping stuff
+	then creating 
+	- the only thin is where we factor code off into another function and 
+	will have to return these shad
+	- and this is what we do with if/else as well - rather than return state
+	we just return what we modified. 
+	- limits the scope of the vars, and makes it clear whats being done. 
+*)
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
             let hash = (Message.strsub payload 0 80 |> Message.sha256d |> Message.strrev ) in
