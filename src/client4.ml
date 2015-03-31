@@ -54,6 +54,12 @@ Lwt_main.run (
       ^ " " ^ Message.hex_of_string hash 
       ^ " " ^ string_of_int tx_count  
 
+    (*Message.decodeTx payload pos in  *)
+
+    >> let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
+
+    Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx @@ List.hd txs 
+
     >> return (acc + 1)
   in
 
@@ -67,3 +73,4 @@ Lwt_main.run (
           Lwt_io.write_line Lwt_io.stdout ("result " ^ (string_of_int acc ))
         >> Lwt_unix.close fd
 )
+
