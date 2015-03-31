@@ -59,14 +59,34 @@ Lwt_main.run (
   
       we need to extract the txid...
       and see if we can start linking them.
+
+      ok, so we can decode the tx's but how about the positions ...
+
+      ok, we have the pos argument.
+      but I think we need a different version of decodeNItems...
+      or else we store the position in the tx record ...
     *)
 
-    >> let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
+    
+    >> 
+      let first = pos in
+      let pos, txs = Message.decodeNItemsPos payload pos Message.decodeTx tx_count in
 
-    let x = List.map 
+      let left = first:: txs |> List.rev |> List.tl |> List.rev in 
+      let h = Core.Core_list.zip_exn left txs in
+
+      let x = List.map(fun (a,b) -> String.sub payload a (b -a)  ) h  
+
+      in
+
+      let x = List.map 
+        (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ string_of_int tx) txs in
+      Lwt.join x
+
+    (*let x = List.map 
       (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx tx) txs in
-
     Lwt.join x
+    *)
 
     >> return (acc + 1)
   in
