@@ -1,6 +1,4 @@
  
-open Script
-
 
 open Lwt (* for >>= *)
 
