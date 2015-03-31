@@ -27,7 +27,7 @@ Lwt_main.run (
     don't we want to be able to compute something...
     perhaps monadically...
   *)
-  let rec loop fd f =
+  let rec loop fd f acc =
     read_bytes fd 24
     >>= fun x -> match x with 
       | Some s -> ( 
@@ -36,20 +36,22 @@ Lwt_main.run (
         read_bytes fd 80 
         >>= fun u -> match u with 
           | Some payload -> 
-              f payload 
-              >> advance fd (header.length - 80 )
-              >> loop fd f 
+              f payload acc 
+              >>= fun acc -> advance fd (header.length - 80 )
+              >> loop fd f acc 
+              
           | None -> 
-            return () 
+            return acc 
         )
       | None -> 
-        return () 
+        return acc 
   in 
 
-  let f payload = 
-    let hash = payload |> Message.sha256d |> Message.strrev in
+  let f payload acc = 
+(*    let hash = payload |> Message.sha256d |> Message.strrev in
     let _, block_header = Message.decodeBlock payload 0 in
-    return ()
+    Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash 
+    >> *) return (acc + 1)
   in
 
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
@@ -57,7 +59,10 @@ Lwt_main.run (
     match Lwt_unix.state fd with 
       Opened -> 
         Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
-        >> loop fd f 
+        >> loop fd f 0 
+        >>= fun acc ->   
+
+          Lwt_io.write_line Lwt_io.stdout ("result " ^ (string_of_int acc ))
         >> Lwt_unix.close fd
 (**)
 )
