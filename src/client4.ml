@@ -2,8 +2,6 @@
 
 open Lwt (* for >>= *)
 
-
-
 Lwt_main.run (
 
   let read_bytes fd len =
@@ -16,42 +14,52 @@ Lwt_main.run (
       else None 
       )
   in
+(*
   let advance fd len =
       Lwt_unix.lseek fd len SEEK_CUR 
       >>= fun r -> 
       (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
       return ()
   in
+*)
   (* to scan the messages stored in file 
     this thing is effectively a fold. 
     don't we want to be able to compute something...
     perhaps monadically...
   *)
-  let rec loop fd f acc =
+  let rec fold fd f acc =
     read_bytes fd 24
     >>= fun x -> match x with 
+      | None -> return acc 
       | Some s -> ( 
         let _, header = Message.decodeHeader s 0 in
         (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
-        read_bytes fd 80 
+        read_bytes fd header.length 
         >>= fun u -> match u with 
+          | None -> return acc 
           | Some payload -> 
               f payload acc 
-              >>= fun acc -> advance fd (header.length - 80 )
-              >> loop fd f acc 
-              
-          | None -> 
-            return acc 
+              >>= fun acc -> (* advance fd (header.length - 80 )
+              >> *) fold fd f acc 
         )
-      | None -> 
-        return acc 
   in 
 
   let f payload acc = 
+    let hash = payload |> Message.sha256d |> Message.strrev in
+    let pos, block_header = Message.decodeBlock payload 0 in
+    let pos, tx_count = Message.decodeVarInt payload pos in 
+
+    Lwt_io.write_line Lwt_io.stdout @@ 
+      string_of_int acc 
+      ^ " " ^ Message.hex_of_string hash 
+      ^ " " ^ string_of_int tx_count  
+
 (*    let hash = payload |> Message.sha256d |> Message.strrev in
     let _, block_header = Message.decodeBlock payload 0 in
     Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash 
-    >> *) return (acc + 1)
+    >> *) 
+
+    >> return (acc + 1)
   in
 
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
@@ -59,10 +67,8 @@ Lwt_main.run (
     match Lwt_unix.state fd with 
       Opened -> 
         Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
-        >> loop fd f 0 
+        >> fold fd f 0 
         >>= fun acc ->   
-
           Lwt_io.write_line Lwt_io.stdout ("result " ^ (string_of_int acc ))
         >> Lwt_unix.close fd
-(**)
 )
