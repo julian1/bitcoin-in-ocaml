@@ -66,8 +66,8 @@ type tx_in =
   previous : string; (* 32 byte tx hash *)
   index : int;
   (* should be a variant either a string ... or a decoded list of tokens? *)
-  script: script_token list;
-  (* script : string;  *)
+  (* script: script_token list; *)
+  script : string;  
   sequence : int;
 }
 
@@ -75,8 +75,8 @@ type tx_in =
 type tx_out =
 {
   value : Int64.t;
-  script: script_token list;
-  (* script : string; *)
+  (* script: script_token list; *)
+  script : string; 
 }
 
 type tx =
@@ -421,7 +421,7 @@ let decodeTx s pos =
 
     let pos, sequence = decodeInteger32 s pos in
     pos, { previous = previous; index = index;
-      script = decode_script script ; sequence = sequence; }
+      script = (* decode_script *) script ; sequence = sequence; }
   in
   let decodeInputs s pos n = decodeNItems s pos decodeInput n in
   (* should we be reversing the list, when running decodeInput ?  *)
@@ -432,7 +432,7 @@ let decodeTx s pos =
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
     let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = decode_script script; }
+    pos, { value = value; script = (* decode_script *) script; }
   in
   let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
   let pos, outputsCount = decodeVarInt s pos in
@@ -538,7 +538,7 @@ let encode_script tokens =
 let encodeInput (input : tx_in) =
   [ encodeHash32 input.previous;
     encodeInteger32 input.index ;
-    (let s = encode_script input.script in
+    (let s = (* encode_script *) input.script in
     let len = strlen s in
     (encodeInteger8 len) ^ s );  (* FIXME *)  (* and get rid of the ^ *)
     encodeInteger32 input.sequence
@@ -549,7 +549,7 @@ let encodeOutput (output : tx_out) =
   [ 
 	encodeInteger64 output.value ;
 
-    (let s = encode_script output.script in
+    (let s = (* encode_script *) output.script in
     let len = strlen s in
     (encodeInteger8 len) ^ s );  (* FIXME *)  (* and get rid of the ^ *)
 
@@ -680,7 +680,7 @@ let formatBlock (h : block) =
 let formatInput input = String.concat "" [
   "  previous: " ^ hex_of_string input.previous
   ^ "\n  index: " ^ string_of_int input.index
-  ^ "\n  script: " ^ format_script input.script
+  ^ "\n  script: " ^ (* format_script*) hex_of_string input.script
   ^ "\n  sequence: " ^ string_of_int input.sequence
 ]
 
@@ -689,7 +689,7 @@ let formatInputs inputs =
 
 let formatOutput output = String.concat "" [
   "  value: " ^ Int64.to_string output.value
-  ^ "\n  script: " ^ format_script output.script
+  ^ "\n  script: " ^ (* format_script *) hex_of_string output.script
 ]
 
 let formatOutputs outputs =

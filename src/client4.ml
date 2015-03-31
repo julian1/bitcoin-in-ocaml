@@ -55,12 +55,16 @@ Lwt_main.run (
       ^ " " ^ Message.hex_of_string hash 
       ^ " " ^ string_of_int tx_count  
 
-    (*Message.decodeTx payload pos in  *)
+    (*Message.decodeTx payload pos in  
+  
+      we need to extract the txid...
+      and see if we can start linking them.
+    *)
 
     >> let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
 
     let x = List.map 
-      (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx tx ) txs  in
+      (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx tx) txs in
 
     Lwt.join x
 
