@@ -75,12 +75,11 @@ Lwt_main.run (
       let left = first:: txs |> List.rev |> List.tl |> List.rev in 
       let h = Core.Core_list.zip_exn left txs in
 
-      let x = List.map(fun (a,b) -> String.sub payload a (b -a)  ) h  
-
+      let hashes = List.map(fun (a,b) -> String.sub payload a (b -a) |> Message.sha256d  ) h  
       in
 
       let x = List.map 
-        (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ string_of_int tx) txs in
+        (fun hash -> Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash ) hashes in
       Lwt.join x
 
     (*let x = List.map 

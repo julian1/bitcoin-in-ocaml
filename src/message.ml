@@ -214,10 +214,22 @@ let checksum2 s = s |> sha256d |> (fun x -> String.sub x 0 4 )
 (* f is decode function, at pos, count items *)
 let decodeNItems s pos f count =
   let rec fff pos acc count =
-    if count == 0 then pos, (List.rev acc)
+    if count == 0 then 
+	  pos, (List.rev acc)
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1)
   in fff pos [] count
+
+(* same but recode pos not the parse result *)
+let decodeNItemsPos s pos f count =
+  let rec fff pos acc count =
+    if count == 0 then 
+	  pos, (List.rev acc)
+    else let pos, _ = f s pos in
+      fff pos (pos::acc) (count-1)
+  in fff pos [] count
+
+
 
 
 let decodeString s pos =
