@@ -54,11 +54,6 @@ Lwt_main.run (
       ^ " " ^ Message.hex_of_string hash 
       ^ " " ^ string_of_int tx_count  
 
-(*    let hash = payload |> Message.sha256d |> Message.strrev in
-    let _, block_header = Message.decodeBlock payload 0 in
-    Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash 
-    >> *) 
-
     >> return (acc + 1)
   in
 
