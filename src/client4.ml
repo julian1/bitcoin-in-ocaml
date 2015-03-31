@@ -50,7 +50,8 @@ Lwt_main.run (
     let pos, tx_count = Message.decodeVarInt payload pos in 
 
     Lwt_io.write_line Lwt_io.stdout @@ 
-      string_of_int acc 
+      "*****\n"
+      ^ string_of_int acc 
       ^ " " ^ Message.hex_of_string hash 
       ^ " " ^ string_of_int tx_count  
 
@@ -58,7 +59,10 @@ Lwt_main.run (
 
     >> let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
 
-    Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx @@ List.hd txs 
+    let x = List.map 
+      (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx tx ) txs  in
+
+    Lwt.join x
 
     >> return (acc + 1)
   in
