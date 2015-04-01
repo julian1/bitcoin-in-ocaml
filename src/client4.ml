@@ -46,14 +46,14 @@ Lwt_main.run (
 
   let f payload acc = 
     (* decode block header *)
-    let hash = payload |> Message.sha256d |> Message.strrev in
+    let hash = String.sub payload 0 80 |> Message.sha256d |> Message.strrev in
     let pos, block_header = Message.decodeBlock payload 0 in
     let pos, tx_count = Message.decodeVarInt payload pos in 
-    (* decode tx's and start/lengths *)
+    (* decode tx start/lengths *)
     let first = pos in
     let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
     let lens = List.map (fun (tx : Message.tx) -> tx.bytes_length) txs in 
-    let starts = List.fold_left (fun a b -> List.hd a +  b :: a ) [first] lens |> List.tl |> List.rev in 
+    let starts = List.fold_left (fun acc len -> List.hd acc + len::acc) [first] lens |> List.tl |> List.rev in 
     let zipped = Core.Core_list.zip_exn starts lens in
     (* tx hashes *)
     let hashes = List.map (fun (start,len) -> 
