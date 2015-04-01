@@ -45,34 +45,44 @@ Lwt_main.run (
   in 
 
   let f payload acc = 
+    (* decode block header *)
     let hash = payload |> Message.sha256d |> Message.strrev in
     let pos, block_header = Message.decodeBlock payload 0 in
     let pos, tx_count = Message.decodeVarInt payload pos in 
+    (* decode tx's and start/lengths *)
+    let first = pos in
+    let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
+    let lens = List.map (fun (tx : Message.tx) -> tx.bytes_length) txs in 
+    let starts = List.fold_left (fun a b -> List.hd a +  b :: a ) [first] lens |> List.tl |> List.rev in 
+    let zipped = Core.Core_list.zip_exn starts lens in
+    (* tx hashes *)
+    let hashes = List.map (fun (start,len) -> 
+      String.sub payload start len 
+      |> Message.sha256d 
+      |> Message.strrev ) zipped 
+    in
 
 
-    Lwt_io.write_line Lwt_io.stdout @@ 
-      "*****\n"
-      ^ string_of_int acc 
-      ^ " " ^ Message.hex_of_string hash 
-      ^ " " ^ string_of_int tx_count  
+    let r =
+      if (mod) acc 1000 = 0 then
 
-    >> 
-      let first = pos in
-      let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
-      let lens = List.map (fun (tx : Message.tx) -> tx.bytes_length) txs in 
-      let starts = List.fold_left (fun a b -> List.hd a +  b :: a ) [first] lens |> List.tl |> List.rev in 
-      let zipped = Core.Core_list.zip_exn starts lens in
-      let hashes = List.map (fun (start,len) -> 
-        String.sub payload start len 
-        |> Message.sha256d 
-        |> Message.strrev ) zipped 
-      in
+      Lwt_io.write_line Lwt_io.stdout @@ 
+        "*****\n"
+        ^ string_of_int acc 
+        ^ " " ^ Message.hex_of_string hash 
+        ^ " " ^ string_of_int tx_count  
 
-      Lwt_io.write_line Lwt_io.stdout @@ " first " ^ string_of_int first 
-      >> Lwt.join @@ List.map (fun hash -> 
-        Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash ) hashes 
+(*        >> Lwt_io.write_line Lwt_io.stdout @@ " first " ^ string_of_int first 
+        >> Lwt.join @@ List.map (fun hash -> 
+          Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash ) hashes 
+*)
+      else
+        return () 
 
+    in 
+      r >> return (acc + 1)
 
+    
 
 (*
 
@@ -94,7 +104,6 @@ bytes_length :
     Lwt.join x
     *)
 
-    >> return (acc + 1)
   in
 
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
