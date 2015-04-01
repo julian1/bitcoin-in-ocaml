@@ -6,3 +6,4 @@ _build
 dumps
 blocks
 deps
+blocks.dat*
