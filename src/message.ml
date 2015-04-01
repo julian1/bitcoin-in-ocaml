@@ -85,7 +85,9 @@ type tx =
   version: int;
   inputs: tx_in list ;
   outputs: tx_out list;
-  lockTime : int
+  lockTime : int;
+
+  bytes_length : int;
 }
 
 let hex_of_char c =
@@ -219,17 +221,6 @@ let decodeNItems s pos f count =
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1)
   in fff pos [] count
-
-(* same but recode pos not the parse result *)
-let decodeNItemsPos s pos f count =
-  let rec fff pos acc count =
-    if count == 0 then 
-	  pos, (List.rev acc)
-    else let pos, _ = f s pos in
-      fff pos (pos::acc) (count-1)
-  in fff pos [] count
-
-
 
 
 let decodeString s pos =
@@ -422,6 +413,7 @@ let decodeTx s pos =
    *)
 (*  let hash = sha256d s |> strrev in
   let pos = 0 in *)
+  let first = pos in
   let pos, version = decodeInteger32 s pos in
 
   let decodeInput s pos =
@@ -451,7 +443,7 @@ let decodeTx s pos =
   let pos, outputs = decodeOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, { bytes_length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
 
 
 

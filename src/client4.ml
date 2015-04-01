@@ -70,18 +70,32 @@ Lwt_main.run (
     
     >> 
       let first = pos in
-      let pos, txs = Message.decodeNItemsPos payload pos Message.decodeTx tx_count in
+      let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
 
-      let left = first:: txs |> List.rev |> List.tl |> List.rev in 
-      let h = Core.Core_list.zip_exn left txs in
+      let lens = List.map (fun (tx : Message.tx) -> tx.bytes_length) txs in 
+      let starts = List.fold_left (fun a b -> List.hd a +  b :: a ) [first] lens |> List.rev in 
 
-      let hashes = List.map(fun (a,b) -> String.sub payload a (b -a) |> Message.sha256d  ) h  
+      let hash = String.sub payload (List.hd starts ) (List.hd lens) |> Message.sha256d |> Message.strrev 
       in
 
-      let x = List.map 
-        (fun hash -> Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash ) hashes in
-      Lwt.join x
+    Lwt_io.write_line Lwt_io.stdout @@ " first " ^ string_of_int first 
+   >>     Lwt.join @@ List.map (fun a -> Lwt_io.write_line Lwt_io.stdout @@ "len " ^ string_of_int a ) lens 
 
+>>    Lwt.join @@ List.map (fun a -> Lwt_io.write_line Lwt_io.stdout @@ "starts " ^ string_of_int a ) starts 
+
+
+>>    Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash 
+(*
+
+      let hashes = String.sub s start  
+bytes_length :
+      let acc = List.fold_left (fun a b -> a + b) first lengths in 
+*)
+(*
+      let x = List.map 
+        (fun (tx : Message.tx ) -> Lwt_io.write_line Lwt_io.stdout @@ string_of_int tx.bytes_length ) txs in
+      Lwt.join x
+*)
     (*let x = List.map 
       (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx tx) txs in
     Lwt.join x
