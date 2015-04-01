@@ -49,43 +49,36 @@ Lwt_main.run (
     let pos, block_header = Message.decodeBlock payload 0 in
     let pos, tx_count = Message.decodeVarInt payload pos in 
 
+
     Lwt_io.write_line Lwt_io.stdout @@ 
       "*****\n"
       ^ string_of_int acc 
       ^ " " ^ Message.hex_of_string hash 
       ^ " " ^ string_of_int tx_count  
 
-    (*Message.decodeTx payload pos in  
-  
-      we need to extract the txid...
-      and see if we can start linking them.
-
-      ok, so we can decode the tx's but how about the positions ...
-
-      ok, we have the pos argument.
-      but I think we need a different version of decodeNItems...
-      or else we store the position in the tx record ...
-    *)
-
-    
     >> 
       let first = pos in
       let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
-
       let lens = List.map (fun (tx : Message.tx) -> tx.bytes_length) txs in 
-      let starts = List.fold_left (fun a b -> List.hd a +  b :: a ) [first] lens |> List.rev in 
-
-      let hash = String.sub payload (List.hd starts ) (List.hd lens) |> Message.sha256d |> Message.strrev 
+      let starts = List.fold_left (fun a b -> List.hd a +  b :: a ) [first] lens |> List.tl |> List.rev in 
+      let zipped = Core.Core_list.zip_exn starts lens in
+      let hashes = List.map (fun (start,len) -> 
+        String.sub payload start len 
+        |> Message.sha256d 
+        |> Message.strrev ) zipped 
       in
 
-    Lwt_io.write_line Lwt_io.stdout @@ " first " ^ string_of_int first 
-   >>     Lwt.join @@ List.map (fun a -> Lwt_io.write_line Lwt_io.stdout @@ "len " ^ string_of_int a ) lens 
+      Lwt_io.write_line Lwt_io.stdout @@ " first " ^ string_of_int first 
+      >> Lwt.join @@ List.map (fun hash -> 
+        Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash ) hashes 
+
+
+
+(*
 
 >>    Lwt.join @@ List.map (fun a -> Lwt_io.write_line Lwt_io.stdout @@ "starts " ^ string_of_int a ) starts 
 
-
 >>    Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash 
-(*
 
       let hashes = String.sub s start  
 bytes_length :
