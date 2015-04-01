@@ -1,0 +1,38 @@
+
+- Need difficulty so that in case of forks - we know the main chain 
+- Merckle tree to conform transaction set, is as the block header describes
+
+- get the height included back in.
+
+- manage uxtos - what is the desired outcome? have an index and offset into blocks.dat for each 
+	uxto. if they are kept in mem 
+		should try just scanning in memory first...
+
+----
+
+we can connect (http/or cli) to examine the read-only structures now, so
+it's not really necessary to dump state everytime.
+
+Ok, during runtime
+	- blocks go in append-only log
+	- leveldb for block and tx indexes - and can be regenerated
+
+- heads should go in leveldb because 
+	- writes should be fast 
+	- and heads can be created by re-indexing
+	- but we need serialization support?
+
+actually we don't need sexp to serialize heads at all. just use
+
+/head/hash1
+/head/hash2
+
+- peers are different in that they cannot be regenerated. actually they could
+if we retained addr messages...
+
+
+But what about the heads...
+And the initial set of peers...
+and the network type? 
+
+
