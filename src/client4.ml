@@ -1,5 +1,6 @@
 
 
+open Lwt (* for >>= *)
 
 type acc_type =
 {
@@ -11,8 +12,6 @@ type acc_type =
 }
 
 
-
-open Lwt (* for >>= *)
 
 Lwt_main.run (
 
@@ -47,7 +46,6 @@ Lwt_main.run (
               >> *) fold fd f acc 
         )
   in 
-
   let f payload ( acc : acc_type ) = 
     let hash = String.sub payload 0 80 |> Message.sha256d |> Message.strrev in
     (* decode block header *)
@@ -66,8 +64,7 @@ Lwt_main.run (
       |> Message.strrev ) zipped 
     in
 
-
-    let r =
+(
       if (mod) acc.count 1000 = 0 then
 
       Lwt_io.write_line Lwt_io.stdout @@ 
@@ -77,8 +74,8 @@ Lwt_main.run (
         ^ " " ^ string_of_int tx_count  
       else
         return () 
-    in 
-      r >> return { acc with count = (acc.count + 1) }
+)      
+      >> return { acc with count = (acc.count + 1) }
   in
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
   >>= fun fd -> 
