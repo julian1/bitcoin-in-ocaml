@@ -1,4 +1,16 @@
- 
+
+
+
+type acc_type =
+{
+  (* what is it that we want to record - the uxto set  
+    or changes... 
+  *)
+
+  count : int;
+}
+
+
 
 open Lwt (* for >>= *)
 
@@ -14,20 +26,12 @@ Lwt_main.run (
       else None 
       )
   in
-(*
-  let advance fd len =
-      Lwt_unix.lseek fd len SEEK_CUR 
-      >>= fun r -> 
-      (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
-      return ()
-  in
-*)
   (* to scan the messages stored in file 
     this thing is effectively a fold. 
     don't we want to be able to compute something...
     perhaps monadically...
   *)
-  let rec fold fd f acc =
+  let rec fold fd f (acc : acc_type ) =
     read_bytes fd 24
     >>= fun x -> match x with 
       | None -> return acc 
@@ -44,9 +48,9 @@ Lwt_main.run (
         )
   in 
 
-  let f payload acc = 
-    (* decode block header *)
+  let f payload ( acc : acc_type ) = 
     let hash = String.sub payload 0 80 |> Message.sha256d |> Message.strrev in
+    (* decode block header *)
     let pos, block_header = Message.decodeBlock payload 0 in
     let pos, tx_count = Message.decodeVarInt payload pos in 
     (* decode tx start/lengths *)
@@ -64,56 +68,26 @@ Lwt_main.run (
 
 
     let r =
-      if (mod) acc 1000 = 0 then
+      if (mod) acc.count 1000 = 0 then
 
       Lwt_io.write_line Lwt_io.stdout @@ 
         "*****\n"
-        ^ string_of_int acc 
+        ^ string_of_int acc.count 
         ^ " " ^ Message.hex_of_string hash 
         ^ " " ^ string_of_int tx_count  
-
-(*        >> Lwt_io.write_line Lwt_io.stdout @@ " first " ^ string_of_int first 
-        >> Lwt.join @@ List.map (fun hash -> 
-          Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash ) hashes 
-*)
       else
         return () 
-
     in 
-      r >> return (acc + 1)
-
-    
-
-(*
-
->>    Lwt.join @@ List.map (fun a -> Lwt_io.write_line Lwt_io.stdout @@ "starts " ^ string_of_int a ) starts 
-
->>    Lwt_io.write_line Lwt_io.stdout @@ Message.hex_of_string hash 
-
-      let hashes = String.sub s start  
-bytes_length :
-      let acc = List.fold_left (fun a b -> a + b) first lengths in 
-*)
-(*
-      let x = List.map 
-        (fun (tx : Message.tx ) -> Lwt_io.write_line Lwt_io.stdout @@ string_of_int tx.bytes_length ) txs in
-      Lwt.join x
-*)
-    (*let x = List.map 
-      (fun tx -> Lwt_io.write_line Lwt_io.stdout @@ Message.formatTx tx) txs in
-    Lwt.join x
-    *)
-
+      r >> return { acc with count = (acc.count + 1) }
   in
-
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
   >>= fun fd -> 
     match Lwt_unix.state fd with 
       Opened -> 
         Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
-        >> fold fd f 0 
+        >> fold fd f { count = 0 ; }
         >>= fun acc ->   
-          Lwt_io.write_line Lwt_io.stdout ("result " ^ (string_of_int acc ))
+          Lwt_io.write_line Lwt_io.stdout ("result " ^ (string_of_int acc.count ))
         >> Lwt_unix.close fd
 )
 
