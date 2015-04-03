@@ -5,6 +5,9 @@ open Lwt (* for >>= *)
 module M = Message
 module L = List
 
+
+module SS = Map.Make(struct type t = string let compare = compare end)
+
 type acc_type =
 {
   (* what is it that we want to record - the uxto set  
@@ -12,6 +15,8 @@ type acc_type =
   *)
 
   count : int;
+	
+  utxo : string SS.t ;	
 }
 
 
@@ -75,7 +80,8 @@ Lwt_main.run (
 
 	let _ = write_stdout @@ M.hex_of_string hash in 
  
-	let _ =  Lwt.join @@ L.map (fun (hash,tx) -> write_stdout @@ " " ^ M.hex_of_string hash) txs in 
+	let _ =  Lwt.join @@ L.map ( fun (hash,tx) -> 
+		write_stdout @@ " " ^ M.hex_of_string hash ^ M.formatTx tx) txs in 
 
 
     (* - want to associate the hash with the tx - so can look up 
@@ -99,9 +105,9 @@ Lwt_main.run (
     match Lwt_unix.state fd with 
       Opened -> 
         write_stdout "scanning blocks..." 
-        >> fold fd f { count = 0 ; }
+        >> fold fd f { count = 0 ; utxo = SS.empty; }
         >>= fun acc ->   
-          write_stdout ("result " ^ (string_of_int acc.count ))
+          write_stdout ("result " ^ (string_of_int acc.count  ))
         >> Lwt_unix.close fd
       | _ -> 
         write_stdout "couldn't open file"
