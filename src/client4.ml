@@ -16,7 +16,7 @@ type acc_type =
 
   count : int;
 	
-  utxo : string SS.t ;	
+  utxos : string SS.t ;	
 }
 
 
@@ -78,7 +78,8 @@ Lwt_main.run (
     (* associate hash with tx *)
     let txs = Core.Core_list.zip_exn hashes txs in
 
-	let uxto = L.fold_left (fun tx utxo -> acc.utxo ) acc.utxo txs in 
+
+	let uxtos = L.fold_left (fun utxos (hash,tx) -> utxos) acc.utxos txs in 
 
 
 	let _ = write_stdout @@ M.hex_of_string hash in 
@@ -108,7 +109,7 @@ Lwt_main.run (
     match Lwt_unix.state fd with 
       Opened -> 
         write_stdout "scanning blocks..." 
-        >> fold fd f { count = 0 ; utxo = SS.empty; }
+        >> fold fd f { count = 0 ; utxos = SS.empty; }
         >>= fun acc ->   
           write_stdout ("result " ^ (string_of_int acc.count  ))
         >> Lwt_unix.close fd
