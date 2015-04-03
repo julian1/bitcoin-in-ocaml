@@ -78,6 +78,9 @@ Lwt_main.run (
     (* associate hash with tx *)
     let txs = Core.Core_list.zip_exn hashes txs in
 
+	let uxto = L.fold_left (fun tx utxo -> acc.utxo ) acc.utxo txs in 
+
+
 	let _ = write_stdout @@ M.hex_of_string hash in 
  
 	let _ =  Lwt.join @@ L.map ( fun (hash,tx) -> 
