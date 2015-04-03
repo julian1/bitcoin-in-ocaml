@@ -115,32 +115,26 @@ Lwt_main.run (
       L.fold_left (fun utxos (input : M.tx_in) -> 
 
         if input.previous = coinbase then  
-          (* coinbase*) 
-          SSS.add (hash,0) utxos
+          Core.Core_list.foldi tx.outputs ~f:(fun i utxos output -> 
+            SSS.add (hash, i) utxos
+          ) ~init: utxos 
         else
           if SSS.mem (input.previous, input.index) utxos then   
              utxos  
             |> SSS.remove (input.previous, input.index)
-            (* L.fold_left( fun uxtos 
-                we need to count
-                accumulate or reduce ?
-              - we don't need a range just iterate
-              - we want an index...
-            *)
             |> (fun j -> 
-              (* Core.Core_list.foldi (fun utxos i output -> uxtos ) j tx.outputs *) 
-              Core.Core_list.foldi tx.outputs ~f:(fun i uxtos output -> uxtos )  ~init: j
+              Core.Core_list.foldi tx.outputs ~f:(fun i utxos output -> 
+                SSS.add (hash, i) utxos
+              ) ~init: j
             )
-
-            |> SSS.add (hash, 0)
-            |> SSS.add (hash, 1)
           else
-            (* shouldn't happen *)
-            raise (Failure 
-                (
-                "block " ^ string_of_int acc.count
-                ^ " hash " ^ M.hex_of_string hash 
-                ^ " previous " ^ M.hex_of_string input.previous) )
+            (* referencing a tx that doesn't exist *)
+            raise (Failure (
+              "block " ^ string_of_int acc.count
+              ^ " hash " ^ M.hex_of_string hash 
+              ^ " previous " ^ M.hex_of_string input.previous
+              ^ " previous index " ^ string_of_int input.index 
+              ) )
           ) utxos tx.inputs
     ) acc.utxos txs in 
 
