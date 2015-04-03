@@ -6,7 +6,9 @@ module M = Message
 module L = List
 
 
-module SS = Map.Make(struct type t = string let compare = compare end)
+module SSS = Set.Make(String);; 
+
+
 
 type acc_type =
 {
@@ -16,7 +18,7 @@ type acc_type =
 
   count : int;
 	
-  utxos : string SS.t ;	
+  utxos : SSS.t ;	
 }
 
 
@@ -77,18 +79,19 @@ Lwt_main.run (
     in
     (* associate hash with tx *)
     let txs = Core.Core_list.zip_exn hashes txs in
-
-	let uxtos = L.fold_left (fun utxos (hash,( tx : M.tx) ) -> 
-
-    let uxtos = L.fold_left (fun uxtos (input : M.tx_in) -> 
-      if SS.mem input.previous uxtos then   
-        uxtos
-      else
-        utxos
-      ) utxos tx.inputs
-    in uxtos
-
-	) acc.utxos txs in 
+(*
+  so replace the previous - but with what ? the tx out?  
+*)
+    let uxtos = L.fold_left (fun utxos (hash,( tx : M.tx) ) -> 
+      L.fold_left (fun uxtos (input : M.tx_in) -> 
+        if SSS.mem input.previous uxtos then   
+           uxtos  
+          |> SSS.remove input.previous 
+          |> SSS.add hash
+        else
+          utxos
+        ) utxos tx.inputs
+    ) acc.utxos txs in 
 
 	let _ = write_stdout @@ M.hex_of_string hash in 
  
@@ -117,7 +120,7 @@ Lwt_main.run (
     match Lwt_unix.state fd with 
       Opened -> 
         write_stdout "scanning blocks..." 
-        >> fold fd f { count = 0 ; utxos = SS.empty; }
+        >> fold fd f { count = 0 ; utxos = SSS.empty; }
         >>= fun acc ->   
           write_stdout ("result " ^ (string_of_int acc.count  ))
         >> Lwt_unix.close fd

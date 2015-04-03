@@ -322,9 +322,9 @@ type pending_request =
 *)
 
 
-module SS = Map.Make(struct type t = string let compare = compare end)
-
-module SSS = Set.Make(String);; 
+(* module SS = Map.Make(struct type t = string let compare = compare end)
+*)
+module SS = Set.Make(String);; 
 
 type my_head = 
 {
