@@ -60,7 +60,7 @@ Lwt_main.run (
   in 
   let f payload ( acc : acc_type ) = 
 	(* IMPORTANT - all the code that isn't IO should be factored out *)
-    let hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
+    let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     (* decode block header *)
     let pos, _ = M.decodeBlock payload 0 in
     let pos, tx_count = M.decodeVarInt payload pos in 
@@ -79,25 +79,63 @@ Lwt_main.run (
     in
     (* associate hash with tx *)
     let txs = Core.Core_list.zip_exn hashes txs in
+
 (*
-  so replace the previous - but with what ? the tx out?  
+  - ahh remember we specify an index with the output we want... 
+  - rather than pass utxos through here, 
+    why not pass the accumulator? 
+    - then we can record lots of stats...
+  -- can also add logging jobs...
+
+    OK. input unlocks an output
+    but we have indexes 
+
+    tx has a bunch of outputs.  
+
+    an input can spend any of the outputs. but we need to specify... 
+
+    tx outputs... meaning tx and index 
+
+    when we add, we'll have to add for each output...
+    
+    so this means a set using output and hash...
 *)
-    let uxtos = L.fold_left (fun utxos (hash,( tx : M.tx) ) -> 
-      L.fold_left (fun uxtos (input : M.tx_in) -> 
-        if SSS.mem input.previous uxtos then   
-           uxtos  
-          |> SSS.remove input.previous 
-          |> SSS.add hash
+    let coinbase = M.zeros 32 in
+
+    (* so replace the previous - but with what ? the tx out?  *)
+    let utxos = L.fold_left (fun utxos (hash,( tx : M.tx) ) -> 
+      L.fold_left (fun utxos (input : M.tx_in) -> 
+
+        if input.previous = coinbase then  
+          (* coinbase*) 
+          SSS.add hash utxos
         else
-          utxos
-        ) utxos tx.inputs
+          if SSS.mem input.previous utxos then   
+             utxos  
+(*            |> SSS.remove input.previous  *)
+            |> SSS.add hash
+          else
+            (* shouldn't happen *)
+            raise (Failure 
+                (
+                "block " ^ string_of_int acc.count
+                ^ " hash " ^ M.hex_of_string hash 
+                ^ " previous " ^ M.hex_of_string input.previous) )
+          ) utxos tx.inputs
     ) acc.utxos txs in 
 
-	let _ = write_stdout @@ M.hex_of_string hash in 
- 
+  let _ = 
+  if (mod) acc.count 1000 = 0 then
+   
+    write_stdout @@ (string_of_int acc.count) ^ " " ^ (M.hex_of_string block_hash) 
+    >> write_stdout @@ "utxo count " ^ string_of_int @@ SSS.cardinal utxos 
+  else
+    return ()
+  in
+(* 
 	let _ =  Lwt.join @@ L.map ( fun (hash,tx) -> 
 		write_stdout @@ " " ^ M.hex_of_string hash ^ M.formatTx tx) txs in 
-
+*)
 
     (* - want to associate the hash with the tx - so can look up 
         and invalidate... 
@@ -112,7 +150,7 @@ Lwt_main.run (
       else
         return () 
     ) *)      
-    return { acc with count = (acc.count + 1) }
+    return { acc with count = (acc.count + 1); utxos = utxos; }
   in
 
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
