@@ -2,6 +2,9 @@
 
 open Lwt (* for >>= *)
 
+module M = Message
+module L = List
+
 type acc_type =
 {
   (* what is it that we want to record - the uxto set  
@@ -37,7 +40,7 @@ Lwt_main.run (
     >>= fun x -> match x with 
       | None -> return acc 
       | Some s -> ( 
-        let _, header = Message.decodeHeader s 0 in
+        let _, header = M.decodeHeader s 0 in
         (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
         read_bytes fd header.length 
         >>= fun u -> match u with 
@@ -49,43 +52,46 @@ Lwt_main.run (
         )
   in 
   let f payload ( acc : acc_type ) = 
-    let hash = String.sub payload 0 80 |> Message.sha256d |> Message.strrev in
+	(* IMPORTANT - all the code that isn't IO should be factored out *)
+    let hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     (* decode block header *)
-    let pos, _ = Message.decodeBlock payload 0 in
-    let pos, tx_count = Message.decodeVarInt payload pos in 
+    let pos, _ = M.decodeBlock payload 0 in
+    let pos, tx_count = M.decodeVarInt payload pos in 
     (* decode txs *)
     let first = pos in
-    let _, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
+    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
     (* extract tx start/lengths *)
-    let lens = List.map (fun (tx : Message.tx) -> tx.bytes_length) txs in 
-    let starts = List.fold_left (fun acc len -> List.hd acc + len::acc) [first] lens |> List.tl |> List.rev in 
+    let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
+    let starts = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
     let zipped = Core.Core_list.zip_exn starts lens in
     (* tx hashes *)
-    let hashes = List.map (fun (start,len) -> 
-      String.sub payload start len 
-      |> Message.sha256d 
-      |> Message.strrev ) zipped 
+    let hashes = L.map (fun (start,len) -> 
+      M.strsub payload start len 
+      |> M.sha256d 
+      |> M.strrev ) zipped 
     in
     (* associate hash with tx *)
     let txs = Core.Core_list.zip_exn hashes txs in
 
-(*      List.map (fun (hash,tx) -> write_stdout hash) txs in 
-*)
+	let _ = write_stdout @@ M.hex_of_string hash in 
+ 
+	let _ =  Lwt.join @@ L.map (fun (hash,tx) -> write_stdout @@ " " ^ M.hex_of_string hash) txs in 
+
 
     (* - want to associate the hash with the tx - so can look up 
         and invalidate... 
     *)
-    (
+(*    (
     if (mod) acc.count 1000 = 0 then
       write_stdout @@ 
         "*****\n"
         ^ string_of_int acc.count 
-        ^ " " ^ Message.hex_of_string hash 
+        ^ " " ^ M.hex_of_string hash 
         ^ " " ^ string_of_int tx_count  
       else
         return () 
-    )      
-    >> return { acc with count = (acc.count + 1) }
+    ) *)      
+    return { acc with count = (acc.count + 1) }
   in
 
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
