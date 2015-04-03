@@ -15,6 +15,8 @@ type acc_type =
 
 Lwt_main.run (
 
+  let write_stdout = Lwt_io.write_line Lwt_io.stdout in
+
   let read_bytes fd len =
     let block = Bytes .create len in
     Lwt_unix.read fd block 0 len >>= 
@@ -49,11 +51,12 @@ Lwt_main.run (
   let f payload ( acc : acc_type ) = 
     let hash = String.sub payload 0 80 |> Message.sha256d |> Message.strrev in
     (* decode block header *)
-    let pos, block_header = Message.decodeBlock payload 0 in
+    let pos, _ = Message.decodeBlock payload 0 in
     let pos, tx_count = Message.decodeVarInt payload pos in 
-    (* decode tx start/lengths *)
+    (* decode txs *)
     let first = pos in
-    let pos, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
+    let _, txs = Message.decodeNItems payload pos Message.decodeTx tx_count in
+    (* extract tx start/lengths *)
     let lens = List.map (fun (tx : Message.tx) -> tx.bytes_length) txs in 
     let starts = List.fold_left (fun acc len -> List.hd acc + len::acc) [first] lens |> List.tl |> List.rev in 
     let zipped = Core.Core_list.zip_exn starts lens in
@@ -63,28 +66,38 @@ Lwt_main.run (
       |> Message.sha256d 
       |> Message.strrev ) zipped 
     in
+    (* associate hash with tx *)
+    let txs = Core.Core_list.zip_exn hashes txs in
 
-(
-      if (mod) acc.count 1000 = 0 then
+(*      List.map (fun (hash,tx) -> write_stdout hash) txs in 
+*)
 
-      Lwt_io.write_line Lwt_io.stdout @@ 
+    (* - want to associate the hash with the tx - so can look up 
+        and invalidate... 
+    *)
+    (
+    if (mod) acc.count 1000 = 0 then
+      write_stdout @@ 
         "*****\n"
         ^ string_of_int acc.count 
         ^ " " ^ Message.hex_of_string hash 
         ^ " " ^ string_of_int tx_count  
       else
         return () 
-)      
-      >> return { acc with count = (acc.count + 1) }
+    )      
+    >> return { acc with count = (acc.count + 1) }
   in
+
   Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
   >>= fun fd -> 
     match Lwt_unix.state fd with 
       Opened -> 
-        Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
+        write_stdout "scanning blocks..." 
         >> fold fd f { count = 0 ; }
         >>= fun acc ->   
-          Lwt_io.write_line Lwt_io.stdout ("result " ^ (string_of_int acc.count ))
+          write_stdout ("result " ^ (string_of_int acc.count ))
         >> Lwt_unix.close fd
+      | _ -> 
+        write_stdout "couldn't open file"
 )
 
