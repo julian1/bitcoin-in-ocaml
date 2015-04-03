@@ -78,9 +78,17 @@ Lwt_main.run (
     (* associate hash with tx *)
     let txs = Core.Core_list.zip_exn hashes txs in
 
+	let uxtos = L.fold_left (fun utxos (hash,( tx : M.tx) ) -> 
 
-	let uxtos = L.fold_left (fun utxos (hash,tx) -> utxos) acc.utxos txs in 
+    let uxtos = L.fold_left (fun uxtos (input : M.tx_in) -> 
+      if input.previous = "x" then   
+        uxtos
+      else
+        utxos
+      ) utxos tx.inputs
+    in uxtos
 
+	) acc.utxos txs in 
 
 	let _ = write_stdout @@ M.hex_of_string hash in 
  
