@@ -81,7 +81,7 @@ Lwt_main.run (
 	let uxtos = L.fold_left (fun utxos (hash,( tx : M.tx) ) -> 
 
     let uxtos = L.fold_left (fun uxtos (input : M.tx_in) -> 
-      if input.previous = "x" then   
+      if SS.mem input.previous uxtos then   
         uxtos
       else
         utxos
