@@ -6,8 +6,16 @@ module M = Message
 module L = List
 
 
-module SSS = Set.Make(String);; 
+module SSS = Set.Make( 
+  struct
+    let compare = Pervasives.compare
+    type t = string * int
+  end 
+)
 
+(*
+module SSS = Set.Make( String );; 
+*)
 
 
 type acc_type =
@@ -108,12 +116,24 @@ Lwt_main.run (
 
         if input.previous = coinbase then  
           (* coinbase*) 
-          SSS.add hash utxos
+          SSS.add (hash,0) utxos
         else
-          if SSS.mem input.previous utxos then   
+          if SSS.mem (input.previous, input.index) utxos then   
              utxos  
-(*            |> SSS.remove input.previous  *)
-            |> SSS.add hash
+            |> SSS.remove (input.previous, input.index)
+            (* L.fold_left( fun uxtos 
+                we need to count
+                accumulate or reduce ?
+              - we don't need a range just iterate
+              - we want an index...
+            *)
+            |> (fun j -> 
+              (* Core.Core_list.foldi (fun utxos i output -> uxtos ) j tx.outputs *) 
+              Core.Core_list.foldi tx.outputs ~f:(fun i uxtos output -> uxtos )  ~init: j
+            )
+
+            |> SSS.add (hash, 0)
+            |> SSS.add (hash, 1)
           else
             (* shouldn't happen *)
             raise (Failure 
