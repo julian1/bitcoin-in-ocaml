@@ -45,7 +45,7 @@ type block =
   nTime : int;
   bits : int;
   nonce : int;
-  tx_count : int;
+  (* tx_count : int; *)
 }
 
 
@@ -66,8 +66,8 @@ type tx_in =
   previous : string; (* 32 byte tx hash *)
   index : int;
   (* should be a variant either a string ... or a decoded list of tokens? *)
-  script: script_token list;
-  (* script : string;  *)
+  (* script: script_token list; *)
+  script : string;  
   sequence : int;
 }
 
@@ -75,8 +75,8 @@ type tx_in =
 type tx_out =
 {
   value : Int64.t;
-  script: script_token list;
-  (* script : string; *)
+  (* script: script_token list; *)
+  script : string; 
 }
 
 type tx =
@@ -85,7 +85,9 @@ type tx =
   version: int;
   inputs: tx_in list ;
   outputs: tx_out list;
-  lockTime : int
+  lockTime : int;
+
+  bytes_length : int;
 }
 
 let hex_of_char c =
@@ -214,7 +216,8 @@ let checksum2 s = s |> sha256d |> (fun x -> String.sub x 0 4 )
 (* f is decode function, at pos, count items *)
 let decodeNItems s pos f count =
   let rec fff pos acc count =
-    if count == 0 then pos, (List.rev acc)
+    if count == 0 then 
+	  pos, (List.rev acc)
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1)
   in fff pos [] count
@@ -297,7 +300,7 @@ let decodeVarInt s pos =
     | _ -> (pos, first)
 
 
-
+(* change name decodeBlockHeader *)
 let decodeBlock (s:string) pos = 
 	let pos, version = decodeInteger32 s pos in 
 	let pos, previous = decodeHash32 s pos in
@@ -305,9 +308,11 @@ let decodeBlock (s:string) pos =
 	let pos, nTime = decodeInteger32 s pos in
 	let pos, bits = decodeInteger32 s pos in
 	let pos, nonce = decodeInteger32 s pos in
-	let pos, tx_count = decodeVarInt s pos in 
+
+	(* TODO remove this - tx count is not part of block header, but the block description *)  
+	(* let pos, tx_count = decodeVarInt s pos in  *)
 	pos, ({ version = version; previous = previous; merkle = merkle; 
-		nTime = nTime; bits = bits; nonce = nonce; tx_count = tx_count } : block) 
+		nTime = nTime; bits = bits; nonce = nonce; (* tx_count = tx_count *)  } : block) 
 
 
 
@@ -408,6 +413,7 @@ let decodeTx s pos =
    *)
 (*  let hash = sha256d s |> strrev in
   let pos = 0 in *)
+  let first = pos in
   let pos, version = decodeInteger32 s pos in
 
   let decodeInput s pos =
@@ -419,7 +425,7 @@ let decodeTx s pos =
 
     let pos, sequence = decodeInteger32 s pos in
     pos, { previous = previous; index = index;
-      script = decode_script script ; sequence = sequence; }
+      script = (* decode_script *) script ; sequence = sequence; }
   in
   let decodeInputs s pos n = decodeNItems s pos decodeInput n in
   (* should we be reversing the list, when running decodeInput ?  *)
@@ -430,14 +436,14 @@ let decodeTx s pos =
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
     let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = decode_script script; }
+    pos, { value = value; script = (* decode_script *) script; }
   in
   let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
   let pos, outputsCount = decodeVarInt s pos in
   let pos, outputs = decodeOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, { bytes_length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
 
 
 
@@ -476,8 +482,12 @@ let encodeInteger64 value = enc64 8 value
 (* should do string reverse if necessary *)
 let encodeString (h : string) = enc 1 (strlen h) ^ h
 
-(* change name to encode hash32 and do a sanity chekc ? *)
-let encodeHash32 (h : string) = strrev h
+(* change name to encode hash32 and do a sanity check on the length ? *)
+let encodeHash32 (h : string) = 
+  if String.length h <> 32 then
+    raise (Failure "hash length ") 
+  else
+  strrev h
 
 
 (* TODO FIXME!! 
@@ -536,7 +546,7 @@ let encode_script tokens =
 let encodeInput (input : tx_in) =
   [ encodeHash32 input.previous;
     encodeInteger32 input.index ;
-    (let s = encode_script input.script in
+    (let s = (* encode_script *) input.script in
     let len = strlen s in
     (encodeInteger8 len) ^ s );  (* FIXME *)  (* and get rid of the ^ *)
     encodeInteger32 input.sequence
@@ -547,7 +557,7 @@ let encodeOutput (output : tx_out) =
   [ 
 	encodeInteger64 output.value ;
 
-    (let s = encode_script output.script in
+    (let s = (* encode_script *) output.script in
     let len = strlen s in
     (encodeInteger8 len) ^ s );  (* FIXME *)  (* and get rid of the ^ *)
 
@@ -668,7 +678,7 @@ let formatBlock (h : block) =
     "\nnTime:    "; string_of_int h.nTime; 
     "\nbits:    "; string_of_int h.bits; 
     "\nnonce:    "; string_of_int h.nonce; 
-    "\ntx_count:    "; string_of_int h.tx_count; 
+    (*"\ntx_count:    "; string_of_int h.tx_count;  *)
   ]
 
 
@@ -678,7 +688,7 @@ let formatBlock (h : block) =
 let formatInput input = String.concat "" [
   "  previous: " ^ hex_of_string input.previous
   ^ "\n  index: " ^ string_of_int input.index
-  ^ "\n  script: " ^ format_script input.script
+  ^ "\n  script: " ^ (* format_script*) hex_of_string input.script
   ^ "\n  sequence: " ^ string_of_int input.sequence
 ]
 
@@ -687,7 +697,7 @@ let formatInputs inputs =
 
 let formatOutput output = String.concat "" [
   "  value: " ^ Int64.to_string output.value
-  ^ "\n  script: " ^ format_script output.script
+  ^ "\n  script: " ^ (* format_script *) hex_of_string output.script
 ]
 
 let formatOutputs outputs =

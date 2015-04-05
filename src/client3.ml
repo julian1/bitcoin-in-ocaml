@@ -100,11 +100,28 @@ type connection =
 
 }
 
+
+type peer =
+{
+	 conn : connection ;   
+(*
+  maybe move the addr and port of the connection in here?
+*)
+  (* use sets? also probably need timestamps to refresh *)
+	blocks_inv : string list ;  (* inv items to work through - may be out of date*) 
+	blocks_pending : string list ;  
+
+  blocks_inv_last_request_time : float;
+
+}
+
+
+
 type my_action =
    | GotConnection of connection
-   | GotMessage of connection  * header * string
    | GotConnectionError of string
-   | GotReadError of connection * string (* change name MessageError - because *)
+   | GotMessage of connection * header * string * string
+   | GotMessageError of connection * string (* change name MessageError - because *)
    | Nop
 
 
@@ -200,30 +217,39 @@ let readChannel inchan length (* timeout here *)  =
   >>= fun _ ->
     return @@ Bytes.to_string buf
 
+(*
+  hmmnn we want to use this thing again... when reading from file ...
+  without the network timeout...
+*)
 
 let get_message conn =
     Lwt.catch (
       fun () -> 
       (* read header *)
-      readChannel conn.ic 24
-      >>= fun s ->
-        let _, header = decodeHeader s 0 in
-        if header.length < 10*1000000 then
-          (* read payload *)
-          readChannel conn.ic header.length
-          >>= fun p -> 
-          return @@ GotMessage ( conn, header, p)
-        else
-          return @@ GotReadError (conn, "payload too big" ) 
+
+        let ic = conn.ic in 
+        readChannel ic 24
+        >>= fun s ->
+          let _, header = decodeHeader s 0 in
+          if header.length < 10*1000000 then
+            (* read payload *)
+            readChannel ic header.length
+            >>= fun p -> 
+            return @@ GotMessage ( conn, header, s, p)
+          else
+            return @@ GotMessageError (conn, "payload too big - command is " 
+              ^ header.command 
+              ^ " size " ^ string_of_int header.length ) 
       ) 
       ( fun exn ->  
           let s = Printexc.to_string exn in
-          return @@ GotReadError (conn, "here2 " ^ s) 
+          return @@ GotMessageError (conn, "here2 " ^ s) 
       )
        
 
 let send_message conn s = 
-    Lwt_io.write conn.oc s >> return Nop 
+    let oc = conn.oc in
+    Lwt_io.write oc s >> return Nop  (* message sent *)
 
 
 (*
@@ -296,9 +322,9 @@ type pending_request =
 *)
 
 
-module SS = Map.Make(struct type t = string let compare = compare end)
-
-module SSS = Set.Make(String);; 
+(* module SS = Map.Make(struct type t = string let compare = compare end)
+*)
+module SS = Set.Make(String);; 
 
 type my_head = 
 {
@@ -327,7 +353,11 @@ type my_app_state =
 (* heads : my_head SS.t;	*)
 
   jobs :  my_action Lwt.t list ;
-  connections : connection list ; 
+
+  peers : peer list ; 
+
+	(* do we do a mapping from connection to connections ? *)
+
 
 	heads : my_head SS.t ;	
 
@@ -336,10 +366,13 @@ type my_app_state =
 
     may only be used for fast downloading...
   *)
-  last_download_block : float; (* change name _time *)
+  time_of_last_valid_block : float; (* change name _time, or condition  *)
   
-  (* from an inv request - to optimize downloads *)
+  (* from an inv request - used to quickly prompt another inv request *)
   last_expected_block : string;
+
+
+  blocks_oc : Lwt_io.output Lwt_io.channel ; 
 
 (*
   db : LevelDB.db ; 
@@ -380,17 +413,108 @@ let detach f =
 
 
 
+  let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
+
+  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } 
+
+  let remove_peer peer state = { state with 
+      (* physical equality *)
+      peers = List.filter (fun x -> not (x.conn.fd == peer.conn.fd)) state.peers
+    } 
+  let add_peer peer state =  { state with peers = peer::state.peers } 
+
+  let update_peer new_peer state =  { 
+        state with 
+
+        peers = List.map (fun peer -> if peer.conn.fd == new_peer.conn.fd then new_peer else peer ) state.peers 
+          
+    } 
+
+
+
+ 
+  (* will throw *) 
+  let peer_of_conn conn state =  List.find(fun peer -> peer.conn.fd ==  conn.fd ) state.peers
+
+
+(*
+ 
+    - the guards on the peers aren't working - we're doing multiple request more inv 
+    and get another block
+
+    VERY IMPORTANT
+    - i think because the peer we bind into the read-message earlier is different to 
+    the peer after other actions.  
+
+    - and we are not correctly shadowing the peers...
+
+    that returns in the read-message.
+*)
+
+  let get_another_block peer state =
+
+    if List.length peer.blocks_inv > 0 
+    && List.length peer.blocks_pending = 0   then
+
+      let encodeInventory jobs =
+        let encodeInvItem hash = encodeInteger32   2 ^ encodeHash32 hash in 
+          (* encodeInv - move to Message  - and need to zip *)
+          encodeVarInt (List.length jobs )
+          ^ String.concat "" @@ List.map encodeInvItem jobs 
+      in
+      let now = Unix.time () in
+      let index = now |> int_of_float |> (fun x -> x mod List.length peer.blocks_inv) in 
+      let hash = List.nth peer.blocks_inv index in
+      let payload = encodeInventory [ hash ] in 
+      let header = encodeHeader {
+        magic = m ;
+        command = "getdata";
+        length = strlen payload;
+        checksum = checksum payload;
+      }
+      in
+      state
+
+      |> remove_peer peer 
+      |> fun state -> 
+        let peer = { peer with 
+          blocks_inv = List.filter (fun x -> x != hash ) peer.blocks_inv;
+          blocks_pending = hash :: peer.blocks_pending;
+		  }  in add_peer peer state 
+
+(*    -- are there two read messages ??? *)
+
+      |> add_jobs [ 
+        log @@ 
+          "requesting block " ^ (hex_of_string hash ) ^ " from " ^ peer.conn.addr 
+          ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
+          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) 
+        >> send_message peer.conn (header ^ payload);  
+      
+(*  get_message peer ;  *)
+      ] (* { state with last_expected_block = last_expected_block }  *)
+
+    else
+       state 
+
+(*
+  what happens if we do the peer change, but don't send the message?
+*)
 let f state e =
 
   (* helpers *)
-  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } in
-  let remove_conn conn state = { state with 
-      (* physical equality *)
-      connections = List.filter (fun x -> x.fd != conn.fd) state.connections
-    } in
-  let add_conn conn state =  { state with connections = conn::state.connections } in
-  let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop in
-  let format_addr conn = conn.addr ^ " " ^ string_of_int conn.port 
+
+  (* this is horrible, use a Map or something ? 
+  let peer_compare a b = a.conn.fd = b.conn.fd  in
+  let update_peer new_peer state = { 
+    state with peers = List.map (fun peer -> 
+     if peer_compare peer new_peer then new_peer else peer 
+    )  
+  state.peers } in
+  *)
+
+
+  let format_addr peer = peer.addr ^ " " ^ string_of_int peer.port 
 
   (* maybe it's the choose() that fails ... *)
 (*
@@ -414,16 +538,17 @@ let f state e =
     match e with
       | Nop -> state 
       | GotConnection conn ->
+        let peer = { conn = conn; blocks_inv = [] ; blocks_pending  = [] ;   blocks_inv_last_request_time = 0. } in
         state
-        |> add_conn conn
+        |> add_peer  peer
         |> add_jobs [
           log @@ "whoot got connection " ^ format_addr conn   ^
-            "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
+            "\npeers now " ^ ( string_of_int @@ List.length state.peers)
           (* or separate? *) 
-          >> send_message conn initial_version 
-          >> log @@ "*** whoot wrote initial version " ^ format_addr conn
+          >> send_message peer.conn initial_version 
+          >> log @@ "*** sent our version " ^ format_addr conn
           ;
-           get_message conn
+           get_message peer.conn
         ] 
       
       | GotConnectionError msg ->
@@ -431,26 +556,38 @@ let f state e =
           log @@ "could not connect " ^ msg >> return Nop
           ] state 
 
-      | GotReadError (conn, msg) ->
-        state 
-        |> remove_conn conn
-        |> add_jobs [ 
-          log @@ "could not read message " ^ msg
-          ^ "\nconnections now " ^ ( string_of_int @@ List.length state.connections)
-          ;
-          Lwt_unix.close conn.fd >> return Nop 
-        ]
+      | GotMessageError (conn, msg) ->
 
-      | GotMessage (conn, header, payload) -> 
+        let peer = peer_of_conn conn state in
+
+        let fd = conn.fd in
+        state 
+        |> remove_peer peer
+        |> fun state -> 
+          add_jobs [ 
+          log @@ "could not read message " ^ msg
+          ^ "\npeers now " ^ ( string_of_int @@ List.length state.peers)
+          ;
+
+          match Lwt_unix.state fd with
+            Opened -> ( Lwt_unix.close fd ) >> return Nop 
+            | _ -> return Nop 
+          (*in
+          log @@ "closing descriptor - state " ^ s
+          >> log "done closing descriptor " 
+          *)
+        ] state
+
+      | GotMessage (conn, header, raw_header, payload) -> 
         match header.command with
           | "version" ->
+            (* let peer = peer_of_conn conn state in  *)
             state
             |> add_jobs [ 
               (* should be 3 separate jobs? *)
               log "got version message"
               >> send_message conn initial_verack
-              >> log @@ "*** whoot wrote verack " ^ format_addr conn
-              ;
+              >> log @@ "*** whoot wrote verack " ^ format_addr conn;
               get_message conn 
             ] 
 
@@ -458,21 +595,11 @@ let f state e =
             add_jobs [ 
               (* should be 3 separate jobs? *)
               log "got verack - requesting addr"
-              >> send_message conn initial_getaddr
-              ;
+              >> send_message conn initial_getaddr ;
               get_message conn 
             ] state 
 
-(*          | "inv" -> 
-            let _, inv = decodeInv payload 0 in
-            add_jobs [ 
-              log @@ "* got inv " ^ string_of_int (List.length inv) ^ " " ^ (format_addr conn)
-              ;
-              get_message conn 
-            ] state
-*)
 
-          | "inv" ->
 (*
     - we don't care about a block unless it can advance a head ?   
     except it might be a fork arising from a point further back in the chain.
@@ -491,82 +618,122 @@ let f state e =
 
   - as a first pass lets just save the blockchain as we go, and see how fast/slow it is on startup
     we can optimize later.
-
-    
 *)
-            let _, inv = decodeInv payload 0 in
-            (* select block types  *)
-            let needed_inv_type = 2 in
-            let block_hashes = inv
-              |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
-              |> List.map (fun (_,hash)->hash)
-              (* avoid blocks we already have *)
-              |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
-            in
-            if List.length block_hashes > 0 then
-              (* if have blocks *)
-              let encodeInventory jobs =
-                let encodeInvItem hash = encodeInteger32 needed_inv_type ^ encodeHash32 hash in 
-                  (* encodeInv - move to Message  - and need to zip *)
-                  encodeVarInt (List.length jobs )
-                  ^ String.concat "" @@ List.map encodeInvItem jobs 
-              in
-              let payload = encodeInventory block_hashes in 
-              let header = encodeHeader {
-                magic = m ;
-                command = "getdata";
-                length = strlen payload;
-                checksum = checksum payload;
-              }
-              in 
-                let last_expected_block = block_hashes |> List.rev |> List.hd
-              in 
-              add_jobs [ 
-                log @@ "requesting blocks\n" ^ String.concat "\n" (List.map hex_of_string block_hashes) ; 
-                send_message conn (header ^ payload); 
-                get_message conn ; 
-              ] { state with last_expected_block = last_expected_block } 
 
-            else
-              add_jobs [ 
-                get_message conn ; 
-              ] state
+(*
+    - so peer gives us inventory...
+    we should store it. and that's about it.   
+    we can request one of the blocks at randome as well...
 
-            (* completely separate bit.  code can go anywhere peer.  *)
+    OK, the peer count should be coming down as we pull off the blocks
+    and download them...
+*)
+                  (* VERY IMPORTANT - when we bind in the peer here, it means that we don't
+                  get the changes to the peer made later
+                  - to make it atomic we can only do the add_jobs once - right at the end.
+                  - and the state peers are a copy of the real peers bound into jobs - which 
+                    is terrible.
+
+                  - the peer stuff should only be in one place. we can compute stats for the
+                  app state if we want..  
+
+                  - getting rid of this ought to simplify...
+
+                  - alternatively we only bind the file descriptor into the read and keep everything 
+                  else in the main state. (so it's only recorded once ). means there's a lookup. 
+                  - eg. there might be several events on the peer...
+
+                  - we're also binding far too much information into the message handlers
+                  that don't really need it. 
+
+                  - does this also mean we can flatten out the peer and conn stuff ?
+  
+                  - ok, as a first pass lets just move the peer information into state
+                  *)    
+          | "inv" ->
+            state
             |> fun state -> 
-              (* round robin making requests to advance the head *)
               let now = Unix.time () in
-              if now -. state.last_download_block  > 10. then 
+              let _, inv = decodeInv payload 0 in
+              (* add inventory blocks to list in peer *)
+              let needed_inv_type = 2 in
+              let block_hashes = inv
+                |> List.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
+                |> List.map (fun (_,hash)->hash)
+                (* ignore blocks we already have *)
+                |> List.filter (fun hash -> not @@ SS.mem hash state.heads )
+              in
+
+              let peer = peer_of_conn conn state in  
+              let peer = { peer with blocks_inv = block_hashes @ peer.blocks_inv  } in
+              update_peer peer state
+
+              |> add_jobs [ 
+                  log @@ "\ngot inv " ^ conn.addr 
+                    ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
+                    ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) ; 
+                  get_message conn; 
+                ] 
+
+            (* code to keep the inventory full for the peer 
+				change this code to return a tuple of the new heads and new jobs
+oooooddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddtttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt
+			*)
+            |> fun state -> 
+              (* this condition is right. if less than 100, we always do it, on timer *)
+              if List.length peer.blocks_inv < 100 
+                && now -. peer.blocks_inv_last_request_time > 60.
+                then  
                 (* create a set of all pointed-to block hashes *)
+                (* watch out for non-tail call optimised functions here which might blow stack  *)
                 let previous = 
                   SS.bindings state.heads 
-                  |> List.map (fun (_,head ) -> head.previous) 
+                  |> List.rev_map (fun (_,head ) -> head.previous) 
                   |> SSS.of_list
                 in
                 (* get the tips of the blockchain tree by filtering all block hashes against the set *)
                 let heads = 
-                  SS.filter (fun a b -> not @@ SSS.mem a previous ) state.heads 
+                  SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
                   |> SS.bindings 
-                  |> List.map (fun (tip,_ ) -> tip) 
+                  |> List.rev_map (fun (tip,_ ) -> tip) 
                 in
-                (* choose one at random *)
+                (* choose a head at random *)
                 let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
                 let head = List.nth heads index in
                 add_jobs [
-                  log @@ "**** update download_head " 
-                  ^ "\n download_heads count " ^ (string_of_int @@ List.length heads )
-                  ^ "\n head " ^ hex_of_string head 
-                  ^ "\n from " ^ format_addr conn   
+                  log @@ "**** requesting blocks inv " 
+                  ^ " from " ^ format_addr peer.conn   
+                  ^ " head count " ^ (string_of_int @@ List.length heads )
+                  ^ " head " ^ hex_of_string head 
                   >> send_message conn (initial_getblocks head)
-                ]
-                { state with last_download_block = now }  
+                ] state
+                |> fun state -> let peer = { peer with blocks_inv_last_request_time = now } in
+                update_peer peer state
+              
               else
-                 state
+                state
+
+            |> fun state ->  
+              (* maybe download a block *) 
+              get_another_block peer state 
+
+
 (*
     OK, now we have a single download head that we make requests too...
     we can compute the download heads... in case of fork.
 *)
 
+(*
+	VERY IMPORTNAT
+  ok, i think this might be done a lot easier by just shadowing everything
+	peer, heads, jobs . rather than our piping stuff
+	then creating 
+	- the only thin is where we factor code off into another function and 
+	will have to return these shad
+	- and this is what we do with if/else as well - rather than return state
+	we just return what we modified. 
+	- limits the scope of the vars, and makes it clear whats being done. 
+*)
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
             let hash = (Message.strsub payload 0 80 |> Message.sha256d |> Message.strrev ) in
@@ -578,32 +745,42 @@ let f state e =
 
               ok, rather than maintaining the download heads... lets compute 
               when we need .
+              ----
+                our optimiser isn't working very well. everytime we get a random block
+                it gets updated. 
+
+                it would be really nice to see how this performs at the start when blocks are small...
             *)
 
-            if not (SS.mem hash state.heads )
-              && SS.mem header.previous state.heads then 
-              let heads =
-                SS.add hash { 
-                  previous = header.previous;  
-                  height = 0; (* head.height + 1;  *)
-                } state.heads
-              in
+            let peer = peer_of_conn conn state in  
+            let peer = { peer with blocks_pending = List.filter (fun pend -> pend <> hash) peer.blocks_pending } in 
+            update_peer peer state
               
-              add_jobs [ 
-                log @@ "block updated chain " ^ string_of_int @@ SS.cardinal heads;
-                get_message conn ; 
-              ] { state with heads = heads;  
-    
-                  last_download_block = 
-                    if hash = state.last_expected_block then 
-                      0.
-                    else
-                      Unix.time ()
+            
+            |> fun state -> 
 
-                } 
+              if not (SS.mem hash state.heads ) then 
+
+                (*let heads =
+                  SS.add hash { 
+                    previous = header.previous;  
+                    height = 0; (* head.height + 1;  *)
+                  } state.heads
+                in
+
+                { state with heads = heads;  } 
+                             
+                |> fun state -> *) (*get_another_block peer  state
+
+				        |> fun state -> *) 
+                add_jobs [ 
+                  log @@ "got block  " ^ conn.addr ^ " " ^  hex_of_string hash; 
+                  (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
+                  get_message conn ; 
+                ] state 
             else
               add_jobs [ 
-                log "already have block or block doesn't change chain - ignored ";
+                log @@ "already have block ignore - " ^ hex_of_string hash;
                 get_message conn ; 
               ] state 
 
@@ -613,12 +790,42 @@ let f state e =
             (* let _, tx = decodeTx payload 0 in *)
             add_jobs [ 
               (let hash = (payload |> Message.sha256d |> Message.strrev ) in 
-              log  "got tx!!! " (* ^ hex_of_string hash *) )   ; 
+              log @@ "got tx!!! "  ^ hex_of_string hash )   ; 
               get_message conn ; 
             ] state
 
+(*
+  we can manage saving connections, the same as blocks - serializing into connections.dat
+  - always connect if unknown
+  - if verack then add to list of known peers and record 
+  - if we have less than the number of active conns we want then choose and connect 
+*)
+(*
+  - closing app ought to be easy - we don't need cancel on individual tasks.
+  - just wait till we get to choose (can have 1 sec timeout job), 
+  - then create a job to close all connections, and descriptors, using details in conn - join 
+  - could even have this outside the main loop. 
+*)
+(*
+    blocks - 
+      should only make inv requests for heads that trace to the main chain, not
+        disconnected sequences
+      but do request blocks from segments
 
-          | "addr" -> 
+      - this will keep it focused downloading around tip.
+    -------
+      -No inventory requests are relatively free.
+      -Do one every ten seconds on the main node (or all heads that trace to root). 
+      - then filter against blocks we have
+      - and filter against pending (with a timeout )
+      - and record new list as blocks that are pending and can be accepted
+      - then distribute block requests to different conns
+
+      - if seomthing is pending, we don't want to re-request it.
+      but, if something stalls we do.
+        - so we just record the time it was requested. 
+
+ *)         | "addr" -> 
               let pos, count = decodeVarInt payload 0 in
               (* should take more than the first *)
               let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
@@ -631,37 +838,163 @@ let f state e =
                 ] (* ^ ":" ^ soi h.port *)
               in
               let a = formatAddress addr in
-              let already_got = List.exists (fun c -> c.addr = a && c.port = addr.port ) 
-                  state.connections 
+              (* ignore, different instances on different ports *)
+              let already_got = List.exists (fun peer -> peer.conn.addr = a (* && peer.conn.port = addr.port *) ) 
+                  state.peers 
               in
-              if already_got || List.length state.connections > 30 then  
+              if already_got || List.length state.peers >= 30 then  
                 add_jobs [ 
                   log @@ "whoot new addr - already got or ignore " ^ a  
                   ;
-                  get_message conn  
+                  get_message conn 
                 ] state 
               else 
                 add_jobs [ 
                  log @@ "whoot new unknown addr - count "  ^ (string_of_int count ) 
-                  ^  " " ^ a ^ " port " ^ string_of_int addr.port 
-                 ;  
-                  get_connection (formatAddress addr) addr.port 
-                  ;
-                  get_message conn  
+                  ^  " " ^ a ^ " port " ^ string_of_int addr.port ;  
+                  get_connection (formatAddress addr) addr.port ;
+                  get_message conn 
               ] state
 
           | s ->
             add_jobs [ 
-              log @@ "message " ^ s
-              ;
+              log @@ "message " ^ s ;
               get_message conn 
             ] state
 
   in new_state 
 
          
-let run f s =
+let run f =
+
   Lwt_main.run (
+
+(*
+Lwt_unix.lseek fd pos Unix.SEEK_SET >>= fun pos' ->
+assert (pos' = pos);
+let block = String.create bs in
+_read_buf fd block 0 bs >>= fun () ->
+Lwt.return block
+
+      (* let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in *)
+*)
+
+
+    let read_bytes fd len =
+      let block = Bytes .create len in
+      Lwt_unix.read fd block 0 len >>= 
+      fun ret ->
+        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
+      return (
+		(* change to test ret = len *)
+        if ret > 0 then Some ( Bytes.to_string block )
+        else None 
+        )
+    in
+    let advance fd len =
+        Lwt_unix.lseek fd len SEEK_CUR 
+        >>= fun r -> 
+        (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+        return ()
+    in
+    (* to scan the messages stored in file *)
+    let rec loop fd heads =
+      read_bytes fd 24
+      >>= fun x -> match x with 
+        | Some s -> ( 
+          let _, header = decodeHeader s 0 in
+          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+          read_bytes fd 80 
+          >>= fun u -> match u with 
+            | Some ss -> 
+              let hash = ss |> Message.sha256d |> Message.strrev  in
+              let _, block_header = decodeBlock ss 0 in
+              (* Lwt_io.write_line Lwt_io.stdout @@ 
+                hex_of_string hash 
+                ^ " " ^ hex_of_string block_header.previous 
+              >> *) advance fd (header.length - 80 )
+              >> let heads = SS.add hash { 
+                  previous = block_header.previous;  
+                  height = 0; 
+                } heads 
+              in
+              loop fd  heads  (* *)
+            | None -> 
+              return heads 
+          )
+        | None -> 
+          return heads 
+    in 
+
+    (* this bloody thing throws - if it can't open *)
+    Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
+    >>= fun fd -> 
+      let u =  (* very strange that this var is needed to typecheck *)
+      match Lwt_unix.state fd with 
+        Opened -> 
+          Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
+          >> loop fd SS.empty  
+          >>= fun heads -> Lwt_unix.close fd
+          >> return heads
+        | _ -> return 
+            ( SS.empty 
+            |>
+            let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+            SS.add genesis 
+           { 
+            previous = ""; 
+            height = 0; 
+          })
+        in u
+
+   >>= fun heads ->   
+      Lwt_io.write_line Lwt_io.stdout @@ "blocks read " ^ string_of_int (SS.cardinal heads  )
+
+    >>
+    (* get initial state up 
+      uggh opening the file, non truncate ... 
+    *)
+(*     Lwt_io.open_file ~flags: [O_WRONLY ] Lwt_io.output       "blocks.dat"  *)  
+
+
+
+    Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0  
+ 
+    >>= fun fd -> 
+      let blocks_oc = Lwt_io.of_fd ~mode:Lwt_io.output fd  in
+ 
+    (* we actually need to read it as well... as write it... *) 
+    let state = 
+      let jobs = [
+        (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
+        get_connection     "23.227.177.161" 8333;
+        get_connection     "23.227.191.50" 8333;
+        get_connection     "23.229.45.32" 8333;
+        get_connection     "23.236.144.69" 8333;
+      ] in
+(*
+      let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+      let heads = 
+          SS.empty 
+          |> SS.add genesis 
+           { 
+            previous = ""; 
+            height = 0; 
+            (* difficulty = 123; *)
+          }  in
+*)
+      { 
+        jobs = jobs; 
+        peers = []; 
+        heads = heads ; 
+        time_of_last_valid_block = 0.;  
+    (*    db = LevelDB.open_db "mydb"; *)
+        last_expected_block = "";
+
+        blocks_oc = blocks_oc
+      } 
+    in
+
     let rec loop state =
       Lwt.catch (
       fun () -> Lwt.nchoose_split state.jobs 
@@ -672,7 +1005,7 @@ let run f s =
             ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>  
-*)
+      *)
           let new_state = List.fold_left f { state with jobs = incomplete } complete 
           in if List.length new_state.jobs > 0 then
             loop new_state 
@@ -687,55 +1020,14 @@ let run f s =
           >> (* just exist cleanly *)  
             return ()
         )
-
-(* - ok there's an easy way to handle this 
-  - we have a read bound.
-  - what we need is to put it on a timer so it returns...
-  after a period.
-  - then we ought to be able to close it 
-  - it may well be easier... since only need to deal with one at a time...
-
-  kk
-*)
-
     in
-    loop s 
+      loop state 
   )
 
 
-let s = 
-  let jobs = [
-    (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
-    get_connection     "23.227.177.161" 8333;
-    get_connection     "23.227.191.50" 8333;
-    get_connection     "23.229.45.32" 8333;
-    get_connection     "23.236.144.69" 8333;
-  ] in
-  let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
-  let heads = 
-      SS.empty 
-      |> SS.add genesis 
-       { 
-        previous = ""; 
-        height = 0; 
-        (* difficulty = 123; *)
-      }  in
-  { 
-    jobs = jobs; 
-    connections = []; 
-(*    pending = SS.empty ;  *)
 
-    heads = heads ; 
-    (* download_heads = [ genesis ] ; *) 
-    last_download_block = 0.;  
 
-(*    db = LevelDB.open_db "mydb"; 
-*)
-    last_expected_block = "";
-
-  } 
-
-let () = run f s  
+let () = run f 
 
 
 
