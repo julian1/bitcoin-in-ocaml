@@ -51,14 +51,18 @@ let decodeTXXX payload =
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout 
 
+(*
+  al right we need to pass in the block position as well...
+  to record the lseek pos.
+*)
 
-
+(* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
 let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
   let f (input : M.tx_in) = 
     Lwt.join @@ 
-      L.mapi (fun i output -> 
+      L.mapi (fun i _ -> 
         Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
     >>
     if input.previous = coinbase then
@@ -68,7 +72,7 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
       Db.get db key 
       >>= (fun result ->	
           match result with 
-            Some s -> return () (* write_stdout ("found " ^ s)  *)
+            Some _ -> return () (* write_stdout ("found " ^ s)  *)
             | None -> raise (Failure "no found") (* write_stdout "not found "  *)
         ) 
       >>
@@ -106,20 +110,15 @@ let run () =
           >>= fun u -> match u with 
             | None -> return ()
             | Some payload -> 
-                f payload db count 
-                >>= fun acc -> (* advance fd (header.length - 80 ) >> *) 
-                loop_blocks fd f db (count + 1)
+              f payload db count 
+              >> 
+              loop_blocks fd f db (count + 1)
           )
     in 
     let process_block payload db count = 
       let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
       let txs = decodeTXXX payload in
         Lwt.join (
-          (* loop_blocks over txs *) 
-(*          L.map (fun ((pos, len, hash), tx  ) -> 
-            process_tx db (pos, len, hash) tx   
-          )  txs  
-*)
           L.map 
             ( process_tx db) 
             txs  
