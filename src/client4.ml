@@ -15,7 +15,10 @@
   to do this we need to change code to use io 
 *)
 
-open Lwt (* for >>= *)
+let (>>=) = Lwt.(>>=)
+let return  = Lwt.return
+
+
 
 module M = Message
 module L = List
