@@ -16,7 +16,7 @@
 *)
 
 let (>>=) = Lwt.(>>=)
-let return  = Lwt.return
+let return = Lwt.return
 
 
 
@@ -51,7 +51,7 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
 
 
-let update_for_tx db hash (tx : M.tx)  = 
+let process_tx db hash (tx : M.tx)  = 
   let coinbase = M.zeros 32 
   in
   let f (input : M.tx_in) = 
@@ -115,7 +115,7 @@ Lwt_main.run (
     Lwt.join (
       (* loop_blocks over txs *) 
       L.map (fun (hash, tx  ) -> 
-        update_for_tx db hash tx   
+        process_tx db hash tx   
       )  txs  
     )
     >> if count mod 1000 = 0 then 
