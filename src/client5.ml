@@ -56,7 +56,7 @@ let run () =
               (*write_stdout (Misc.string_of_bytes payload ) *)
               let _, tx = M.decodeTx payload 0 in 
 
-              write_stdout (M.formatTx tx) 
+               write_stdout tx.value (* (M.formatTx tx)  *) 
               >> loop i fd 
           )
         else

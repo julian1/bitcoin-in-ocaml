@@ -86,7 +86,7 @@ type tx =
   inputs: tx_in list ;
   outputs: tx_out list;
   lockTime : int;
-
+  (* calculated on parse *)
   bytes_length : int;
 }
 
