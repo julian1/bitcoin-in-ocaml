@@ -42,9 +42,7 @@ let decodeTXXX payload =
     let zipped = CL.zip_exn poss lens in
     let zipped = CL.zip_exn zipped txs in
     L.map (fun ((pos,len),tx) -> 
-      let hash = M.strsub payload pos len 
-      |> M.sha256d 
-      |> M.strrev 
+      let hash = M.strsub payload pos len |> M.sha256d |> M.strrev 
       in pos, len, hash, tx
       ) 
     zipped 
