@@ -70,7 +70,7 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
        (* a >> process_tx db pos b ) *) 
 
 (* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
-let process_tx db block_pos ((_ , _ , hash, tx) : int * int * string * M.tx )  = 
+let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
   let process_input (input : M.tx_in) = 
@@ -82,22 +82,24 @@ let process_tx db block_pos ((_ , _ , hash, tx) : int * int * string * M.tx )  =
       >>= (fun result ->	
           match result with 
             Some s -> 
-              if s <> "u" then  
+              (* we should write functions to do this *)
+              let pos, ch = M.decodeString s 0 in 
+              let pos, lseek = M.decodeInteger64 s pos in 
+              if ch <> "u" then  
                 let msg = "ooops tx is spent" in 
                 raise (Failure msg) 
               else
-                  return ()  
+                Db.put db key (M.encodeString "s"  ^ M.encodeInteger64 lseek ) 
+
             | None -> 
               let msg = "txo not found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
               raise (Failure msg) 
         ) 
-      >>
-      Db.put db key "s"  
   in
   let process_output hash i _  = 
     let key = (M.encodeHash32 hash ^ M.encodeInteger32 i) in 
-    let value = ( "u" ^ M.encodeInteger64 @@ Int64.of_int block_pos) in
-    Db.put db key "u" 
+    let value = ( M.encodeString "u" ^ M.encodeInteger64 @@ Int64.of_int @@ block_pos + pos ) in
+    Db.put db key value
   in
   (* process in parallel inputs, then outputs in sequence *) 
   Lwt.join ( L.map process_input tx.inputs )
