@@ -21,6 +21,7 @@ module M = Message
 module L = List
 module CL = Core.Core_list
 
+(*
 
 module SSS = Set.Make( 
   struct
@@ -29,11 +30,12 @@ module SSS = Set.Make(
   end 
 )
 
-
+*)
+(*
 let detach f = 
   Lwt_preemptive.detach 
     (fun () -> f ) () 
-
+*)
 
 
 (*
@@ -100,7 +102,7 @@ let update_for_tx db hash (tx : M.tx)  =
 
     Lwt.join( 
       L.mapi (fun i output -> 
-        detach @@ LevelDB.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
+        Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
     )
     >>
     if input.previous = coinbase then
@@ -110,14 +112,15 @@ let update_for_tx db hash (tx : M.tx)  =
       (* delete ?? - actually we don't want to delete, we just want to update to show it's spent 
         should actually verify it exists...
       *) 
-      detach @@ LevelDB.get db (M.encodeHash32 input.previous ^ M.encodeInteger32 input.index) 
+      let key = (M.encodeHash32 input.previous ^ M.encodeInteger32 input.index) in
+      Db.get db key 
       >>= (fun result ->	
           match result with 
             Some s -> return () (* write_stdout ("found " ^ s)  *)
             | None -> raise (Failure "no found") (* write_stdout "not found "  *)
         ) 
       >>
-      detach @@ LevelDB.put db (M.encodeHash32 input.previous ^ M.encodeInteger32 input.index) "s" 
+      Db.put db key "s" 
 
 (*
   ok, i think we want to be able to look at the tx records,
@@ -217,12 +220,9 @@ Lwt_main.run (
 (*    return { acc with count = (acc.count + 1); (* utxos = utxos; *) } *)
   in
 
-	detach @@ LevelDB.open_db "mydb" 
+	Db.open_db "mydb" >>= fun db -> 
+  Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 >>= fun fd -> 
 
-	>>= fun db -> 
-
-  Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
-  >>= fun fd -> 
     match Lwt_unix.state fd with 
       Opened -> 
         write_stdout "scanning blocks..." 
