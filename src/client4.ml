@@ -55,7 +55,6 @@ let update_for_tx db hash (tx : M.tx)  =
   let coinbase = M.zeros 32 
   in
   let f (input : M.tx_in) = 
-
     Lwt.join @@ 
       L.mapi (fun i output -> 
         Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
@@ -110,7 +109,7 @@ Lwt_main.run (
               loop_blocks fd f db (count + 1)
         )
   in 
-  let f payload db count = 
+  let process_block payload db count = 
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
     Lwt.join (
@@ -131,7 +130,7 @@ Lwt_main.run (
     match Lwt_unix.state fd with 
       Opened -> 
         write_stdout "scanning blocks..." 
-        >> loop_blocks fd f db 0 
+        >> loop_blocks fd process_block db 0 
         >> Lwt_unix.close fd
       | _ -> 
         write_stdout "couldn't open file"
