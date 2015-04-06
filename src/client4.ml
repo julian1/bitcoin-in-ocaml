@@ -79,7 +79,7 @@ and set
        (* a >> process_tx db pos b ) *) 
 
 (* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
-let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx )  = 
+let process_tx db block_pos ((pos, length , hash, tx) : int * int * string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
   let process_input (input : M.tx_in) = 
@@ -105,7 +105,7 @@ let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx ) 
   in
   let process_output hash index _  = 
     let key = I.encodeKey { hash = hash; index = index } in 
-    let value = I.encodeValue { status = "u"; lseek = block_pos + pos  } in
+    let value = I.encodeValue { status = "u"; lseek = block_pos + pos; length = length;  } in
     Db.put db key value
   in
   (* process in parallel inputs, then outputs in sequence *) 
@@ -132,23 +132,22 @@ let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx ) 
       (return ())  
       txs  
 
+(* duplicated in client4 *)
+let read_bytes fd len =
+  let block = Bytes .create len in
+  Lwt_unix.read fd block 0 len >>= 
+  fun ret ->
+    (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
+  return (
+    if ret = len then Some ( Bytes.to_string block )
+    else None 
+    )
 
 
 
 let run () = 
 
   Lwt_main.run (
-
-    let read_bytes fd len =
-      let block = Bytes .create len in
-      Lwt_unix.read fd block 0 len >>= 
-      fun ret ->
-        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
-      return (
-        if ret = len then Some ( Bytes.to_string block )
-        else None 
-        )
-    in
 
     (* we don't really need the count 
         but we do need the file descriptor...

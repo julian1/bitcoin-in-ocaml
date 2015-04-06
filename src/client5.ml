@@ -7,6 +7,10 @@
   - mostly we want to store the lseek pos into the blocks 
 
   - note leveldb iterators are not thread safe.
+
+  - all right now we should see if we can actually get lookup the tx,
+
+  - none of this tx stuff is needed...
 *)
 
 module M = Message
@@ -15,29 +19,57 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 
+let read_bytes fd len =
+  let block = Bytes .create len in
+  Lwt_unix.read fd block 0 len >>= 
+  fun ret ->
+    (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
+  return (
+    if ret = len then Some ( Bytes.to_string block )
+    else None 
+    )
+
+
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout 
 
 let run () = 
 	Lwt_main.run ( 
-    let rec loop i = 
+
+    let rec loop i fd = 
       Db.get_keyval i >>= fun (key,value) -> 
         let k = Index.decodeKey key in 
         let v = Index.decodeValue value in 
-        (* let pos, hash = M.decodeHash32 key 0 in 
-        let pos, index = M.decodeInteger32 key pos in *)
-        write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index ^ " " ^ v.status ^ " " ^ string_of_int v.lseek 
+        write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index 
+          ^ " " ^ v.status ^ " " ^ string_of_int v.lseek 
+          ^ " " ^ string_of_int v.length 
       >> Db.next i 
       >> Db.valid i >>= fun valid -> 
         if valid then  
-          loop i 
+
+          Lwt_unix.lseek fd v.lseek SEEK_SET
+          >> read_bytes fd v.length 
+          >>= (fun x -> match x with 
+            | None -> return ()
+            | Some payload ->  
+
+              (*write_stdout (Misc.string_of_bytes payload ) *)
+              let _, tx = M.decodeTx payload 0 in 
+
+              write_stdout (M.formatTx tx) 
+              >> loop i fd 
+          )
         else
           return ()
     in
-    Db.open_db "mydb" >>= fun db -> 
-    Db.make db >>= fun i -> Db.seek_to_first i 
-    >> 
-    loop i
+    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
+      match Lwt_unix.state fd with 
+        Opened -> 
+          write_stdout "opened blocks..." 
+          >> Db.open_db "mydb" 
+          >>= fun db -> Db.make db 
+          >>= fun i -> Db.seek_to_first i 
+          >> loop i fd
   )
 
 let () = run ()

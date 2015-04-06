@@ -1,11 +1,10 @@
 
-module M = Message
+(*
+	there's a bit of duplication in that we store the lseek for 
+	every output. when it only needs to be stored per hash.
+*)
 
-type value =
-{
-  status : string ;
-  lseek : int;
-}
+module M = Message
 
 type key = 
 {
@@ -14,6 +13,12 @@ type key =
 }
 
 
+type value =
+{
+  status : string ;
+  lseek : int;
+  length : int;
+}
 
 
 let encodeKey (h : key ) =
@@ -30,10 +35,12 @@ let decodeKey s  =
 let decodeValue s =
   let pos, status = M.decodeString s 0 in 
   let pos, lseek =  M.decodeInteger64 s pos in 
-  { status = status; lseek = Int64.to_int lseek; } 
+  let pos, length =  M.decodeInteger32 s pos in 
+  { status = status; lseek = Int64.to_int lseek; length = length; } 
 
 let encodeValue (h : value)  =
   M.encodeString h.status
   ^ M.encodeInteger64 (Int64.of_int h.lseek ) 
+  ^ M.encodeInteger32 h.length 
 
 
