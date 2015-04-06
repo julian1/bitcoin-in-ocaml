@@ -22,9 +22,11 @@ let run () =
 	Lwt_main.run ( 
     let rec loop i = 
       Db.get_keyval i >>= fun (key,value) -> 
-        let pos, hash = M.decodeHash32 key 0 in 
-        let pos, index = M.decodeInteger32 key pos in 
-        write_stdout @@ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ value
+        let k = Index.decodeKey key in 
+        let v = Index.decodeValue value in 
+        (* let pos, hash = M.decodeHash32 key 0 in 
+        let pos, index = M.decodeInteger32 key pos in *)
+        write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index ^ " " ^ v.status ^ " " ^ string_of_int v.lseek 
       >> Db.next i 
       >> Db.valid i >>= fun valid -> 
         if valid then  

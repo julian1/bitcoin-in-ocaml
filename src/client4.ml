@@ -24,6 +24,8 @@ let (>|=) = Lwt.(>|=)
 
 
 module M = Message
+module I = Index
+
 module L = List
 module CL = Core.Core_list
 
@@ -74,41 +76,6 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
 and set
 *) 
 
-type value =
-{
-  status : string ;
-  lseek : int;
-}
-
-type key = 
-{
-  hash : string ;
-  index : int;
-}
-
-
-
-let decodeValue s =
-  let pos, status = M.decodeString s 0 in 
-  let pos, lseek =  M.decodeInteger64 s pos in 
-  { status = status; lseek = Int64.to_int lseek; } 
-
-let encodeValue (h : value)  =
-  M.encodeString h.status
-  ^ M.encodeInteger64 (Int64.of_int h.lseek ) 
-
-
-let encodeKey (h : key ) =
-  M.encodeHash32 h.hash 
-  ^ M.encodeInteger32 h.index
-
-let decodeKey s  =
-  let pos, hash = M.decodeHash32 s 0 in
-  let _, index = M.decodeInteger32 s, pos in 
-  { hash = hash; index = index } 
-
-
-
        (* a >> process_tx db pos b ) *) 
 
 (* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
@@ -119,26 +86,26 @@ let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx ) 
     if input.previous = coinbase then
       return ()
     else
-      let key = encodeKey { hash = input.previous; index = input.index  } in
+      let key = I.encodeKey { hash = input.previous; index = input.index  } in
       Db.get db key 
       >>= (fun result ->	
         match result with 
           Some s -> 
             (* we should write functions to do this *)
-            let value = decodeValue s in 
+            let value = I.decodeValue s in 
             if value.status <> "u" then  
               let msg = "ooops tx is spent" in 
               raise (Failure msg) 
             else
-              Db.put db key (encodeValue { value with status = "s";  } ) 
+              Db.put db key (I.encodeValue { value with status = "s";  } ) 
           | None -> 
             let msg = "txo not found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
             raise (Failure msg) 
       ) 
   in
   let process_output hash index _  = 
-    let key = encodeKey { hash = hash; index = index } in 
-    let value = encodeValue { status = "u"; lseek = block_pos + pos  } in
+    let key = I.encodeKey { hash = hash; index = index } in 
+    let value = I.encodeValue { status = "u"; lseek = block_pos + pos  } in
     Db.put db key value
   in
   (* process in parallel inputs, then outputs in sequence *) 
