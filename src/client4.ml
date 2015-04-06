@@ -61,10 +61,6 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
   let coinbase = M.zeros 32 
   in
   let f (input : M.tx_in) = 
-    Lwt.join @@ 
-      L.mapi (fun i _ -> 
-        Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
-    >>
     if input.previous = coinbase then
       return ()
     else
@@ -73,7 +69,9 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
       >>= (fun result ->	
           match result with 
             Some _ -> return () (* write_stdout ("found " ^ s)  *)
-            | None -> raise (Failure "no found") (* write_stdout "not found "  *)
+            | None -> 
+              let msg = "txo no found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
+              raise (Failure msg) 
         ) 
       >>
       Db.put db key "s" 
@@ -81,6 +79,29 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
   (* fold over inputs *) 
 	Lwt.join @@ 
   ( L.map f tx.inputs )
+  >>
+    Lwt.join @@ 
+      L.mapi (fun i _ -> 
+        Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
+
+
+
+ let process_block payload db count = 
+    let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
+    let txs = decodeTXXX payload in
+      Lwt.join (
+        L.map 
+          ( process_tx db) 
+          txs  
+      )
+    >> 
+      write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
+(*      >> if count mod 1000 = 0 then 
+      write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
+    else 
+      >> return ()
+*)
+
 
 
 
@@ -99,6 +120,7 @@ let run () =
         )
     in
 
+ 
     let rec loop_blocks fd f db count =
       read_bytes fd 24
       >>= fun x -> match x with 
@@ -115,19 +137,6 @@ let run () =
               loop_blocks fd f db (count + 1)
           )
     in 
-    let process_block payload db count = 
-      let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
-      let txs = decodeTXXX payload in
-        Lwt.join (
-          L.map 
-            ( process_tx db) 
-            txs  
-        )
-      >> if count mod 1000 = 0 then 
-        write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
-      else
-        return ()
-    in
 
     Db.open_db "mydb" >>= fun db -> 
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
