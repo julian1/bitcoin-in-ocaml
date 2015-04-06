@@ -120,8 +120,6 @@ let run () =
         Lwt.join (
           (* loop_blocks over txs *) 
           L.map (fun ((pos, len, hash), tx  ) -> 
-
-
             process_tx db (pos, len, hash) tx   
           )  txs  
         )
