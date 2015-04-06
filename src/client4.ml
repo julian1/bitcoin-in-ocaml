@@ -108,7 +108,6 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
 
 (   if count mod 1000 = 0 then 
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
-      >> return ()
     else 
       return ()
 )
