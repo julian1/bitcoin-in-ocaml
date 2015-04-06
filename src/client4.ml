@@ -27,9 +27,9 @@ module CL = Core.Core_list
 
 let sequence txs  = 
   L.fold_left (fun a b ->  
-         a >> b ) 
+         b >> a ) 
         (return ())  
-        (L.rev txs ) 
+        (List.rev txs ) 
 
 
 
@@ -106,7 +106,7 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
 
-(    if true || count mod 1000 = 0 then 
+(    if count mod 1000 = 0 then 
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
     else 
       return ()
@@ -114,13 +114,12 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
     >>
 
     (* seqeuence *)
-(*    sequence ( L.map (process_tx db)  txs ) *)
+    (* sequence ( L.map (process_tx db)  txs )  *)
 
     L.fold_left (fun a b ->  
        a >> process_tx db b ) 
       (return ())  
       txs  
-
 
 
 
