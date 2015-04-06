@@ -28,6 +28,7 @@ module CL = Core.Core_list
 
 *) 
 
+(* : int * int * string * M.tx  *) 
 let decodeTXXX payload =
     (* move to Message ? *)
     let pos = 80 in
@@ -39,24 +40,22 @@ let decodeTXXX payload =
     let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
     let poss = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
     let zipped = CL.zip_exn poss lens in
-    (* tx hashes *)
-    let hashes = L.map (fun (pos,len) -> 
+    let zipped = CL.zip_exn zipped txs in
+    L.map (fun ((pos,len),tx) -> 
       let hash = M.strsub payload pos len 
       |> M.sha256d 
       |> M.strrev 
-      in pos, len, hash
-      ) zipped 
-    in
-    (* associate hash with tx *)
-    let txs = CL.zip_exn hashes txs in
-    txs
+      in pos, len, hash, tx
+      ) 
+    zipped 
+
 
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout 
 
 
 
-let process_tx db (pos, len, hash) (tx : M.tx)  = 
+let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
   let f (input : M.tx_in) = 
@@ -119,9 +118,13 @@ let run () =
       let txs = decodeTXXX payload in
         Lwt.join (
           (* loop_blocks over txs *) 
-          L.map (fun ((pos, len, hash), tx  ) -> 
+(*          L.map (fun ((pos, len, hash), tx  ) -> 
             process_tx db (pos, len, hash) tx   
           )  txs  
+*)
+          L.map 
+            ( process_tx db) 
+            txs  
         )
       >> if count mod 1000 = 0 then 
         write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
