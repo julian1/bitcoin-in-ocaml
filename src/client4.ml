@@ -67,12 +67,26 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
   to record the lseek pos.
 *)
 
+(* so we can push this stuff out into db, or somewhere else so it's useable by client 
+
+  in fact we could hide the entire thing behind a module and just have
+  get 
+and set
+*) 
 
 type value =
 {
   status : string ;
-  lseek : int ;
+  lseek : int;
 }
+
+type key = 
+{
+  hash : string ;
+  index : int;
+}
+
+
 
 let decodeValue s =
   let pos, status = M.decodeString s 0 in 
@@ -84,9 +98,16 @@ let encodeValue (h : value)  =
   ^ M.encodeInteger64 (Int64.of_int h.lseek ) 
 
 
-let encodeKey hash index =
-  M.encodeHash32 hash 
-  ^ M.encodeInteger32 index
+let encodeKey (h : key ) =
+  M.encodeHash32 h.hash 
+  ^ M.encodeInteger32 h.index
+
+let decodeKey s  =
+  let pos, hash = M.decodeHash32 s 0 in
+  let _, index = M.decodeInteger32 s, pos in 
+  { hash = hash; index = index } 
+
+
 
        (* a >> process_tx db pos b ) *) 
 
@@ -98,7 +119,7 @@ let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx ) 
     if input.previous = coinbase then
       return ()
     else
-      let key = encodeKey input.previous input.index in
+      let key = encodeKey { hash = input.previous; index = input.index  } in
       Db.get db key 
       >>= (fun result ->	
         match result with 
@@ -116,7 +137,7 @@ let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx ) 
       ) 
   in
   let process_output hash index _  = 
-    let key = encodeKey hash index in 
+    let key = encodeKey { hash = hash; index = index } in 
     let value = encodeValue { status = "u"; lseek = block_pos + pos  } in
     Db.put db key value
   in
@@ -134,7 +155,7 @@ let process_tx db block_pos ((pos , _ , hash, tx) : int * int * string * M.tx ) 
     let txs = decodeTXXX payload in
     if count mod 1000 = 0 then 
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
-      >> write_stdout @@ string_of_int pos 
+      (* >> write_stdout @@ string_of_int pos  *)
     else 
       return ()
     ;
