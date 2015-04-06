@@ -37,13 +37,15 @@ let decodeTXXX payload =
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
     (* extract tx start/lengths *)
     let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
-    let starts = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
-    let zipped = CL.zip_exn starts lens in
+    let poss = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
+    let zipped = CL.zip_exn poss lens in
     (* tx hashes *)
-    let hashes = L.map (fun (start,len) -> 
-      M.strsub payload start len 
+    let hashes = L.map (fun (pos,len) -> 
+      let hash = M.strsub payload pos len 
       |> M.sha256d 
-      |> M.strrev ) zipped 
+      |> M.strrev 
+      in pos, len, hash
+      ) zipped 
     in
     (* associate hash with tx *)
     let txs = CL.zip_exn hashes txs in
@@ -54,7 +56,7 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
 
 
-let process_tx db hash (tx : M.tx)  = 
+let process_tx db (pos, len, hash) (tx : M.tx)  = 
   let coinbase = M.zeros 32 
   in
   let f (input : M.tx_in) = 
@@ -117,8 +119,10 @@ let run () =
       let txs = decodeTXXX payload in
         Lwt.join (
           (* loop_blocks over txs *) 
-          L.map (fun (hash, tx  ) -> 
-            process_tx db hash tx   
+          L.map (fun ((pos, len, hash), tx  ) -> 
+
+
+            process_tx db (pos, len, hash) tx   
           )  txs  
         )
       >> if count mod 1000 = 0 then 
