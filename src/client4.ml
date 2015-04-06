@@ -67,9 +67,10 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
   to record the lseek pos.
 *)
 
+       (* a >> process_tx db pos b ) *) 
 
 (* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
-let process_tx db ((_ , _ , hash, tx) : int * int * string * M.tx )  = 
+let process_tx db block_pos ((_ , _ , hash, tx) : int * int * string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
   let process_input (input : M.tx_in) = 
@@ -91,17 +92,22 @@ let process_tx db ((_ , _ , hash, tx) : int * int * string * M.tx )  =
               raise (Failure msg) 
         ) 
       >>
-      Db.put db key "s" 
+      Db.put db key "s"  
   in
   let process_output hash i _  = 
-    Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" 
+    let key = (M.encodeHash32 hash ^ M.encodeInteger32 i) in 
+    let value = ( "u" ^ M.encodeInteger64 @@ Int64.of_int block_pos) in
+    Db.put db key "u" 
   in
   (* process in parallel inputs, then outputs in sequence *) 
   Lwt.join ( L.map process_input tx.inputs )
   >> Lwt.join ( L.mapi (process_output hash) tx.outputs )
 
 
-
+  
+  (* this thing doesn't use the db, so it should be configured ...
+    all this stuff is still mucky
+  *)
  let process_block db payload pos count = 
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
@@ -113,7 +119,7 @@ let process_tx db ((_ , _ , hash, tx) : int * int * string * M.tx )  =
     ;
     >>
     L.fold_left (fun a b ->  
-       a >> process_tx db b ) 
+       a >> process_tx db pos b ) 
       (return ())  
       txs  
 
