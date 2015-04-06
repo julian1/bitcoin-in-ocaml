@@ -25,6 +25,14 @@ module M = Message
 module L = List
 module CL = Core.Core_list
 
+let sequence txs  = 
+  L.fold_left (fun a b ->  
+         a >> b ) 
+        (return ())  
+        (L.rev txs ) 
+
+
+
 (* if we want the position, then we need the lseek position 
 
 *) 
@@ -98,13 +106,16 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
 
-    if count mod 1000 = 0 then 
+(    if true || count mod 1000 = 0 then 
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
     else 
       return ()
+)
     >>
 
     (* seqeuence *)
+(*    sequence ( L.map (process_tx db)  txs ) *)
+
     L.fold_left (fun a b ->  
        a >> process_tx db b ) 
       (return ())  
