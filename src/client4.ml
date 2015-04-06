@@ -83,61 +83,62 @@ let process_tx db hash (tx : M.tx)  =
 
 let run () = 
 
-Lwt_main.run (
+  Lwt_main.run (
 
-  let read_bytes fd len =
-    let block = Bytes .create len in
-    Lwt_unix.read fd block 0 len >>= 
-    fun ret ->
-      (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
-    return (
-      if ret = len then Some ( Bytes.to_string block )
-      else None 
-      )
-  in
-
-  let rec loop_blocks fd f db count =
-    read_bytes fd 24
-    >>= fun x -> match x with 
-      | None -> return ()
-      | Some s -> ( 
-        let _, header = M.decodeHeader s 0 in
-        (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
-        read_bytes fd header.length 
-        >>= fun u -> match u with 
-          | None -> return ()
-          | Some payload -> 
-              f payload db count 
-              >>= fun acc -> (* advance fd (header.length - 80 ) >> *) 
-              loop_blocks fd f db (count + 1)
+    let read_bytes fd len =
+      let block = Bytes .create len in
+      Lwt_unix.read fd block 0 len >>= 
+      fun ret ->
+        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
+      return (
+        if ret = len then Some ( Bytes.to_string block )
+        else None 
         )
-  in 
-  let process_block payload db count = 
-    let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
-    let txs = decodeTXXX payload in
-    Lwt.join (
-      (* loop_blocks over txs *) 
-      L.map (fun (hash, tx  ) -> 
-        process_tx db hash tx   
-      )  txs  
-    )
-    >> if count mod 1000 = 0 then 
-      write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
-    else
-      return ()
-  in
+    in
 
-	Db.open_db "mydb" >>= fun db -> 
-  Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 >>= fun fd -> 
+    let rec loop_blocks fd f db count =
+      read_bytes fd 24
+      >>= fun x -> match x with 
+        | None -> return ()
+        | Some s -> ( 
+          let _, header = M.decodeHeader s 0 in
+          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+          read_bytes fd header.length 
+          >>= fun u -> match u with 
+            | None -> return ()
+            | Some payload -> 
+                f payload db count 
+                >>= fun acc -> (* advance fd (header.length - 80 ) >> *) 
+                loop_blocks fd f db (count + 1)
+          )
+    in 
+    let process_block payload db count = 
+      let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
+      let txs = decodeTXXX payload in
+        Lwt.join (
+          (* loop_blocks over txs *) 
+          L.map (fun (hash, tx  ) -> 
+            process_tx db hash tx   
+          )  txs  
+        )
+      >> if count mod 1000 = 0 then 
+        write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
+      else
+        return ()
+    in
 
-    match Lwt_unix.state fd with 
-      Opened -> 
-        write_stdout "scanning blocks..." 
-        >> loop_blocks fd process_block db 0 
-        >> Lwt_unix.close fd
-      | _ -> 
-        write_stdout "couldn't open file"
-  )
+    Db.open_db "mydb" >>= fun db -> 
+    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
+      match Lwt_unix.state fd with 
+        Opened -> 
+          write_stdout "scanning blocks..." 
+          >> loop_blocks fd process_block db 0 
+          >> Lwt_unix.close fd
+        | _ -> 
+          write_stdout "couldn't open file"
+)
 
 let () = run ()
+
+
 
