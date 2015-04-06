@@ -1,4 +1,6 @@
 
+(* we should record the value, if only to verify ordering *)
+
 (*
   - instead of building index of just utxos we may as well just have an index 
   of all txo's and
@@ -64,6 +66,7 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
   al right we need to pass in the block position as well...
   to record the lseek pos.
 *)
+
 
 (* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
 let process_tx db ((_ , _ , hash, tx) : int * int * string * M.tx )  = 
