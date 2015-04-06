@@ -65,15 +65,11 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
     if input.previous = coinbase then
       return ()
     else
-      write_stdout "looking up key " 
-      >> let key = (M.encodeHash32 input.previous ^ M.encodeInteger32 input.index) in
+      let key = (M.encodeHash32 input.previous ^ M.encodeInteger32 input.index) in
       Db.get db key 
       >>= (fun result ->	
           match result with 
             Some _ -> 
-              let msg = "txo found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
-              write_stdout msg  
-              >>
                 return ()  
             | None -> 
               let msg = "txo not found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
@@ -83,8 +79,6 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
       Db.put db key "s" 
   in
 
-    write_stdout @@ "doing tx " ^ M.hex_of_string hash 
-    >> 
     (* why does writing the outputs first fix this issue ???
       ok, think it might be the join nested inside join ...
      *)
@@ -95,11 +89,8 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
     >>
     Lwt.join ( 
       L.mapi (fun i _ -> 
-        let msg = "marking output " ^ M.hex_of_string hash ^ " " ^ string_of_int i in
-        write_stdout msg
-        >> Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
+        Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
     )
-
 
 
 
@@ -107,16 +98,17 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
 
-    write_stdout @@ "\nblock " ^ string_of_int count ^ " " ^ M.hex_of_string block_hash
-    >> (* Lwt.join (
-      L.map 
-        ( process_tx db) 
-        txs  
-    ) *)
-      L.fold_left (fun a b ->  
-         a >> process_tx db b ) 
-        (return ())  
-        txs  
+    if count mod 1000 = 0 then 
+      write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
+    else 
+      return ()
+    >>
+
+    (* seqeuence *)
+    L.fold_left (fun a b ->  
+       a >> process_tx db b ) 
+      (return ())  
+      txs  
 
 
 
