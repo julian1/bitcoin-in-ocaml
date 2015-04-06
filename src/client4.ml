@@ -21,39 +21,6 @@ module M = Message
 module L = List
 module CL = Core.Core_list
 
-(*
-
-module SSS = Set.Make( 
-  struct
-    let compare = Pervasives.compare
-    type t = string * int
-  end 
-)
-
-*)
-(*
-let detach f = 
-  Lwt_preemptive.detach 
-    (fun () -> f ) () 
-*)
-
-
-(*
-module SSS = Set.Make( String );; 
-*)
-
-(*
-type acc_type =
-{
-  (* what is it that we want to record - the uxto set  
-    or changes... 
-  *)
-
-  count : int;
-	
-  utxos : LevelDB.db ;	
-}
-*)
 
 let decodeTXXX payload =
     (* move to Message ? *)
@@ -79,39 +46,20 @@ let decodeTXXX payload =
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout 
 
-(*
-  so we need to change utxos to be a db structure...
-  - add_block       (add and replace txos)
-  - remove_block    (remove txos) 
-
-  but how do we deal with addresses?
-*)
 
 
 let update_for_tx db hash (tx : M.tx)  = 
   let coinbase = M.zeros 32 
   in
-(*  let add_outputs outputs hash utxos  = 
-    CL.foldi outputs ~f:(fun i utxos output -> 
-      SSS.add (hash, i) utxos
-    ) ~init: utxos 
-  in
-*)
-
   let f (input : M.tx_in) = 
 
-    Lwt.join( 
+    Lwt.join @@ 
       L.mapi (fun i output -> 
         Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
-    )
     >>
     if input.previous = coinbase then
-      (* write_stdout "coinbase" *)
       return ()
     else
-      (* delete ?? - actually we don't want to delete, we just want to update to show it's spent 
-        should actually verify it exists...
-      *) 
       let key = (M.encodeHash32 input.previous ^ M.encodeInteger32 input.index) in
       Db.get db key 
       >>= (fun result ->	
@@ -121,45 +69,16 @@ let update_for_tx db hash (tx : M.tx)  =
         ) 
       >>
       Db.put db key "s" 
-
-(*
-  ok, i think we want to be able to look at the tx records,
-*)
-
-(*
-    utxos >>= (fun utxos -> 
-    if input.previous = coinbase then  
-      write_stdout "here"  
-      >> return ( add_outputs tx.outputs hash utxos ) 
-    else if SSS.mem (input.previous, input.index) utxos then   
-      write_stdout "here2"  
-       >> return (
-       utxos  
-      |> SSS.remove (input.previous, input.index)
-      |> add_outputs tx.outputs  hash
-      )
-    else
-      (* referencing a tx that doesn't exist *)
-      raise (Failure (
-        " hash " ^ M.hex_of_string hash 
-        ^ " previous " ^ M.hex_of_string input.previous
-        ^ " previous index " ^ string_of_int input.index 
-        ) )
-    )
-*)
   in
   (* fold over inputs *) 
-
-	Lwt.join( 
+	Lwt.join @@ 
   ( L.map f tx.inputs )
-	)
 
 
 
 let run () = 
 
 Lwt_main.run (
-
 
   let read_bytes fd len =
     let block = Bytes .create len in
@@ -171,16 +90,7 @@ Lwt_main.run (
       else None 
       )
   in
-  (* to scan the messages stored in file 
-    this thing is effectively a fold. 
-    don't we want to be able to compute something...
-    perhaps monadically...
 
-    change name do_block read_block... loop_blocks
-
-    db is not used here. so should be bound into f as an initial condition... 
-    call it fold_blocks ? 
-  *)
   let rec loop_blocks fd f db count =
     read_bytes fd 24
     >>= fun x -> match x with 
@@ -193,8 +103,8 @@ Lwt_main.run (
           | None -> return ()
           | Some payload -> 
               f payload db count 
-              >>= fun acc -> (* advance fd (header.length - 80 )
-              >> *) loop_blocks fd f db (count + 1)
+              >>= fun acc -> (* advance fd (header.length - 80 ) >> *) 
+              loop_blocks fd f db (count + 1)
         )
   in 
   let f payload db count = 
@@ -210,14 +120,6 @@ Lwt_main.run (
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
     else
       return ()
-
-(*    >>= (fun utxos -> 
-      write_stdout @@  (M.hex_of_string block_hash) 
-      >> return { acc with count = (acc.count + 1);  utxos = utxos;  }
-    )
-*)
-
-(*    return { acc with count = (acc.count + 1); (* utxos = utxos; *) } *)
   in
 
 	Db.open_db "mydb" >>= fun db -> 
@@ -227,9 +129,7 @@ Lwt_main.run (
       Opened -> 
         write_stdout "scanning blocks..." 
         >> loop_blocks fd f db 0 
-(*        >>= fun acc ->   
-          write_stdout ("result " ^ (string_of_int acc.count  ))
- *)       >> Lwt_unix.close fd
+        >> Lwt_unix.close fd
       | _ -> 
         write_stdout "couldn't open file"
   )
