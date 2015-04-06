@@ -24,6 +24,9 @@ module M = Message
 module L = List
 module CL = Core.Core_list
 
+(* if we want the position, then we need the lseek position 
+
+*) 
 
 let decodeTXXX payload =
     (* move to Message ? *)
