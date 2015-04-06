@@ -174,6 +174,9 @@ Lwt_main.run (
     perhaps monadically...
 
     change name do_block read_block... loop_blocks
+
+    db is not used here. so should be bound into f as an initial condition... 
+    call it fold_blocks ? 
   *)
   let rec loop_blocks fd f db count =
     read_bytes fd 24
