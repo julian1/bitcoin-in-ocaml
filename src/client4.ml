@@ -102,11 +102,12 @@ let process_tx db ((_ , _ , hash, tx) : int * int * string * M.tx )  =
 
 
 
- let process_block db payload count = 
+ let process_block db payload pos count = 
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
-    if count mod 1000 = 0 then 
+    if true || count mod 1000 = 0 then 
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
+      >> write_stdout @@ string_of_int pos 
     else 
       return ()
     ;
@@ -134,19 +135,25 @@ let run () =
         )
     in
 
- 
+    (* we don't really need the count 
+        but we do need the file descriptor...
+    *) 
     let rec loop_blocks fd f count =
       read_bytes fd 24
       >>= fun x -> match x with 
         | None -> return ()
         | Some s -> ( 
+
+          Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
+
           let _, header = M.decodeHeader s 0 in
           (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+
           read_bytes fd header.length 
           >>= fun u -> match u with 
             | None -> return ()
             | Some payload -> 
-              f payload count 
+              f payload pos count 
               >> 
               loop_blocks fd f (count + 1)
           )
