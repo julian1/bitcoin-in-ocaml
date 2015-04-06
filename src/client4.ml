@@ -106,13 +106,13 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
 
-(    if count mod 1000 = 0 then 
+(   if count mod 1000 = 0 then 
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
+      >> return ()
     else 
       return ()
 )
     >>
-
     (* seqeuence *)
     (* sequence ( L.map (process_tx db)  txs )  *)
 
