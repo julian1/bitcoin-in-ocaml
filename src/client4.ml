@@ -25,13 +25,13 @@ module M = Message
 module L = List
 module CL = Core.Core_list
 
+(*
 let sequence txs  = 
   L.fold_left (fun a b ->  
          b >> a ) 
         (return ())  
         (List.rev txs ) 
-
-
+*)
 
 (* if we want the position, then we need the lseek position 
 
@@ -66,7 +66,7 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
 *)
 
 (* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
-let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  = 
+let process_tx db ((_ , _ , hash, tx) : int * int * string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
   let process_input (input : M.tx_in) = 
@@ -77,8 +77,12 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
       Db.get db key 
       >>= (fun result ->	
           match result with 
-            Some _ -> 
-                return ()  
+            Some s -> 
+              if s <> "u" then  
+                let msg = "ooops tx is spent" in 
+                raise (Failure msg) 
+              else
+                  return ()  
             | None -> 
               let msg = "txo not found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
               raise (Failure msg) 
@@ -86,20 +90,20 @@ let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx )  =
       >>
       Db.put db key "s" 
   in
+  let process_output hash i _  = 
+    Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" 
+  in
+  (* process in parallel inputs, then outputs in sequence *) 
+  Lwt.join ( L.map process_input tx.inputs )
+  >> Lwt.join ( L.mapi (process_output hash) tx.outputs )
 
-    (* why does writing the outputs first fix this issue ???
-      ok, think it might be the join nested inside join ...
-     *)
-      (* fold over inputs *) 
-      Lwt.join ( 
-        ( L.map process_input tx.inputs )
-      )
-    >>
-    Lwt.join ( 
+
+
+(*    Lwt.join ( 
       L.mapi (fun i _ -> 
         Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
     )
-
+*)
 
 
  let process_block payload db count = 
