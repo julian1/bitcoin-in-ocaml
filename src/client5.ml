@@ -22,8 +22,9 @@ module DB =
   struct
 	  let open_db n = detach @@ LevelDB.open_db n 
 
-    let get_key i = detach @@ LevelDB.Iterator.get_key i
+    (* let get_key i = detach @@ LevelDB.Iterator.get_key i
     let get_value i = detach @@ LevelDB.Iterator.get_value i
+    *)
 
     let get_keyval i = detach @@ (
       let key = LevelDB.Iterator.get_key i  in
@@ -50,26 +51,16 @@ let run () =
 	Lwt_main.run (
 
 	let rec loop i = 
-		(* need to decode the index *)
     DB.get_keyval i >>= fun (key,value) -> 
-(* 
-		DB.get_key i 
-		>>= fun key -> 
-		DB.get_value i 
-		>>= fun value -> 
-*)
-      let pos = 0 in
-      let pos, hash = M.decodeHash32 key pos in 
+      let pos, hash = M.decodeHash32 key 0 in 
       let pos, index = M.decodeInteger32 key pos in 
-
 			write_stdout @@ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ value
-
 		>> DB.next i 
-
-    >> DB.valid i >>= fun valid -> if valid then  
-      loop i 
-    else
-      return ()
+    >> DB.valid i >>= fun valid -> 
+      if valid then  
+        loop i 
+      else
+        return ()
 	in
 	DB.open_db "mydb" >>= fun db -> 
 	DB.make db >>= fun i -> DB.seek_to_first i 

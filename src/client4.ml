@@ -40,7 +40,7 @@ let detach f =
 module SSS = Set.Make( String );; 
 *)
 
-
+(*
 type acc_type =
 {
   (* what is it that we want to record - the uxto set  
@@ -51,7 +51,7 @@ type acc_type =
 	
   utxos : LevelDB.db ;	
 }
-
+*)
 
 let decodeTXXX payload =
     (* move to Message ? *)
