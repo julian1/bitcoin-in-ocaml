@@ -102,38 +102,19 @@ let process_tx db ((_ , _ , hash, tx) : int * int * string * M.tx )  =
 
 
 
-(*    Lwt.join ( 
-      L.mapi (fun i _ -> 
-        Db.put db (M.encodeHash32 hash ^ M.encodeInteger32 i) "u" ) tx.outputs 
-    )
-*)
-
-
- let process_block payload db count = 
+ let process_block db payload count = 
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
-
-(   if count mod 1000 = 0 then 
+    if count mod 1000 = 0 then 
       write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
     else 
       return ()
-)
+    ;
     >>
-    (* seqeuence *)
-    (* sequence ( L.map (process_tx db)  txs )  *)
-
     L.fold_left (fun a b ->  
        a >> process_tx db b ) 
       (return ())  
       txs  
-
-
-
-(*      >> if count mod 1000 = 0 then 
-      write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
-    else 
-      >> return ()
-*)
 
 
 
@@ -154,7 +135,7 @@ let run () =
     in
 
  
-    let rec loop_blocks fd f db count =
+    let rec loop_blocks fd f count =
       read_bytes fd 24
       >>= fun x -> match x with 
         | None -> return ()
@@ -165,9 +146,9 @@ let run () =
           >>= fun u -> match u with 
             | None -> return ()
             | Some payload -> 
-              f payload db count 
+              f payload count 
               >> 
-              loop_blocks fd f db (count + 1)
+              loop_blocks fd f (count + 1)
           )
     in 
 
@@ -176,7 +157,7 @@ let run () =
       match Lwt_unix.state fd with 
         Opened -> 
           write_stdout "scanning blocks..." 
-          >> loop_blocks fd process_block db 0 
+          >> loop_blocks fd (process_block db) 0 
           >> Lwt_unix.close fd
         | _ -> 
           write_stdout "couldn't open file"

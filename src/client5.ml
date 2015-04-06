@@ -5,6 +5,8 @@
   - we should wrap the actions to be simpler... 
   - we can easily make a fold type function with the iterator.
   - mostly we want to store the lseek pos into the blocks 
+
+  - note leveldb iterators are not thread safe.
 *)
 
 module M = Message
