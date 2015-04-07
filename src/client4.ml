@@ -29,29 +29,6 @@ module I = Index
 module L = List
 module CL = Core.Core_list
 
-(*
-let sequence txs  = 
-  L.fold_left (fun a b ->  
-         b >> a ) 
-        (return ())  
-        (List.rev txs ) 
-*)
-
-(* if we want the position, then we need the lseek position 
-
-  O
-*) 
-
-(* : int * int * string * M.tx  *) 
-let decodeTXXX payload =
-    let pos = 80 in
-    let pos, tx_count = M.decodeVarInt payload pos in 
-    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    L.map (fun (tx : M.tx) -> 
-      let hash = M.strsub payload tx.pos tx.len |> M.sha256d |> M.strrev 
-      in hash, tx
-    ) txs 
-
 
 
 (*
@@ -66,10 +43,6 @@ let decodeTXXX payload =
 and set
 *) 
 
-       (* a >> process_tx db pos b ) *) 
-
-(* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
-(* let process_tx db block_pos ((pos, length , hash, tx) : int * int * string * M.tx )  =  *)
 let process_tx db block_pos ((hash, tx) : string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
@@ -111,8 +84,7 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
  let process_block db payload pos count = 
     let block_pos = pos in
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
-(*    let txs = decodeTXXX payload in  *)
-
+    (* decode tx's and get tx hash *)
     let pos = 80 in
     let pos, tx_count = M.decodeVarInt payload pos in 
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
