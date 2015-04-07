@@ -44,25 +44,9 @@ let sequence txs  =
 
 (* : int * int * string * M.tx  *) 
 let decodeTXXX payload =
-    (* move to Message ? *)
     let pos = 80 in
     let pos, tx_count = M.decodeVarInt payload pos in 
-    (* decode txs *)
-(*    let first = pos in *)
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    (* extract tx start/lengths 
-        we kind of want the output scripts to be indexed?  
-    *)
-(*    let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
-    let poss = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
-    let zipped = CL.zip_exn poss lens in
-    let zipped = CL.zip_exn zipped txs in
-    L.map (fun ((pos,len),tx) -> 
-      let hash = M.strsub payload pos len |> M.sha256d |> M.strrev 
-      in pos, len, hash, tx
-      ) 
-    zipped 
-*)
     L.map (fun (tx : M.tx) -> 
       let hash = M.strsub payload tx.pos tx.len |> M.sha256d |> M.strrev 
       in hash, tx
@@ -125,8 +109,19 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
     all this stuff is still mucky
   *)
  let process_block db payload pos count = 
+    let block_pos = pos in
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
-    let txs = decodeTXXX payload in
+(*    let txs = decodeTXXX payload in  *)
+
+    let pos = 80 in
+    let pos, tx_count = M.decodeVarInt payload pos in 
+    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+    let txs = L.map (fun (tx : M.tx) -> 
+      let hash = M.strsub payload tx.pos tx.len |> M.sha256d |> M.strrev 
+      in hash, tx
+    ) txs 
+    in
+
     if count mod 1000 = 0 then 
       Misc.write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
       (* >> write_stdout @@ string_of_int pos  *)
@@ -135,7 +130,7 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
     ;
     >>
     L.fold_left (fun a b ->  
-       a >> process_tx db pos b ) 
+       a >> process_tx db block_pos b ) 
       (return ())  
       txs  
 
