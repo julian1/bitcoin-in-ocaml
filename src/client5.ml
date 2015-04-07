@@ -16,8 +16,6 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 
-
-
 let run () = 
 	Lwt_main.run ( 
 
@@ -48,22 +46,17 @@ let run () =
             | None -> return ()
             | Some payload ->  
               let _, output = M.decodeTxOutput payload 0 in
-
               let tokens = M.decode_script output.script in 
-
               Misc.write_stdout @@ M.formatTxOutput output
               >> Misc.write_stdout @@ M.format_script tokens 
               >> Misc.write_stdout "" 
           )
-
-          (* ok, lets decode the script and display it! *)
-
           >> loop i fd 
-
         else
           return ()
     in
-    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
+    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 
+    >>= fun fd -> 
       match Lwt_unix.state fd with 
         Opened -> 
           Misc.write_stdout "opened blocks..." 
@@ -73,7 +66,6 @@ let run () =
           >> loop i fd
         | _ -> 
           Misc.write_stdout "failed to open file..." 
-
   )
 
 let () = run ()
