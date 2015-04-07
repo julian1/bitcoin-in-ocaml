@@ -418,6 +418,17 @@ let format_script tokens =
   String.concat " " @@ List.map format_token tokens
 
 
+let decodeTxOutput s pos =
+  let first = pos in
+  let pos, value = decodeInteger64 s pos in
+  let pos, scriptLen = decodeVarInt s pos in
+  let pos, script = decs_ s pos scriptLen in
+  pos, { value = value; script = (* decode_script *) script; 
+    pos = first;
+    length = pos - first;
+  }
+
+
 
 let decodeTx s pos =
 	(* we can't do the hash here cause we don't know the tx length, when
@@ -444,7 +455,7 @@ let decodeTx s pos =
   let pos, inputsCount = decodeVarInt s pos in
   let pos, inputs = decodeInputs s pos inputsCount in
 
-  let decodeOutput s pos =
+(*  let decodeOutput s pos =
     let first = pos in
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
@@ -454,7 +465,8 @@ let decodeTx s pos =
       length = pos - first;
     }
   in
-  let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
+*)
+  let decodeOutputs s pos n = decodeNItems s pos decodeTxOutput n in
   let pos, outputsCount = decodeVarInt s pos in
   let pos, outputs = decodeOutputs s pos outputsCount in
 

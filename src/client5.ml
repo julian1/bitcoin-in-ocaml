@@ -35,7 +35,7 @@ let run () =
       >> Db.next i 
       >> Db.valid i >>= fun valid -> 
         if valid then  
-
+(*
           Lwt_unix.lseek fd (v.block_pos + v.tx_pos ) SEEK_SET
           >> Misc.read_bytes fd v.tx_length 
           >>= (fun x -> match x with 
@@ -46,6 +46,14 @@ let run () =
               write_stdout  (M.formatTx tx) 
           )
 
+          >> *)Lwt_unix.lseek fd (v.block_pos + v.output_pos ) SEEK_SET
+          >> Misc.read_bytes fd v.output_length 
+          >>= (fun x -> match x with 
+            | None -> return ()
+            | Some payload ->  
+              let _, output = M.decodeTxOutput payload 0 in
+              write_stdout @@ M.formatOutput output
+          )
 
           >> loop i fd 
 
