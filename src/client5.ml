@@ -30,14 +30,16 @@ let run () =
         let k = Index.decodeKey key in 
         let v = Index.decodeValue value in 
         write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index 
-          ^ " " ^ v.status ^ " " ^ string_of_int v.lseek 
-          ^ " " ^ string_of_int v.length 
+          ^ " " ^ v.status 
+          ^ " " ^ string_of_int v.block_pos 
+          ^ " " ^ string_of_int v.tx_pos 
+          ^ " " ^ string_of_int v.tx_length 
       >> Db.next i 
       >> Db.valid i >>= fun valid -> 
         if valid then  
 
-          Lwt_unix.lseek fd v.lseek SEEK_SET
-          >> Misc.read_bytes fd v.length 
+          Lwt_unix.lseek fd (v.block_pos + v.tx_pos ) SEEK_SET
+          >> Misc.read_bytes fd v.tx_length 
           >>= (fun x -> match x with 
             | None -> return ()
             | Some payload ->  

@@ -90,8 +90,9 @@ type tx =
   (* calculated on parse *)
 (*  bytes_length : int; *)
   pos : int;
-  len : int;
+  length : int;
 }
+
 
 let hex_of_char c =
   let hexa = "0123456789abcdef" in
@@ -450,7 +451,7 @@ let decodeTx s pos =
   let pos, outputs = decodeOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { pos = first; len = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, { pos = first; length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
 
 
 

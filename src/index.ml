@@ -19,8 +19,9 @@ type key =
 type value =
 {
   status : string ;
-  lseek : int;
-  length : int;
+  block_pos : int;
+  tx_pos : int;
+  tx_length : int;
 }
 
 
@@ -36,13 +37,15 @@ let decodeKey s  =
 
 let decodeValue s =
   let pos, status = M.decodeString s 0 in 
-  let pos, lseek =  M.decodeInteger64 s pos in 
-  let pos, length =  M.decodeInteger32 s pos in 
-  { status = status; lseek = Int64.to_int lseek; length = length; } 
+  let pos, block_pos =  M.decodeInteger64 s pos in 
+  let pos, tx_pos =  M.decodeInteger32 s pos in 
+  let pos, tx_length =  M.decodeInteger32 s pos in 
+  { status = status; block_pos = Int64.to_int block_pos; tx_pos = tx_pos; tx_length = tx_length; } 
 
 let encodeValue (h : value)  =
   M.encodeString h.status
-  ^ M.encodeInteger64 (Int64.of_int h.lseek ) 
-  ^ M.encodeInteger32 h.length 
+  ^ M.encodeInteger64 (Int64.of_int h.block_pos ) 
+  ^ M.encodeInteger32 h.tx_pos 
+  ^ M.encodeInteger32 h.tx_length
 
 

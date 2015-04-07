@@ -69,7 +69,7 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
   in
   let process_output hash index _  = 
     let key = I.encodeKey { hash = hash; index = index } in 
-    let value = I.encodeValue { status = "u"; lseek = block_pos + tx.pos; length = tx.len;  } in
+    let value = I.encodeValue { status = "u"; block_pos = block_pos; tx_pos = tx.pos; tx_length = tx.length;  } in
     Db.put db key value
   in
   (* process in parallel inputs, then outputs in sequence *) 
@@ -89,7 +89,7 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
     let pos, tx_count = M.decodeVarInt payload pos in 
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
     let txs = L.map (fun (tx : M.tx) -> 
-      let hash = M.strsub payload tx.pos tx.len |> M.sha256d |> M.strrev 
+      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev 
       in hash, tx
     ) txs 
     in

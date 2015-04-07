@@ -1,4 +1,33 @@
 
+
+(* : int * int * string * M.tx  *) 
+let decodeTXXX payload =
+    (* move to Message ? *)
+    let pos = 80 in
+    let pos, tx_count = M.decodeVarInt payload pos in 
+    (* decode txs *)
+(*    let first = pos in *)
+    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+    (* extract tx start/lengths 
+        we kind of want the output scripts to be indexed?  
+    *)
+(*    let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
+    let poss = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
+    let zipped = CL.zip_exn poss lens in
+    let zipped = CL.zip_exn zipped txs in
+    L.map (fun ((pos,len),tx) -> 
+      let hash = M.strsub payload pos len |> M.sha256d |> M.strrev 
+      in pos, len, hash, tx
+      ) 
+    zipped 
+*)
+    L.map (fun (tx : M.tx) -> 
+      let hash = M.strsub payload tx.pos tx.len |> M.sha256d |> M.strrev 
+      in hash, tx
+    ) txs 
+
+
+
 (* 
 	let _ =  Lwt.join @@ L.map ( fun (hash,tx) -> 
 		write_stdout @@ " " ^ M.hex_of_string hash ^ M.formatTx tx) txs in 
