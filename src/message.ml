@@ -77,6 +77,11 @@ type tx_out =
   value : Int64.t;
   (* script: script_token list; *)
   script : string; 
+
+
+  (* calculated on parse *)
+  pos : int; 
+  length : int ;
 }
 
 type tx =
@@ -88,7 +93,6 @@ type tx =
   lockTime : int;
 
   (* calculated on parse *)
-(*  bytes_length : int; *)
   pos : int;
   length : int;
 }
@@ -441,10 +445,14 @@ let decodeTx s pos =
   let pos, inputs = decodeInputs s pos inputsCount in
 
   let decodeOutput s pos =
+    let first = pos in
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
     let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = (* decode_script *) script; }
+    pos, { value = value; script = (* decode_script *) script; 
+      pos = first;
+      length = pos - first;
+    }
   in
   let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
   let pos, outputsCount = decodeVarInt s pos in

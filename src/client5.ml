@@ -30,10 +30,8 @@ let run () =
         let k = Index.decodeKey key in 
         let v = Index.decodeValue value in 
         write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index 
-          ^ " " ^ v.status 
-          ^ " " ^ string_of_int v.block_pos 
-          ^ " " ^ string_of_int v.tx_pos 
-          ^ " " ^ string_of_int v.tx_length 
+          ^ " " ^ Index.formatValue v
+ 
       >> Db.next i 
       >> Db.valid i >>= fun valid -> 
         if valid then  
@@ -45,9 +43,12 @@ let run () =
             | Some payload ->  
               (*write_stdout (Misc.string_of_bytes payload ) *)
               let _, tx = M.decodeTx payload 0 in 
-              (* write_stdout tx.value  (M.formatTx tx)  *) 
-              loop i fd 
+              write_stdout  (M.formatTx tx) 
           )
+
+
+          >> loop i fd 
+
         else
           return ()
     in

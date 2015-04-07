@@ -67,9 +67,12 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
             raise (Failure msg) 
       ) 
   in
-  let process_output hash index _  = 
-    let key = I.encodeKey { hash = hash; index = index } in 
-    let value = I.encodeValue { status = "u"; block_pos = block_pos; tx_pos = tx.pos; tx_length = tx.length;  } in
+  let process_output tx_hash index (output : M.tx_out) = 
+    let key = I.encodeKey { hash = tx_hash; index = index } in 
+    let value = I.encodeValue { 
+        status = "u"; block_pos = block_pos; tx_pos = tx.pos; tx_length = tx.length;  
+        output_pos = output.pos; output_length = output.length; 
+      } in
     Db.put db key value
   in
   (* process in parallel inputs, then outputs in sequence *) 
