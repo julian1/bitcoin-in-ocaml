@@ -713,31 +713,31 @@ let formatBlock (h : block) =
 
 
 (* not sure if we want to enclose this scope, in the format tx action *)
-let formatInput input = String.concat "" [
+let formatTxInput input = String.concat "" [
   "  previous: " ^ hex_of_string input.previous
   ^ "\n  index: " ^ string_of_int input.index
   ^ "\n  script: " ^ (* format_script*) hex_of_string input.script
   ^ "\n  sequence: " ^ string_of_int input.sequence
 ]
 
-let formatInputs inputs =
-  String.concat "\n" @@ List.map formatInput inputs
+let formatTxInputs inputs =
+  String.concat "\n" @@ List.map formatTxInput inputs
 
-let formatOutput output = String.concat "" [
+let formatTxOutput output = String.concat "" [
   "  value: " ^ Int64.to_string output.value
   ^ "\n  script: " ^ (* format_script *) hex_of_string output.script
 ]
 
-let formatOutputs outputs =
-  String.concat "\n" @@ List.map formatOutput outputs
+let formatTxOutputs outputs =
+  String.concat "\n" @@ List.map formatTxOutput outputs
 
 let formatTx tx =
   (* " hash " ^ hex_of_string tx.hash  *)
   "\n version " ^ string_of_int tx.version
   ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
-  ^ "\n" ^ formatInputs tx.inputs
+  ^ "\n" ^ formatTxInputs tx.inputs
   ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
-  ^ "\n" ^ formatOutputs tx.outputs
+  ^ "\n" ^ formatTxOutputs tx.outputs
   ^ "\n lockTime " ^ string_of_int tx.lockTime
 
 

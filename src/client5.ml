@@ -43,8 +43,15 @@ let run () =
             | None -> return ()
             | Some payload ->  
               let _, output = M.decodeTxOutput payload 0 in
-              write_stdout @@ M.formatOutput output
+
+              let tokens = M.decode_script output.script in 
+
+              write_stdout @@ M.formatTxOutput output
+              >> write_stdout @@ M.format_script tokens 
+              >> write_stdout "" 
           )
+
+          (* ok, lets decode the script and display it! *)
 
           >> loop i fd 
 
