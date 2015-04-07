@@ -19,17 +19,6 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 
-let read_bytes fd len =
-  let block = Bytes .create len in
-  Lwt_unix.read fd block 0 len >>= 
-  fun ret ->
-    (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
-  return (
-    if ret = len then Some ( Bytes.to_string block )
-    else None 
-    )
-
-
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout 
 
@@ -48,16 +37,14 @@ let run () =
         if valid then  
 
           Lwt_unix.lseek fd v.lseek SEEK_SET
-          >> read_bytes fd v.length 
+          >> Misc.read_bytes fd v.length 
           >>= (fun x -> match x with 
             | None -> return ()
             | Some payload ->  
-
               (*write_stdout (Misc.string_of_bytes payload ) *)
               let _, tx = M.decodeTx payload 0 in 
-
-               write_stdout tx.value (* (M.formatTx tx)  *) 
-              >> loop i fd 
+              (* write_stdout tx.value  (M.formatTx tx)  *) 
+              loop i fd 
           )
         else
           return ()

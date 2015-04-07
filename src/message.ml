@@ -95,7 +95,11 @@ let hex_of_char c =
   let x = Char.code c in
   hexa.[x lsr 4], hexa.[x land 0xf]
 
-(* TODO change name hex_of_binary *)
+
+(*  
+  move to Misc.ml ?
+  
+*)
 let hex_of_string s =
   (* functional *)
   let n = String.length s in

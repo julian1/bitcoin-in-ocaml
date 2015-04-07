@@ -132,17 +132,6 @@ let process_tx db block_pos ((pos, length , hash, tx) : int * int * string * M.t
       (return ())  
       txs  
 
-(* duplicated in client4 *)
-let read_bytes fd len =
-  let block = Bytes .create len in
-  Lwt_unix.read fd block 0 len >>= 
-  fun ret ->
-    (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
-  return (
-    if ret = len then Some ( Bytes.to_string block )
-    else None 
-    )
-
 
 
 let run () = 
@@ -153,7 +142,7 @@ let run () =
         but we do need the file descriptor...
     *) 
     let rec loop_blocks fd f count =
-      read_bytes fd 24
+      Misc.read_bytes fd 24
       >>= fun x -> match x with 
         | None -> return ()
         | Some s -> ( 
@@ -163,7 +152,7 @@ let run () =
           let _, header = M.decodeHeader s 0 in
           (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
 
-          read_bytes fd header.length 
+          Misc.read_bytes fd header.length 
           >>= fun u -> match u with 
             | None -> return ()
             | Some payload -> 
