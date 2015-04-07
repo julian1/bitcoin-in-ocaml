@@ -61,9 +61,6 @@ let decodeTXXX payload =
     zipped 
 
 
-
-let write_stdout = Lwt_io.write_line Lwt_io.stdout 
-
 (*
   al right we need to pass in the block position as well...
   to record the lseek pos.
@@ -121,7 +118,7 @@ let process_tx db block_pos ((pos, length , hash, tx) : int * int * string * M.t
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     let txs = decodeTXXX payload in
     if count mod 1000 = 0 then 
-      write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
+      Misc.write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
       (* >> write_stdout @@ string_of_int pos  *)
     else 
       return ()
@@ -166,11 +163,11 @@ let run () =
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
       match Lwt_unix.state fd with 
         Opened -> 
-          write_stdout "scanning blocks..." 
+          Misc.write_stdout "scanning blocks..." 
           >> loop_blocks fd (process_block db) 0 
           >> Lwt_unix.close fd
         | _ -> 
-          write_stdout "couldn't open file"
+          Misc.write_stdout "couldn't open file"
 )
 
 let () = run ()
