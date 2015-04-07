@@ -16,6 +16,19 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 
+(* is the iterator valid and does the first char match 
+  we could actually return the key
+  *)
+let valid i = 
+  Db.valid i 
+  >>= fun valid -> 
+    if valid then  
+      Db.get_key i 
+      >>= fun key -> 
+        return (key.[0]) (* = 't')  *)
+    else
+      return '0'
+
 
 let run () = 
 	Lwt_main.run ( 
@@ -48,11 +61,11 @@ let run () =
             >> Misc.write_stdout @@ M.format_script tokens 
             >> Misc.write_stdout "" 
         )
- 
+
+      (* need to partition the keyspace, - instead of doing if else we could pass the function?? *)
       >> Db.next i 
-      >> Db.valid i 
-      >>= fun valid -> 
-        if valid then  
+      >> valid i >>= fun ret ->
+        if ret = 't' then
           loop i fd 
         else
           return ()
@@ -64,9 +77,8 @@ let run () =
           Misc.write_stdout "opened blocks..." 
           >> Db.open_db "mydb" 
           >>= fun db -> Db.make db 
-          >>= fun i -> Db.seek_to_first i 
-
-          >> Db.seek i (M.encodeHash32 ( M.string_of_hex "222c3b911469a8ea1f0eff0dd34b4facdd5db7e0ebe47d97ac08cbed2bc00200" )) 
+          (* >>= fun i -> Db.seek_to_first i  *)
+          >>= fun i -> Db.seek i "t"  
           >> loop i fd
         | _ -> 
           Misc.write_stdout "failed to open file..." 

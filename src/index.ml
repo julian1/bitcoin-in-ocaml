@@ -26,23 +26,25 @@ type value =
   output_length : int ; 
 }
 
-(* change name to encodeTXKey and decodeTXValue or IndexValue to distinguish from 
+(* change name to encodeTXOKey and decodeTXOValue to distinguish from 
   other indexes in db.
   etc 
   --- 
   if we have several types of things - then should we be using variants? 
 
+  encodeTXOKey
 *)
 
-let encodeKey (h : key ) =
-(*  "/tx/" *)
-  M.encodeHash32 h.hash 
-  ^ M.encodeInteger32 h.index
-
 let decodeKey s  =
-  let pos, hash = M.decodeHash32 s 0 in
+  let pos = 1 in
+  let pos, hash = M.decodeHash32 s pos in
   let _, index = M.decodeInteger32 s pos in 
   { hash = hash; index = index } 
+
+let encodeKey (h : key ) =
+  "t"
+  ^ M.encodeHash32 h.hash 
+  ^ M.encodeInteger32 h.index
 
 
 let decodeValue s =
@@ -71,8 +73,5 @@ let formatValue (h : value)  =
   ^ " tx_length " ^ string_of_int h.tx_length
   ^ " output_pos " ^ string_of_int h.output_pos
   ^ " output_length " ^ string_of_int h.output_length
-
-
-
 
 
