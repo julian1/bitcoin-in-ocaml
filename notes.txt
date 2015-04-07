@@ -1,3 +1,149 @@
+
+
+(* : int * int * string * M.tx  *) 
+let decodeTXXX payload =
+    (* move to Message ? *)
+    let pos = 80 in
+    let pos, tx_count = M.decodeVarInt payload pos in 
+    (* decode txs *)
+(*    let first = pos in *)
+    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+    (* extract tx start/lengths 
+        we kind of want the output scripts to be indexed?  
+    *)
+(*    let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
+    let poss = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
+    let zipped = CL.zip_exn poss lens in
+    let zipped = CL.zip_exn zipped txs in
+    L.map (fun ((pos,len),tx) -> 
+      let hash = M.strsub payload pos len |> M.sha256d |> M.strrev 
+      in pos, len, hash, tx
+      ) 
+    zipped 
+*)
+    L.map (fun (tx : M.tx) -> 
+      let hash = M.strsub payload tx.pos tx.len |> M.sha256d |> M.strrev 
+      in hash, tx
+    ) txs 
+
+
+
+(* 
+	let _ =  Lwt.join @@ L.map ( fun (hash,tx) -> 
+		write_stdout @@ " " ^ M.hex_of_string hash ^ M.formatTx tx) txs in 
+*)
+
+    (* - want to associate the hash with the tx - so can look up 
+        and invalidate... 
+    *)
+(*    (
+    if (mod) acc.count 1000 = 0 then
+      write_stdout @@ 
+        "*****\n"
+        ^ string_of_int acc.count 
+        ^ " " ^ M.hex_of_string hash 
+        ^ " " ^ string_of_int tx_count  
+      else
+        return () 
+    ) *)      
+
+
+
+(*    >>= (fun utxos -> 
+      write_stdout @@  (M.hex_of_string block_hash) 
+      >> return { acc with count = (acc.count + 1);  utxos = utxos;  }
+    )
+*)
+
+(*    return { acc with count = (acc.count + 1); (* utxos = utxos; *) } *)
+
+  (* to scan the messages stored in file 
+    this thing is effectively a fold. 
+    don't we want to be able to compute something...
+    perhaps monadically...
+
+    change name do_block read_block... loop_blocks
+
+    db is not used here. so should be bound into f as an initial condition... 
+    call it fold_blocks ? 
+  *)
+
+(*
+  ok, i think we want to be able to look at the tx records,
+*)
+
+(*
+    utxos >>= (fun utxos -> 
+    if input.previous = coinbase then  
+      write_stdout "here"  
+      >> return ( add_outputs tx.outputs hash utxos ) 
+    else if SSS.mem (input.previous, input.index) utxos then   
+      write_stdout "here2"  
+       >> return (
+       utxos  
+      |> SSS.remove (input.previous, input.index)
+      |> add_outputs tx.outputs  hash
+      )
+    else
+      (* referencing a tx that doesn't exist *)
+      raise (Failure (
+        " hash " ^ M.hex_of_string hash 
+        ^ " previous " ^ M.hex_of_string input.previous
+        ^ " previous index " ^ string_of_int input.index 
+        ) )
+    )
+*)
+
+
+(*
+  so we need to change utxos to be a db structure...
+  - add_block       (add and replace txos)
+  - remove_block    (remove txos) 
+  but how do we deal with addresses?
+*)
+
+
+((*  let add_outputs outputs hash utxos  = 
+    CL.foldi outputs ~f:(fun i utxos output -> 
+      SSS.add (hash, i) utxos
+    ) ~init: utxos 
+  in
+*)
+*
+
+module SSS = Set.Make( 
+  struct
+    let compare = Pervasives.compare
+    type t = string * int
+  end 
+)
+
+*)
+(*
+let detach f = 
+  Lwt_preemptive.detach 
+    (fun () -> f ) () 
+*)
+
+
+(*
+module SSS = Set.Make( String );; 
+*)
+
+(*
+type acc_type =
+{
+  (* what is it that we want to record - the uxto set  
+    or changes... 
+  *)
+
+  count : int;
+	
+  utxos : LevelDB.db ;	
+}
+*)
+
+
 (*
             in
             let new_heads = List.map (fun head -> 

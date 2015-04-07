@@ -77,6 +77,11 @@ type tx_out =
   value : Int64.t;
   (* script: script_token list; *)
   script : string; 
+
+
+  (* calculated on parse *)
+  pos : int; 
+  length : int ;
 }
 
 type tx =
@@ -87,15 +92,22 @@ type tx =
   outputs: tx_out list;
   lockTime : int;
 
-  bytes_length : int;
+  (* calculated on parse *)
+  pos : int;
+  length : int;
 }
+
 
 let hex_of_char c =
   let hexa = "0123456789abcdef" in
   let x = Char.code c in
   hexa.[x lsr 4], hexa.[x land 0xf]
 
-(* TODO change name hex_of_binary *)
+
+(*  
+  move to Misc.ml ?
+  
+*)
 let hex_of_string s =
   (* functional *)
   let n = String.length s in
@@ -406,6 +418,17 @@ let format_script tokens =
   String.concat " " @@ List.map format_token tokens
 
 
+let decodeTxOutput s pos =
+  let first = pos in
+  let pos, value = decodeInteger64 s pos in
+  let pos, scriptLen = decodeVarInt s pos in
+  let pos, script = decs_ s pos scriptLen in
+  pos, { value = value; script = (* decode_script *) script; 
+    pos = first;
+    length = pos - first;
+  }
+
+
 
 let decodeTx s pos =
 	(* we can't do the hash here cause we don't know the tx length, when
@@ -432,18 +455,23 @@ let decodeTx s pos =
   let pos, inputsCount = decodeVarInt s pos in
   let pos, inputs = decodeInputs s pos inputsCount in
 
-  let decodeOutput s pos =
+(*  let decodeOutput s pos =
+    let first = pos in
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
     let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = (* decode_script *) script; }
+    pos, { value = value; script = (* decode_script *) script; 
+      pos = first;
+      length = pos - first;
+    }
   in
-  let decodeOutputs s pos n = decodeNItems s pos decodeOutput n in
+*)
+  let decodeOutputs s pos n = decodeNItems s pos decodeTxOutput n in
   let pos, outputsCount = decodeVarInt s pos in
   let pos, outputs = decodeOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { bytes_length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, { pos = first; length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
 
 
 

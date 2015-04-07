@@ -1,49 +1,74 @@
 
-open Lwt (* for >>= *)
+(*
+  - index may be reverse of what we want
+  - do we record the value?  or refer ba
+  - we should wrap the actions to be simpler... 
+  - we can easily make a fold type function with the iterator.
+  - mostly we want to store the lseek pos into the blocks 
+
+  - note leveldb iterators are not thread safe.
+
+  - all right now we should see if we can actually get lookup the tx,
+
+  - none of this tx stuff is needed...
+*)
+
 module M = Message
 
+let (>>=) = Lwt.(>>=)
+let return = Lwt.return
 
-let detach f = 
-  Lwt_preemptive.detach 
-    (fun () -> f ) () 
 
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout 
 
 let run () = 
+	Lwt_main.run ( 
 
-	Lwt_main.run (
+    let rec loop i fd = 
+      Db.get_keyval i >>= fun (key,value) -> 
+        let k = Index.decodeKey key in 
+        let v = Index.decodeValue value in 
+        write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index 
+          ^ " " ^ Index.formatValue v
+ 
+      >> Db.next i 
+      >> Db.valid i >>= fun valid -> 
+        if valid then  
+(*
+          Lwt_unix.lseek fd (v.block_pos + v.tx_pos ) SEEK_SET
+          >> Misc.read_bytes fd v.tx_length 
+          >>= (fun x -> match x with 
+            | None -> return ()
+            | Some payload ->  
+              (*write_stdout (Misc.string_of_bytes payload ) *)
+              let _, tx = M.decodeTx payload 0 in 
+              write_stdout  (M.formatTx tx) 
+          )
 
-	let rec loop i = 
-		(* need to decode the index *)
-		detach @@ LevelDB.Iterator.get_key i 
-		>>= fun key -> 
-		detach @@ LevelDB.Iterator.get_value i 
-		>>= fun value -> 
-      let pos = 0 in
-      let pos, hash = M.decodeHash32 key pos in 
-      let pos, index = M.decodeInteger32 key pos in 
+          >> *)Lwt_unix.lseek fd (v.block_pos + v.output_pos ) SEEK_SET
+          >> Misc.read_bytes fd v.output_length 
+          >>= (fun x -> match x with 
+            | None -> return ()
+            | Some payload ->  
+              let _, output = M.decodeTxOutput payload 0 in
+              write_stdout @@ M.formatOutput output
+          )
 
-			write_stdout @@ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ value
-		>> detach @@ LevelDB.Iterator.next i 
+          >> loop i fd 
 
-    >> if LevelDB.Iterator.valid i then  
-      loop i 
-    else
-      return ()
-
-
-
-	in
-	detach @@ LevelDB.open_db "mydb" 
-	>>= fun db -> 
-	detach @@ LevelDB.Iterator.make db 
-	>>= fun i -> 
-	detach @@ LevelDB.Iterator.seek_to_first i 
-	>> 
-	loop i
-)
-
+        else
+          return ()
+    in
+    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
+      match Lwt_unix.state fd with 
+        Opened -> 
+          write_stdout "opened blocks..." 
+          >> Db.open_db "mydb" 
+          >>= fun db -> Db.make db 
+          >>= fun i -> Db.seek_to_first i 
+          >> loop i fd
+  )
 
 let () = run ()
 
