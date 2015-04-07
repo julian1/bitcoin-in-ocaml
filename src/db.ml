@@ -35,6 +35,13 @@ let put db key value = detach @@ LevelDB.put db key value
 let get db key = detach @@ LevelDB.get db key 
  
 
- 
+  (** [seek it s off len] seeks to first binding whose key is >= to the key
+    * corresponding to the substring of [s] starting at [off] and of length
+    * [len].
+*) 
+
+let seek i key = detach @@ LevelDB.Iterator.seek i key 0 (String.length key) 
+
+
 
 

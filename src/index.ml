@@ -26,6 +26,9 @@ type value =
   output_length : int ; 
 }
 
+(* change name to encodeTXKey and decodeTXValue or IndexValue to distinguish from 
+  other indexes in db.
+  etc *)
 
 let encodeKey (h : key ) =
   M.encodeHash32 h.hash 

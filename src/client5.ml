@@ -16,6 +16,7 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 
+
 let run () = 
 	Lwt_main.run ( 
 
@@ -63,6 +64,8 @@ let run () =
           >> Db.open_db "mydb" 
           >>= fun db -> Db.make db 
           >>= fun i -> Db.seek_to_first i 
+
+          >> Db.seek i (M.encodeHash32 ( M.string_of_hex "222c3b911469a8ea1f0eff0dd34b4facdd5db7e0ebe47d97ac08cbed2bc00200" )) 
           >> loop i fd
         | _ -> 
           Misc.write_stdout "failed to open file..." 
