@@ -10,6 +10,27 @@
   able to move to the first item...
 *)
 
+(*
+  indexing addresses is harder because they can be used multiple times . 
+  we have to use either 
+      - a value representing which particular tx and index 
+      which means we can't test whether an address exists without
+      using an iterator. 
+
+      - or we just use sequential number which means need to scan 
+      to the end to update.
+
+      - or else use a big list, which has problem that must retrieve all 
+      uses, add an entry and store back again. 
+
+      - in fact the first case is effieicent... for indexing
+        but search is slow with the index ...
+      - address / tx / output index
+
+      ---- 
+
+*)
+
 module M = Message
 
 let (>>=) = Lwt.(>>=)
