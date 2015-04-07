@@ -1,4 +1,7 @@
 
+(* there's a bunch of string manipulation functions in message.ml that
+are not encode or decode that should probably go here *)
+
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
@@ -23,6 +26,8 @@ let read_bytes fd len =
     if ret = len then Some ( Bytes.to_string block )
     else None 
     )
+
+let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
 
 
