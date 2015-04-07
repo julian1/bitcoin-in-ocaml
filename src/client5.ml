@@ -1,23 +1,14 @@
-
 (*
-  - index may be reverse of what we want
-  - do we record the value?  or refer ba
-  - we should wrap the actions to be simpler... 
+  scan tx indexes, and lookup the relevant tx or output and print 
+
   - we can easily make a fold type function with the iterator.
-  - mostly we want to store the lseek pos into the blocks 
-
   - note leveldb iterators are not thread safe.
-
-  - all right now we should see if we can actually get lookup the tx,
-
-  - none of this tx stuff is needed...
 *)
 
 module M = Message
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
-
 
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout 
