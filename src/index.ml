@@ -1,7 +1,10 @@
 
 (*
-	there's a bit of duplication in that we store the lseek for 
+	- there's a bit of duplication in that we store the lseek for 
 	every output. when it only needs to be stored per hash.
+
+	- when we index we really want to store the block pos, tx pos separately, and actual output
+		separately - to get the value etc.
 *)
 
 module M = Message

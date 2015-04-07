@@ -39,6 +39,7 @@ let sequence txs  =
 
 (* if we want the position, then we need the lseek position 
 
+  O
 *) 
 
 (* : int * int * string * M.tx  *) 
@@ -47,10 +48,12 @@ let decodeTXXX payload =
     let pos = 80 in
     let pos, tx_count = M.decodeVarInt payload pos in 
     (* decode txs *)
-    let first = pos in
+(*    let first = pos in *)
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    (* extract tx start/lengths *)
-    let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
+    (* extract tx start/lengths 
+        we kind of want the output scripts to be indexed?  
+    *)
+(*    let lens = L.map (fun (tx : M.tx) -> tx.bytes_length) txs in 
     let poss = L.fold_left (fun acc len -> L.hd acc + len::acc) [first] lens |> L.tl |> L.rev in 
     let zipped = CL.zip_exn poss lens in
     let zipped = CL.zip_exn zipped txs in
@@ -59,6 +62,12 @@ let decodeTXXX payload =
       in pos, len, hash, tx
       ) 
     zipped 
+*)
+    L.map (fun (tx : M.tx) -> 
+      let hash = M.strsub payload tx.pos tx.len |> M.sha256d |> M.strrev 
+      in hash, tx
+    ) txs 
+
 
 
 (*
@@ -76,7 +85,8 @@ and set
        (* a >> process_tx db pos b ) *) 
 
 (* let process_tx db ((pos, len, hash, tx) : int * int * string * M.tx ) *)
-let process_tx db block_pos ((pos, length , hash, tx) : int * int * string * M.tx )  = 
+(* let process_tx db block_pos ((pos, length , hash, tx) : int * int * string * M.tx )  =  *)
+let process_tx db block_pos ((hash, tx) : string * M.tx )  = 
   let coinbase = M.zeros 32 
   in
   let process_input (input : M.tx_in) = 
@@ -102,7 +112,7 @@ let process_tx db block_pos ((pos, length , hash, tx) : int * int * string * M.t
   in
   let process_output hash index _  = 
     let key = I.encodeKey { hash = hash; index = index } in 
-    let value = I.encodeValue { status = "u"; lseek = block_pos + pos; length = length;  } in
+    let value = I.encodeValue { status = "u"; lseek = block_pos + tx.pos; length = tx.len;  } in
     Db.put db key value
   in
   (* process in parallel inputs, then outputs in sequence *) 

@@ -1,5 +1,7 @@
 
-
+(* Lwt wrapper around level db 
+	- note that iterator stuff is not thread safe, but get, put etc are
+*)
 
 let (>>=) = Lwt.(>>=)
 let return  = Lwt.return

@@ -86,8 +86,11 @@ type tx =
   inputs: tx_in list ;
   outputs: tx_out list;
   lockTime : int;
+
   (* calculated on parse *)
-  bytes_length : int;
+(*  bytes_length : int; *)
+  pos : int;
+  len : int;
 }
 
 let hex_of_char c =
@@ -447,7 +450,7 @@ let decodeTx s pos =
   let pos, outputs = decodeOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { bytes_length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, { pos = first; len = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
 
 
 
