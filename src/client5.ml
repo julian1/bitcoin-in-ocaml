@@ -5,13 +5,18 @@
   - note leveldb iterators are not thread safe.
 *)
 
+(*
+  so if we want to use the same leveldb to perform indexing, then we need to be
+  able to move to the first item...
+*)
+
 module M = Message
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 
-let write_stdout = Lwt_io.write_line Lwt_io.stdout 
+
 
 let run () = 
 	Lwt_main.run ( 
@@ -20,7 +25,7 @@ let run () =
       Db.get_keyval i >>= fun (key,value) -> 
         let k = Index.decodeKey key in 
         let v = Index.decodeValue value in 
-        write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index 
+        Misc.write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index 
           ^ " " ^ Index.formatValue v
  
       >> Db.next i 
@@ -32,9 +37,9 @@ let run () =
           >>= (fun x -> match x with 
             | None -> return ()
             | Some payload ->  
-              (*write_stdout (Misc.string_of_bytes payload ) *)
+              (*Misc.write_stdout (Misc.string_of_bytes payload ) *)
               let _, tx = M.decodeTx payload 0 in 
-              write_stdout  (M.formatTx tx) 
+              Misc.write_stdout  (M.formatTx tx) 
           )
 
           >> *)Lwt_unix.lseek fd (v.block_pos + v.output_pos ) SEEK_SET
@@ -46,9 +51,9 @@ let run () =
 
               let tokens = M.decode_script output.script in 
 
-              write_stdout @@ M.formatTxOutput output
-              >> write_stdout @@ M.format_script tokens 
-              >> write_stdout "" 
+              Misc.write_stdout @@ M.formatTxOutput output
+              >> Misc.write_stdout @@ M.format_script tokens 
+              >> Misc.write_stdout "" 
           )
 
           (* ok, lets decode the script and display it! *)
@@ -61,11 +66,14 @@ let run () =
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
       match Lwt_unix.state fd with 
         Opened -> 
-          write_stdout "opened blocks..." 
+          Misc.write_stdout "opened blocks..." 
           >> Db.open_db "mydb" 
           >>= fun db -> Db.make db 
           >>= fun i -> Db.seek_to_first i 
           >> loop i fd
+        | _ -> 
+          Misc.write_stdout "failed to open file..." 
+
   )
 
 let () = run ()
