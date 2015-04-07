@@ -28,9 +28,14 @@ type value =
 
 (* change name to encodeTXKey and decodeTXValue or IndexValue to distinguish from 
   other indexes in db.
-  etc *)
+  etc 
+  --- 
+  if we have several types of things - then should we be using variants? 
+
+*)
 
 let encodeKey (h : key ) =
+(*  "/tx/" *)
   M.encodeHash32 h.hash 
   ^ M.encodeInteger32 h.index
 

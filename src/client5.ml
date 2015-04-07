@@ -26,11 +26,7 @@ let run () =
         let v = Index.decodeValue value in 
         Misc.write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index 
           ^ " " ^ Index.formatValue v
- 
-      >> Db.next i 
-      >> Db.valid i >>= fun valid -> 
-        if valid then  
-(*
+        (*
           Lwt_unix.lseek fd (v.block_pos + v.tx_pos ) SEEK_SET
           >> Misc.read_bytes fd v.tx_length 
           >>= (fun x -> match x with 
@@ -40,19 +36,24 @@ let run () =
               let _, tx = M.decodeTx payload 0 in 
               Misc.write_stdout  (M.formatTx tx) 
           )
-
-          >> *)Lwt_unix.lseek fd (v.block_pos + v.output_pos ) SEEK_SET
-          >> Misc.read_bytes fd v.output_length 
-          >>= (fun x -> match x with 
-            | None -> return ()
-            | Some payload ->  
-              let _, output = M.decodeTxOutput payload 0 in
-              let tokens = M.decode_script output.script in 
-              Misc.write_stdout @@ M.formatTxOutput output
-              >> Misc.write_stdout @@ M.format_script tokens 
-              >> Misc.write_stdout "" 
-          )
-          >> loop i fd 
+      *)
+        >> Lwt_unix.lseek fd (v.block_pos + v.output_pos ) SEEK_SET
+        >> Misc.read_bytes fd v.output_length 
+        >>= (fun x -> match x with 
+          | None -> return ()
+          | Some payload ->  
+            let _, output = M.decodeTxOutput payload 0 in
+            let tokens = M.decode_script output.script in 
+            Misc.write_stdout @@ M.formatTxOutput output
+            >> Misc.write_stdout @@ M.format_script tokens 
+            >> Misc.write_stdout "" 
+        )
+ 
+      >> Db.next i 
+      >> Db.valid i 
+      >>= fun valid -> 
+        if valid then  
+          loop i fd 
         else
           return ()
     in
