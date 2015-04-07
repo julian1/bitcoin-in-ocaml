@@ -25,12 +25,20 @@ let myfunc acc (key,value) =
       | "s" -> { acc with spent = acc.spent + 1 }  
       | _ -> raise ( Failure "ughh" )
   in
+  if ((acc.unspent + acc.spent) mod 100000) = 0 then
+    Misc.write_stdout @@ "unspent " ^ string_of_int acc.unspent 
+      ^ " " ^ " spent " ^ string_of_int acc.spent 
+  else
+    return ()
+    ;
+
   (* Misc.write_stdout @@ M.hex_of_string k.hash ^ " " ^ string_of_int k.index
     ^ " " ^ v.status ^ " " ^ string_of_int v.lseek
     ^ " " ^ string_of_int v.length
   >> Misc.write_stdout @@ "unspent " ^ string_of_int acc.unspent 
     ^ " " ^ " spent " ^ string_of_int acc.spent 
-  >> *)return acc 
+  >> *)
+  >> return acc 
 
 let rec fold i f acc =
   Db.get_keyval i 
@@ -38,7 +46,7 @@ let rec fold i f acc =
   >>= fun acc -> Db.next i
   >> Db.valid i 
   >>= fun valid ->
-    if valid && acc.unspent < 100 then
+    if valid (* && acc.unspent < 100 *) then
       fold i f acc
     else
       return acc 
