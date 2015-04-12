@@ -26,6 +26,27 @@ module L = List
 module CL = Core.Core_list
 
 
+
+let initial_getblocks starting_hash =
+  (* the list are the options, and peer will return a sequence
+    from the first valid block in our list *)
+  let payload =
+    M.encodeInteger32 1  (* version *)
+    ^ M.encodeVarInt 1
+    ^ M.encodeHash32 starting_hash
+                        (* TODO should be list of hashes *)
+    ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
+  in
+  let header = M.encodeHeader {
+    magic = Misc.magic ;
+    command = "getblocks";
+    length = M.strlen payload;
+    checksum = M.checksum payload;
+  } in
+  header ^ payload
+
+
+
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
 let manage_chain1 state  e   =  
 
@@ -81,10 +102,16 @@ let manage_chain2 state  e   =
         let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
         let head = List.nth heads index in
 
-
+        (* we need to record if handshake has been performed 
+          - which means a peer structure *)
+(*   >> send_message conn (initial_getblocks head) *)
+ 
         { state with 
+          time_of_last_received_block = now; 
           jobs = state.jobs @ [
             log @@ " need to request some blocks head is " ^ M.hex_of_string head 
+          (* >> send_message conn (initial_getblocks head) *)
+ 
           ]
         }
       else

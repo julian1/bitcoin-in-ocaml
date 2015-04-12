@@ -8,12 +8,7 @@ open Misc
 module M = Message
 
 
-(*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
-  testnet magic_head: "\xFA\xBF\xB5\xDA",
-  litecoin magic_head: "\xfb\xc0\xb6\xdb",
-*)
 
-let m = 0xd9b4bef9  (* bitcoin *)
 (* let m = 0xdbb6c0fb   litecoin *)
 
 (* initial version message to send *)
@@ -31,7 +26,7 @@ let initial_version =
       relay = 0xff;
   } in
   let header = M.encodeHeader {
-    magic = m ;
+    magic = magic ;
     command = "version";
     length = M.strlen payload;
     checksum = M.checksum payload;
@@ -42,7 +37,7 @@ let initial_version =
 (* verack response to send *)
 let initial_verack =
   let header = M.encodeHeader {
-    magic = m ;
+    magic = magic ;
     command = "verack";
     length = 0;
     (* clients seem to use e2e0f65d - hash of first part of header? *)
@@ -53,37 +48,13 @@ let initial_verack =
 
 let initial_getaddr =
   let header = M.encodeHeader {
-    magic = m ;
+    magic = magic ;
     command = "getaddr";
     length = 0;
     (* clients seem to use e2e0f65d - hash of first part of header? *)
     checksum = 0;
   } in
   header
-
-
-let initial_getblocks starting_hash =
-  (* we can only request one at a time 
-    - the list are the options, and server returns a sequence
-    from the first valid block in our list
-  *)
-  let payload =
-    M.encodeInteger32 1  (* version *)
-    ^ M.encodeVarInt 1
-    ^ M.encodeHash32 starting_hash
-
- (*   ^ encodeHash32 (string_of_hex "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"  ) *)
-(*    ^ encodeHash32 ( string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"  ) *)
-                        (* this isn't right it should be a hash *)
-    ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
-  in
-  let header = M.encodeHeader {
-    magic = m ;
-    command = "getblocks";
-    length = M.strlen payload;
-    checksum = M.checksum payload;
-  } in
-  header ^ payload
 
 
 
@@ -165,11 +136,6 @@ let get_message conn =
           return @@ GotMessageError (conn, "here2 " ^ s) 
       )
        
-
-let send_message conn s = 
-    let oc = conn.oc in
-    Lwt_io.write oc s >> return Nop  (* message sent *)
-
 
 
 (*

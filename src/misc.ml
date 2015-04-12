@@ -105,5 +105,18 @@ type my_app_state =
   (* db : LevelDB.db ; *)
 }
 
+(* this really shouldn't be here - place it in app_state? *) 
+
+(*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
+  testnet magic_head: "\xFA\xBF\xB5\xDA",
+  litecoin magic_head: "\xfb\xc0\xb6\xdb",
+*)
+
+let magic = 0xd9b4bef9  (* bitcoin *)
+
+
+let send_message conn s = 
+    let oc = conn.oc in
+    Lwt_io.write oc s >> return Nop  (* message sent *)
 
 
