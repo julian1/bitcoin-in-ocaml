@@ -263,8 +263,8 @@ let f state e =
       { state with 
         connections = conn :: state.connections;
         jobs = state.jobs @ [  
-          log @@ "whoot got connection " ^ format_addr conn   ^
-            "\nconnections now " ^ ( string_of_int @@ List.length state.connections )
+          log @@ format_addr conn ^  " got connection "  ^
+            ", connections now " ^ ( string_of_int @@ List.length state.connections )
           >> send_message conn initial_version 
           >> log @@ "*** sent our version " ^ format_addr conn
           ;
@@ -346,7 +346,8 @@ let f state e =
             if already_got || List.length state.connections >= 30 then  
               { state with 
                 jobs = state.jobs @ [ 
-                  log @@ format_addr conn ^ " addr - already got or ignore " ^ a  ;
+                  log @@ format_addr conn ^ " addr - already got or ignore " 
+                    ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn 
                   ]
                 }
@@ -446,7 +447,9 @@ let run f =
       )
         (fun exn ->
           (* must close *)
-          let s = Printexc.to_string exn in
+
+
+          let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
           Lwt_io.write_line Lwt_io.stdout ("finishing - exception " ^ s ) 
           >> (* just exist cleanly *)  
             return ()
