@@ -28,6 +28,10 @@
       - address / tx / output index
 
       ---- 
+      note that we could just the same value for the mention. 
+
+      In fact the indexing action, is almost exactly the same... as for txo
+      except we append a bit the address to the start of the key.
 
 *)
 
