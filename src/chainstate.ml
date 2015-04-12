@@ -1,22 +1,22 @@
 
 
 (* ok this thing needs access to some of the shared data structures
-namely my_event 
+namely my_event
 
-Actually we ought to be able to have the chainstate structure be completely 
-  shielded here.  connections should be shielded... but jobs need to be shared 
+Actually we ought to be able to have the chainstate structure be completely
+  shielded here.  connections should be shielded... but jobs need to be shared
 *)
 
 (*
   - important - it looks like this code, will just ignore random blocks that
   inv advertises us. which is really nice.
-  - because we analyze everything that we request 
-  ---  
-  when we make an inv request we do it against a specific node, we can 
-  therefore know, what we expect from that node. and can ignore other inv 
+  - because we analyze everything that we request
+  ---
+  when we make an inv request we do it against a specific node, we can
+  therefore know, what we expect from that node. and can ignore other inv
   while request is not empty.
   - inv and request is empty and from specific address, then probably
-    in response to a get data 
+    in response to a get data
 *)
 
 open Misc
@@ -48,10 +48,10 @@ let initial_getblocks starting_hash =
 
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
-let manage_chain1 state  e   =  
+let manage_chain1 state  e   =
 
   match e with
-    | GotMessage (conn, header, raw_header, payload) -> 
+    | GotMessage (conn, header, raw_header, payload) ->
 	    (
       match header.command with
         | "inv" ->
@@ -65,53 +65,60 @@ let manage_chain1 state  e   =
           |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
           (* should ignore pending also *)
           in
-          { state with 
+          { state with
             jobs = state.jobs @ [
-              log @@ format_addr conn ^ " chainstate got inv " 
+              log @@ format_addr conn ^ " chainstate got inv "
                 ^ string_of_int @@ List.length block_hashes
             ]
           }
-		    | _ -> state	
+		    | _ -> state
 		  )
     | _ -> state
 
 
-let manage_chain2 state  e   =  
+let manage_chain2 state  e   =
   match e with
-    | Nop -> state 
+    | Nop -> state
     | _ ->
       (* we need to check we have completed handshake *)
       let now = Unix.time () in
-      if CL.is_empty state.requested_blocks  
-        && now > state.time_of_last_received_block +. 180. then 
+      if CL.is_empty state.requested_blocks
+        && not (CL.is_empty state.connections)
+        && now > state.time_of_last_received_block +. 180. then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
-        let previous = 
-          SS.bindings state.heads 
-          |> List.rev_map (fun (_,head ) -> head.previous) 
+        let previous =
+          SS.bindings state.heads
+          |> List.rev_map (fun (_,head ) -> head.previous)
           |> SSS.of_list
         in
         (* get the tips of the blockchain tree by filtering all block hashes against the set *)
-        let heads = 
-          SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
-          |> SS.bindings 
-          |> List.rev_map (fun (tip,_ ) -> tip) 
+        let heads =
+          SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads
+          |> SS.bindings
+          |> List.rev_map (fun (tip,_ ) -> tip)
         in
         (* choose a head at random *)
-        let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
+        let index = now |> int_of_float |> (fun x -> x mod List.length heads) in
         let head = List.nth heads index in
 
-        (* we need to record if handshake has been performed 
-          - which means a peer structure *)
+        (* choose a conn at random *)
+        let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
+        let conn = List.nth state.connections index in
+
+
+        (* we need to record if handshake has been performed
+          - which means a peer structure
+          - we should be recording peer version anyway.
+        *)
 (*   >> send_message conn (initial_getblocks head) *)
- 
-        { state with 
-          time_of_last_received_block = now; 
+
+        { state with
+          time_of_last_received_block = now;
           jobs = state.jobs @ [
-            log @@ " need to request some blocks head is " ^ M.hex_of_string head 
-          (* >> send_message conn (initial_getblocks head) *)
- 
+            log @@ " need to request some blocks head is " ^ M.hex_of_string head
+           >> send_message conn (initial_getblocks head)
           ]
         }
       else
@@ -119,8 +126,8 @@ let manage_chain2 state  e   =
 
 
 
-let manage_chain state e   =  
-  let state = manage_chain1 state  e in 
+let manage_chain state e   =
+  let state = manage_chain1 state  e in
   manage_chain2 state  e
 
 
@@ -130,7 +137,7 @@ let manage_chain state e   =
 
 (* we've got an issue about adding read jobs - can only do it once
 
-	IMPORTANT we may want to a flag in state structure to indicate whether the message 
+	IMPORTANT we may want to a flag in state structure to indicate whether the message
 	has been handled...
  *)
 
