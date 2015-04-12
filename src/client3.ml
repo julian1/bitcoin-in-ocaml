@@ -332,13 +332,9 @@ let run f =
         get_connection     "62.43.40.154" 8333; 
         get_connection     "62.80.185.213" 8333; 
 
-
-
-
-
       ] in
-(*
-      let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+      (* this code needs to be factored out *)
+      let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
       let heads = 
           SS.empty 
           |> SS.add genesis 
@@ -347,11 +343,10 @@ let run f =
             height = 0; 
             (* difficulty = 123; *)
           }  in
-*)
       { 
         jobs = jobs; 
         connections = []; 
-        heads = SS.empty ; 
+        heads = heads ;
 
         time_of_last_received_block = 0. ; 
         time_of_last_inv_request = 0.; 

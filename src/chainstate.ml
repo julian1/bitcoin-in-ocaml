@@ -7,12 +7,23 @@ Actually we ought to be able to have the chainstate structure be completely
   shielded here.  connections should be shielded... but jobs need to be shared 
 *)
 
+(*
+  - important - it looks like this code, will just ignore random blocks that
+  inv advertises us. which is really nice.
+  - because we analyze everything that we request 
+  ---  
+  when we make an inv request we do it against a specific node, we can 
+  therefore know, what we expect from that node. and can ignore other inv 
+  while request is not empty.
+  - inv and request is empty and from specific address, then probably
+    in response to a get data 
+*)
+
 open Misc
 
+module M = Message
 module L = List
 module CL = Core.Core_list
-
-
 
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
@@ -20,10 +31,10 @@ let manage_chain1 state  e   =
 
   match e with
     | GotMessage (conn, header, raw_header, payload) -> 
-	(
+	    (
       match header.command with
         | "inv" ->
-          let _, inv = Message.decodeInv payload 0 in
+          let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)
           let needed_inv_type = 2 in
           let block_hashes = inv
@@ -31,37 +42,53 @@ let manage_chain1 state  e   =
           |> L.map (fun (_,hash)->hash)
           (* ignore blocks we already have *)
           |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
+          (* should ignore pending also *)
           in
-
           { state with 
             jobs = state.jobs @ [
               log @@ format_addr conn ^ " chainstate got inv " 
                 ^ string_of_int @@ List.length block_hashes
             ]
           }
-		| _ -> 
-      state	
-		)
+		    | _ -> state	
+		  )
     | _ -> state
+
 
 let manage_chain2 state  e   =  
   match e with
     | Nop -> state 
-
     | _ ->
-	
-  (* we need to check we have completed handshake *)
-  let now = Unix.time () in
+      (* we need to check we have completed handshake *)
+      let now = Unix.time () in
+      if CL.is_empty state.requested_blocks  
+        && now > state.time_of_last_received_block +. 180. then 
 
-  if CL.is_empty state.requested_blocks  
-      && now > state.time_of_last_received_block +. 180. then 
-    { state with 
-      jobs = state.jobs @ [
-        log @@ " need to request some blocks " 
-      ]
-    }
-  else
-    state
+        (* create a set of all pointed-to block hashes *)
+        (* watch out for non-tail call optimised functions here which might blow stack  *)
+        let previous = 
+          SS.bindings state.heads 
+          |> List.rev_map (fun (_,head ) -> head.previous) 
+          |> SSS.of_list
+        in
+        (* get the tips of the blockchain tree by filtering all block hashes against the set *)
+        let heads = 
+          SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads 
+          |> SS.bindings 
+          |> List.rev_map (fun (tip,_ ) -> tip) 
+        in
+        (* choose a head at random *)
+        let index = now |> int_of_float |> (fun x -> x mod List.length heads) in 
+        let head = List.nth heads index in
+
+
+        { state with 
+          jobs = state.jobs @ [
+            log @@ " need to request some blocks head is " ^ M.hex_of_string head 
+          ]
+        }
+      else
+        state
 
 
 
