@@ -1,3 +1,46 @@
+  
+
+
+  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } 
+let get_another_block peer state =
+
+    if List.length peer.blocks_inv > 0 
+    && List.length peer.blocks_pending = 0   then
+
+      let encodeInventory jobs =
+        let encodeInvItem hash = encodeInteger32   2 ^ encodeHash32 hash in 
+          (* encodeInv - move to Message  - and need to zip *)
+          encodeVarInt (List.length jobs )
+          ^ String.concat "" @@ List.map encodeInvItem jobs 
+      in
+      let now = Unix.time () in
+      let index = now |> int_of_float |> (fun x -> x mod List.length peer.blocks_inv) in 
+      let hash = List.nth peer.blocks_inv index in
+      let payload = encodeInventory [ hash ] in 
+      let header = encodeHeader {
+        magic = m ;
+        command = "getdata";
+        length = strlen payload;
+        checksum = checksum payload;
+      }
+      in
+      state
+
+      |> remove_peer peer 
+      |> fun state -> 
+        let peer = { peer with 
+          blocks_inv = List.filter (fun x -> x != hash ) peer.blocks_inv;
+          blocks_pending = hash :: peer.blocks_pending;
+      }  in add_peer peer state 
+
+(*    -- are there two read messages ??? *)
+
+      |> add_jobs [ 
+        log @@ 
+          "requesting block " ^ (hex_of_string hash ) ^ " from " ^ peer.conn.addr 
+          ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
+          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) 
+        >> send_message peer.conn (header ^ payload);  
 
 Lwt_unix.lseek fd pos Unix.SEEK_SET >>= fun pos' ->
 assert (pos' = pos);

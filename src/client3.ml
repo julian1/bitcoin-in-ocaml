@@ -237,62 +237,13 @@ type my_app_state =
 - app state is effectively a fold over the network events...
 *)
 
-  let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
+let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
 
-  let add_jobs jobs state = { state with jobs = jobs @ state.jobs } 
 
 let format_addr conn = conn.addr 
 
-(*
-  let get_another_block peer state =
 
-    if List.length peer.blocks_inv > 0 
-    && List.length peer.blocks_pending = 0   then
 
-      let encodeInventory jobs =
-        let encodeInvItem hash = encodeInteger32   2 ^ encodeHash32 hash in 
-          (* encodeInv - move to Message  - and need to zip *)
-          encodeVarInt (List.length jobs )
-          ^ String.concat "" @@ List.map encodeInvItem jobs 
-      in
-      let now = Unix.time () in
-      let index = now |> int_of_float |> (fun x -> x mod List.length peer.blocks_inv) in 
-      let hash = List.nth peer.blocks_inv index in
-      let payload = encodeInventory [ hash ] in 
-      let header = encodeHeader {
-        magic = m ;
-        command = "getdata";
-        length = strlen payload;
-        checksum = checksum payload;
-      }
-      in
-      state
-
-      |> remove_peer peer 
-      |> fun state -> 
-        let peer = { peer with 
-          blocks_inv = List.filter (fun x -> x != hash ) peer.blocks_inv;
-          blocks_pending = hash :: peer.blocks_pending;
-      }  in add_peer peer state 
-
-(*    -- are there two read messages ??? *)
-
-      |> add_jobs [ 
-        log @@ 
-          "requesting block " ^ (hex_of_string hash ) ^ " from " ^ peer.conn.addr 
-          ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
-          ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) 
-        >> send_message peer.conn (header ^ payload);  
-      
-(*  get_message peer ;  *)
-      ] (* { state with last_expected_block = last_expected_block }  *)
-
-    else
-       state 
-*)
-(*
-  what happens if we do the peer change, but don't send the message?
-*)
 let f state e =
 
   match e with
