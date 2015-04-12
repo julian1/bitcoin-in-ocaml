@@ -53,11 +53,55 @@ type connection =
 }
 
 
+
+let format_addr conn = 
+  let s = conn.addr ^ ":" ^ string_of_int conn.port in 
+  pad s 18 
+ 
+
 type my_event =
    | GotConnection of connection
    | GotConnectionError of string
    | GotMessage of connection * Message.header * string * string
    | GotMessageError of connection * string (* change name MessageError - because *)
    | Nop
+
+
+let log s = write_stdout s >> return Nop 
+
+module SS = Map.Make(struct type t = string let compare = compare end)
+
+module SSS = Set.Make(String);; 
+
+type my_head = 
+{
+  (*  hash : string; *)
+    previous : string;  (* could be a list pointer at my_head *) 
+    height : int;   (* if known? *)
+   (*  difficulty : int ; *) (* aggregated *)
+    (* bool requested *)
+    (* bool have *)
+}
+
+
+type my_app_state =
+{
+  jobs :  my_event Lwt.t list ;
+
+  connections : connection list ; 
+
+  heads : my_head SS.t ;  
+
+  time_of_last_received_block : float; 
+  time_of_last_inv_request : float; 
+  requested_blocks : string list ; 
+
+   (* should change to be blocks_fd 
+      does this file descriptor even need to be here. it doesn't change?
+    *)
+(*  blocks_oc : Lwt_io.output Lwt_io.channel ; *) 
+  (* db : LevelDB.db ; *)
+}
+
 
 

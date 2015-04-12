@@ -2,12 +2,9 @@
 corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client3.byte
 
 *)
-(* open Message *)
-open Script
 
 open Misc
 
-open Lwt (* for >>= *)
 
 
 (*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
@@ -174,42 +171,6 @@ let send_message conn s =
 
 
 
-
-module SS = Map.Make(struct type t = string let compare = compare end)
-
-module SSS = Set.Make(String);; 
-
-type my_head = 
-{
-  (*  hash : string; *)
-    previous : string;  (* could be a list pointer at my_head *) 
-    height : int;   (* if known? *)
-   (*  difficulty : int ; *) (* aggregated *)
-    (* bool requested *)
-    (* bool have *)
-}
-
-
-type my_app_state =
-{
-  jobs :  my_event Lwt.t list ;
-
-  connections : Misc.connection list ; 
-
-  heads : my_head SS.t ;  
-
-  time_of_last_received_block : float; 
-  time_of_last_inv_request : float; 
-  requested_blocks : string list ; 
-
-   (* should change to be blocks_fd 
-      does this file descriptor even need to be here. it doesn't change?
-    *)
-(*  blocks_oc : Lwt_io.output Lwt_io.channel ; *) 
-  (* db : LevelDB.db ; *)
-}
-
-
 (*
 - jobs = jobs, tasks, threads, fibres
 - within a task we can sequence as many sub tasks using >>= as we like
@@ -218,13 +179,8 @@ type my_app_state =
 - app state is effectively a fold over the network events...
 *)
 
-let log s = Misc.write_stdout s >> return Nop 
 
-
-let format_addr conn = 
-  let s = conn.addr ^ ":" ^ string_of_int conn.port in 
-  Misc.pad s 18 
-     
+    
 
 (* 50.199.113.193:8333 *)
 
