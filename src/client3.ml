@@ -239,8 +239,15 @@ type my_app_state =
 
 let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
 
+let pad s length =
+    s ^ String.make (length - String.length s + 1) ' '
 
- let format_addr conn = conn.addr ^ ":" ^ string_of_int conn.port  
+let format_addr conn = 
+  let s = conn.addr ^ ":" ^ string_of_int conn.port in 
+  pad s 18 
+     
+
+(* 50.199.113.193:8333 *)
 
 (*
 let format_addr conn = String.concat "" [ conn.addr ; ":" ; string_of_int conn.port ] 
@@ -254,7 +261,7 @@ let f state e =
     | Nop -> state 
     | GotConnection conn ->
       { state with 
-        (* connections = conn :: state.connections; *)
+        connections = conn :: state.connections;
         jobs = state.jobs @ [  
           log @@ "whoot got connection " ^ format_addr conn   ^
             "\nconnections now " ^ ( string_of_int @@ List.length state.connections )
@@ -272,8 +279,14 @@ let f state e =
 
     | GotMessageError (conn, msg) ->
       { state with
-        (* need to remove the conn from the list *)
-        jobs = state.jobs @ [  log @@ format_addr conn ^ "msg error " ^ msg ] 
+        (* fd test is physical equality *)
+        connections = List.filter (fun c -> c.fd != conn.fd) state.connections;
+        jobs = state.jobs @ [  
+          log @@ format_addr conn ^ "msg error " ^ msg; 
+          match Lwt_unix.state conn.fd with
+            Opened -> ( Lwt_unix.close conn.fd ) >> return Nop 
+            | _ -> return Nop 
+        ] 
       }
 
 
@@ -296,11 +309,45 @@ let f state e =
           { state with 
             jobs = state.jobs @ [ 
               (* should be 3 separate jobs? *)
-              log @@ format_addr conn ^ " got verack - requesting addr"
-              >> send_message conn initial_getaddr ;
+              log @@ format_addr conn ^ " got verack";
+              (* >> send_message conn initial_getaddr *)
               get_message conn 
             ]
           }
+
+
+        | "addr" -> 
+            let pos, count = decodeVarInt payload 0 in
+            (* should take more than the first *)
+            let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
+            let _, addr = decodeAddress payload pos in 
+            let formatAddress (h : ip_address ) =
+              let soi = string_of_int in
+              let a,b,c,d = h.address  in
+              String.concat "." [
+              soi a; soi b; soi c; soi d 
+              ] (* ^ ":" ^ soi h.port *)
+            in
+            let a = formatAddress addr in
+            (* ignore, different instances on different ports *)
+            let already_got = List.exists (fun c -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            in
+            if already_got || List.length state.connections >= 30 then  
+              { state with 
+                jobs = state.jobs @ [ 
+                  log @@ format_addr conn ^ " addr - already got or ignore " ^ a  ;
+                  get_message conn 
+                  ]
+                }
+            else 
+              { state with  
+              jobs = state.jobs @ [ 
+                 log @@ format_addr conn ^ " addr - count "  ^ (string_of_int count ) 
+                    ^  " " ^ a ^ " port " ^ string_of_int addr.port ;  
+                  get_connection (formatAddress addr) addr.port ;
+                  get_message conn 
+                ]  
+              }
 
         | s ->
           { state with  
