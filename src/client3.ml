@@ -2,8 +2,10 @@
 corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client3.byte
 
 *)
-open Message
+(* open Message *)
 open Script
+
+open Misc
 
 open Lwt (* for >>= *)
 
@@ -18,7 +20,7 @@ let m = 0xd9b4bef9  (* bitcoin *)
 
 (* initial version message to send *)
 let initial_version =
-  let payload = encodeVersion {
+  let payload = Message.encodeVersion {
       protocol = 70002;
       nlocalServices = 1L; (* doesn't seem to like non- full network 0L *)
       nTime = 1424343054L;
@@ -30,18 +32,18 @@ let initial_version =
       height = 127953;
       relay = 0xff;
   } in
-  let header = encodeHeader {
+  let header = Message.encodeHeader {
     magic = m ;
     command = "version";
-    length = strlen payload;
-    checksum = checksum payload;
+    length = Message.strlen payload;
+    checksum = Message.checksum payload;
   } in
   header ^ payload
 
 
 (* verack response to send *)
 let initial_verack =
-  let header = encodeHeader {
+  let header = Message.encodeHeader {
     magic = m ;
     command = "verack";
     length = 0;
@@ -52,7 +54,7 @@ let initial_verack =
 
 
 let initial_getaddr =
-  let header = encodeHeader {
+  let header = Message.encodeHeader {
     magic = m ;
     command = "getaddr";
     length = 0;
@@ -68,44 +70,23 @@ let initial_getblocks starting_hash =
     from the first valid block in our list
   *)
   let payload =
-    encodeInteger32 1  (* version *)
-    ^ encodeVarInt 1
-    ^ encodeHash32 starting_hash
+    Message.encodeInteger32 1  (* version *)
+    ^ Message.encodeVarInt 1
+    ^ Message.encodeHash32 starting_hash
 
  (*   ^ encodeHash32 (string_of_hex "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"  ) *)
 (*    ^ encodeHash32 ( string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"  ) *)
                         (* this isn't right it should be a hash *)
-    ^ zeros 32   (* block to stop - we don't know should be 32 bytes *)
+    ^ Message.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
-  let header = encodeHeader {
+  let header = Message.encodeHeader {
     magic = m ;
     command = "getblocks";
-    length = strlen payload;
-    checksum = checksum payload;
+    length = Message.strlen payload;
+    checksum = Message.checksum payload;
   } in
   header ^ payload
 
-
-type connection =
-{
-  (* addr : ip_address;
-    when checking if connecting to same node, should check ip not dns name
-    *) 
-  addr : string ; 
-  port : int;
-  fd :  Lwt_unix.file_descr ;
-  (* get rid of this,  sockets don't need buffers *) 
-  ic : Lwt_io.input Lwt_io.channel ; 
-  oc : Lwt_io.output Lwt_io.channel ; 
-}
-
-
-type my_event =
-   | GotConnection of connection
-   | GotConnectionError of string
-   | GotMessage of connection * header * string * string
-   | GotMessageError of connection * string (* change name MessageError - because *)
-   | Nop
 
 
 let get_connection host port =
@@ -113,7 +94,7 @@ let get_connection host port =
   Lwt_unix.gethostbyname host  (* FIXME this should be in lwt catch as well *)
   >>= fun entry ->
     if Array.length entry.Unix.h_addr_list = 0 then
-      return @@ GotConnectionError "could not resolve hostname"
+      return @@ Misc.GotConnectionError ( "could not resolve hostname " ^ host )
     else
       let a_ = entry.Unix.h_addr_list.(0) in
       let a = Unix.ADDR_INET ( a_ , port) in 
@@ -170,7 +151,7 @@ let get_message conn =
         let ic = conn.ic in 
         readChannel ic 24
         >>= fun s ->
-          let _, header = decodeHeader s 0 in
+          let _, header = Message.decodeHeader s 0 in
           if header.length < 10*1000000 then
             (* read payload *)
             readChannel ic header.length
@@ -213,7 +194,7 @@ type my_app_state =
 {
   jobs :  my_event Lwt.t list ;
 
-  connections : connection list ; 
+  connections : Misc.connection list ; 
 
   heads : my_head SS.t ;  
 
@@ -237,7 +218,7 @@ type my_app_state =
 - app state is effectively a fold over the network events...
 *)
 
-let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
+let log s = Misc.write_stdout s >> return Nop 
 
 
 let format_addr conn = 
@@ -252,8 +233,8 @@ let format_addr conn = String.concat "" [ conn.addr ; ":" ; string_of_int conn.p
 *)
 
 
-
-let f state e =
+(* manage p2p *)
+let manage_p2p state e =
 
   match e with
     | Nop -> state 
@@ -326,11 +307,11 @@ let f state e =
 
 
         | "addr" -> 
-            let pos, count = decodeVarInt payload 0 in
+            let pos, count = Message.decodeVarInt payload 0 in
             (* should take more than the first *)
-            let pos, _ = decodeInteger32 payload pos in (* timeStamp  *)
-            let _, addr = decodeAddress payload pos in 
-            let formatAddress (h : ip_address ) =
+            let pos, _ = Message.decodeInteger32 payload pos in (* timeStamp  *)
+            let _, addr = Message.decodeAddress payload pos in 
+            let formatAddress (h : Message.ip_address ) =
               let soi = string_of_int in
               let a,b,c,d = h.address  in
               String.concat "." [
@@ -457,6 +438,9 @@ let run f =
   )
 
 
+let f state e = 
+  let state = manage_p2p state e in 
+  Chainstate.manage_chain state e
 
 
 let () = run f 

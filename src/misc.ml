@@ -37,3 +37,27 @@ let pad s length =
       s 
 
 
+
+
+type connection =
+{
+  (* addr : ip_address;
+    when checking if connecting to same node, should check ip not dns name
+    *) 
+  addr : string ; 
+  port : int;
+  fd :  Lwt_unix.file_descr ;
+  (* get rid of this,  sockets don't need buffers *) 
+  ic : Lwt_io.input Lwt_io.channel ; 
+  oc : Lwt_io.output Lwt_io.channel ; 
+}
+
+
+type my_event =
+   | GotConnection of connection
+   | GotConnectionError of string
+   | GotMessage of connection * Message.header * string * string
+   | GotMessageError of connection * string (* change name MessageError - because *)
+   | Nop
+
+
