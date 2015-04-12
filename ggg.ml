@@ -2,6 +2,7 @@
 
 
   let add_jobs jobs state = { state with jobs = jobs @ state.jobs } 
+
 let get_another_block peer state =
 
     if List.length peer.blocks_inv > 0 
@@ -145,7 +146,6 @@ Lwt.return block
       (* let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in *)
 *)
 
-(*
     let read_bytes fd len =
       let block = Bytes .create len in
       Lwt_unix.read fd block 0 len >>= 
@@ -212,7 +212,9 @@ Lwt.return block
             height = 0; 
           })
         in u
-*)
+
+
+
    >>= fun heads ->   
       Lwt_io.write_line Lwt_io.stdout @@ "blocks read " ^ string_of_int (SS.cardinal heads  )
 

@@ -217,7 +217,7 @@ type my_app_state =
 
   heads : my_head SS.t ;  
 
-  time_of_last_block : float; 
+  time_of_last_received_block : float; 
   time_of_last_inv_request : float; 
   requested_blocks : string list ; 
 
@@ -240,7 +240,11 @@ type my_app_state =
 let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
 
 
-let format_addr conn = conn.addr 
+ let format_addr conn = conn.addr ^ ":" ^ string_of_int conn.port  
+
+(*
+let format_addr conn = String.concat "" [ conn.addr ; ":" ; string_of_int conn.port ] 
+*)
 
 
 
@@ -250,7 +254,7 @@ let f state e =
     | Nop -> state 
     | GotConnection conn ->
       { state with 
-        connections = conn :: state.connections;
+        (* connections = conn :: state.connections; *)
         jobs = state.jobs @ [  
           log @@ "whoot got connection " ^ format_addr conn   ^
             "\nconnections now " ^ ( string_of_int @@ List.length state.connections )
@@ -261,8 +265,53 @@ let f state e =
         ];
       }
 
-  | _ -> state 
-   
+    | GotConnectionError msg ->
+      { state with
+        jobs = state.jobs @ [  log @@ "connection error " ^ msg ] 
+      }
+
+    | GotMessageError (conn, msg) ->
+      { state with
+        (* need to remove the conn from the list *)
+        jobs = state.jobs @ [  log @@ format_addr conn ^ "msg error " ^ msg ] 
+      }
+
+
+    | GotMessage (conn, header, raw_header, payload) -> 
+      (
+      match header.command with
+
+        | "version" ->
+          { state with 
+            jobs = state.jobs @ [  
+              log @@ format_addr conn ^ " got version message"
+              >> send_message conn initial_verack
+              >> log @@ "*** sent verack " ^ format_addr conn
+              ;
+              get_message conn 
+            ];
+          }
+
+        | "verack" ->
+          { state with 
+            jobs = state.jobs @ [ 
+              (* should be 3 separate jobs? *)
+              log @@ format_addr conn ^ " got verack - requesting addr"
+              >> send_message conn initial_getaddr ;
+              get_message conn 
+            ]
+          }
+
+        | s ->
+          { state with  
+            jobs = state.jobs @ [
+              log @@ format_addr conn ^ " message " ^ s ;
+              get_message conn 
+              ]
+          }
+
+        )
+ 
          
 let run f =
 
@@ -273,10 +322,25 @@ let run f =
     let state = 
       let jobs = [
         (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
-        get_connection     "23.227.177.161" 8333;
+        get_connection     "23.227.177.161" 8333; 
         get_connection     "23.227.191.50" 8333;
         get_connection     "23.229.45.32" 8333;
         get_connection     "23.236.144.69" 8333;
+        
+        get_connection     "50.142.41.23" 8333; 
+        get_connection     "50.199.113.193" 8333; 
+        get_connection     "50.200.78.107" 8333; 
+  
+
+        get_connection     "61.72.211.228" 8333; 
+        get_connection     "62.43.40.154" 8333; 
+        get_connection     "62.43.40.154" 8333; 
+        get_connection     "62.80.185.213" 8333; 
+
+
+
+
+
       ] in
 (*
       let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
@@ -294,7 +358,7 @@ let run f =
         connections = []; 
         heads = SS.empty ; 
 
-        time_of_last_block = 0. ; 
+        time_of_last_received_block = 0. ; 
         time_of_last_inv_request = 0.; 
         requested_blocks  = [ ] ; 
 
