@@ -29,5 +29,11 @@ let read_bytes fd len =
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
+let pad s length =
+    let n = length - String.length s + 1 in 
+    if n > 0 then 
+      s ^ String.make n ' '
+    else
+      s 
 
 

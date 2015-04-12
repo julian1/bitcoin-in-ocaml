@@ -239,12 +239,10 @@ type my_app_state =
 
 let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
 
-let pad s length =
-    s ^ String.make (length - String.length s + 1) ' '
 
 let format_addr conn = 
   let s = conn.addr ^ ":" ^ string_of_int conn.port in 
-  pad s 18 
+  Misc.pad s 18 
      
 
 (* 50.199.113.193:8333 *)
