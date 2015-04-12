@@ -315,6 +315,17 @@ let f state e =
             ]
           }
 
+        (* - there's stuff to manage p2p 
+            - then there's stuff to manage chainstate.. 
+            - can we separate this out into another file...
+            - blocks and inv etc. 
+
+  
+            - we could actually just have a complete module ...
+            with msg interface...
+              - hiding the blocks and db file descriptors etc...
+        *)
+
 
         | "addr" -> 
             let pos, count = decodeVarInt payload 0 in
@@ -329,7 +340,7 @@ let f state e =
               ] (* ^ ":" ^ soi h.port *)
             in
             let a = formatAddress addr in
-            (* ignore, different instances on different ports *)
+            (* ignore, same addr instances on different ports *)
             let already_got = List.exists (fun c -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
             if already_got || List.length state.connections >= 30 then  
