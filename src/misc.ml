@@ -90,6 +90,8 @@ type my_app_state =
 
   connections : connection list ; 
 
+
+  (* really should be able to hide this *)
   heads : my_head SS.t ;  
 
   time_of_last_received_block : float; 

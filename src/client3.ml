@@ -5,6 +5,7 @@ corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax 
 
 open Misc
 
+module M = Message
 
 
 (*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
@@ -17,7 +18,7 @@ let m = 0xd9b4bef9  (* bitcoin *)
 
 (* initial version message to send *)
 let initial_version =
-  let payload = Message.encodeVersion {
+  let payload = M.encodeVersion {
       protocol = 70002;
       nlocalServices = 1L; (* doesn't seem to like non- full network 0L *)
       nTime = 1424343054L;
@@ -29,18 +30,18 @@ let initial_version =
       height = 127953;
       relay = 0xff;
   } in
-  let header = Message.encodeHeader {
+  let header = M.encodeHeader {
     magic = m ;
     command = "version";
-    length = Message.strlen payload;
-    checksum = Message.checksum payload;
+    length = M.strlen payload;
+    checksum = M.checksum payload;
   } in
   header ^ payload
 
 
 (* verack response to send *)
 let initial_verack =
-  let header = Message.encodeHeader {
+  let header = M.encodeHeader {
     magic = m ;
     command = "verack";
     length = 0;
@@ -51,7 +52,7 @@ let initial_verack =
 
 
 let initial_getaddr =
-  let header = Message.encodeHeader {
+  let header = M.encodeHeader {
     magic = m ;
     command = "getaddr";
     length = 0;
@@ -67,20 +68,20 @@ let initial_getblocks starting_hash =
     from the first valid block in our list
   *)
   let payload =
-    Message.encodeInteger32 1  (* version *)
-    ^ Message.encodeVarInt 1
-    ^ Message.encodeHash32 starting_hash
+    M.encodeInteger32 1  (* version *)
+    ^ M.encodeVarInt 1
+    ^ M.encodeHash32 starting_hash
 
  (*   ^ encodeHash32 (string_of_hex "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"  ) *)
 (*    ^ encodeHash32 ( string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"  ) *)
                         (* this isn't right it should be a hash *)
-    ^ Message.zeros 32   (* block to stop - we don't know should be 32 bytes *)
+    ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
-  let header = Message.encodeHeader {
+  let header = M.encodeHeader {
     magic = m ;
     command = "getblocks";
-    length = Message.strlen payload;
-    checksum = Message.checksum payload;
+    length = M.strlen payload;
+    checksum = M.checksum payload;
   } in
   header ^ payload
 
@@ -148,7 +149,7 @@ let get_message conn =
         let ic = conn.ic in 
         readChannel ic 24
         >>= fun s ->
-          let _, header = Message.decodeHeader s 0 in
+          let _, header = M.decodeHeader s 0 in
           if header.length < 10*1000000 then
             (* read payload *)
             readChannel ic header.length
@@ -263,11 +264,11 @@ let manage_p2p state e =
 
 
         | "addr" -> 
-            let pos, count = Message.decodeVarInt payload 0 in
+            let pos, count = M.decodeVarInt payload 0 in
             (* should take more than the first *)
-            let pos, _ = Message.decodeInteger32 payload pos in (* timeStamp  *)
-            let _, addr = Message.decodeAddress payload pos in 
-            let formatAddress (h : Message.ip_address ) =
+            let pos, _ = M.decodeInteger32 payload pos in (* timeStamp  *)
+            let _, addr = M.decodeAddress payload pos in 
+            let formatAddress (h : M.ip_address ) =
               let soi = string_of_int in
               let a,b,c,d = h.address  in
               String.concat "." [
