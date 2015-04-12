@@ -16,10 +16,9 @@ module CL = Core.Core_list
 
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
- let manage_chain state  e   =  
+let manage_chain1 state  e   =  
 
   match e with
-    
     | GotMessage (conn, header, raw_header, payload) -> 
 	(
       match header.command with
@@ -41,17 +40,39 @@ module CL = Core.Core_list
             ]
           }
 		| _ -> 
-        (* we need to check we have completed handshake *)
-        let now = Unix.time () in
- 
-        if CL.is_empty state.requested_blocks  
-            && now > state.time_of_last_received_block +. 180. then 
-          state
-        else
-          state
-		
+      state	
 		)
     | _ -> state
+
+let manage_chain2 state  e   =  
+  match e with
+    | Nop -> state 
+
+    | _ ->
+	
+  (* we need to check we have completed handshake *)
+  let now = Unix.time () in
+
+  if CL.is_empty state.requested_blocks  
+      && now > state.time_of_last_received_block +. 180. then 
+    { state with 
+      jobs = state.jobs @ [
+        log @@ " need to request some blocks " 
+      ]
+    }
+  else
+    state
+
+
+
+let manage_chain state e   =  
+  let state = manage_chain1 state  e in 
+  manage_chain2 state  e
+
+
+
+
+
 
 (* we've got an issue about adding read jobs - can only do it once
 
