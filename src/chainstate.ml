@@ -101,9 +101,10 @@ let manage_chain1 state  e   =
             else
               state.heads, -999
           in
-
+          let blocks_on_request = SSS.remove hash state.blocks_on_request in 
           { state with
               heads = heads;
+              blocks_on_request = blocks_on_request;
               jobs = state.jobs @ [
                 log @@ format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height; 
               ]
