@@ -51,7 +51,6 @@ let initial_getdata hashes =
   let payload = encodeInventory hashes in 
   encodeMessage "getdata" payload  
 
- 
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
 let manage_chain1 state  e   =
@@ -74,7 +73,6 @@ let manage_chain1 state  e   =
             | Some fd when fd == conn.fd -> 
               (* probably in response to a getdata request *)
               let h = CL.take block_hashes 10 in
-
               { state with
               blocks_on_request = h;
               inv_pending = None;
@@ -86,6 +84,17 @@ let manage_chain1 state  e   =
               }
             | _ ->  state
           )
+        | "block" -> (
+          (* let _, block = decodeBlock payload 0 in *)
+          let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
+          let _, header = M.decodeBlock payload 0 in 
+          { state with
+              jobs = state.jobs @ [
+                log @@ format_addr conn ^ " block " ^ M.hex_of_string hash ; 
+              ]
+          }
+
+        ) 
 		    | _ -> state
 		  )
     | _ -> state
@@ -106,6 +115,10 @@ let manage_chain2 state  e   =
       - if we lock up a fd descriptor
       - we want to record the 
       *) 
+      (*
+        if we're synched then the inv won't return anything..., which means that
+          inv_pending will stay true which is what we want.
+      *)
       if CL.is_empty state.blocks_on_request
         && not (CL.is_empty state.connections)
         && state.inv_pending = None then
