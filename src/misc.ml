@@ -94,9 +94,13 @@ type my_app_state =
   (* really should be able to hide this *)
   heads : my_head SS.t ;
 
-  time_of_last_received_block : float;
-  time_of_last_inv_request : float;
-  requested_blocks : string list ;
+ (* time_of_last_received_block : float;
+  time_of_last_inv_request : float; *)
+
+
+  inv_pending	 : Lwt_unix.file_descr option ; (* should include time also *) 
+
+  blocks_on_request : string list ;
 
    (* should change to be blocks_fd
       does this file descriptor even need to be here. it doesn't change?

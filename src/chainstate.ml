@@ -54,7 +54,7 @@ let manage_chain1 state  e   =
     | GotMessage (conn, header, raw_header, payload) ->
 	    (
       match header.command with
-        | "inv" ->
+        | "inv" -> (
           let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)
           let needed_inv_type = 2 in
@@ -65,12 +65,17 @@ let manage_chain1 state  e   =
           |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
           (* should ignore pending also *)
           in
-          { state with
-            jobs = state.jobs @ [
-              log @@ format_addr conn ^ " chainstate got inv "
+
+          match state.inv_pending with 
+            | Some fd when fd == conn.fd -> 
+              { state with
+              jobs = state.jobs @ [
+                log @@ format_addr conn ^ " *** WHOOT chainstate got inv "
                 ^ string_of_int @@ List.length block_hashes
-            ]
-          }
+              ]
+              }
+            | _ ->  state
+          )
 		    | _ -> state
 		  )
     | _ -> state
@@ -81,10 +86,19 @@ let manage_chain2 state  e   =
     | Nop -> state
     | _ ->
       (* we need to check we have completed handshake *)
+
+      (* shouldn't we always issue a request when blocks_on_request 
+      is empty? 
+      - yes except for when we're synched..., when we want to do it every minute or two.
       let now = Unix.time () in
-      if CL.is_empty state.requested_blocks
+      && now > state.time_of_last_received_block +. 180.
+
+      - if we lock up a fd descriptor
+      - we want to record the 
+      *) 
+      if CL.is_empty state.blocks_on_request
         && not (CL.is_empty state.connections)
-        && now > state.time_of_last_received_block +. 180. then
+        && state.inv_pending = None then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
@@ -100,6 +114,7 @@ let manage_chain2 state  e   =
           |> List.rev_map (fun (tip,_ ) -> tip)
         in
         (* choose a head at random *)
+        let now = Unix.time () in
         let index = now |> int_of_float |> (fun x -> x mod List.length heads) in
         let head = List.nth heads index in
 
@@ -107,17 +122,14 @@ let manage_chain2 state  e   =
         let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
         let conn = List.nth state.connections index in
 
-
         (* we need to record if handshake has been performed
           - which means a peer structure
           - we should be recording peer version anyway.
         *)
-(*   >> send_message conn (initial_getblocks head) *)
-
         { state with
-          time_of_last_received_block = now;
+          inv_pending = Some conn.fd ;
           jobs = state.jobs @ [
-            log @@ " need to request some blocks head is " ^ M.hex_of_string head
+            log @@ " ** requesting blocks " ^ conn.addr ^ ", head is " ^ M.hex_of_string head
            >> send_message conn (initial_getblocks head)
           ]
         }

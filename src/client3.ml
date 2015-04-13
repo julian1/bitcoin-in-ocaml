@@ -314,9 +314,12 @@ let run f =
         connections = [];
         heads = heads ;
 
-        time_of_last_received_block = 0. ;
-        time_of_last_inv_request = 0.;
-        requested_blocks  = [ ] ;
+        inv_pending	 = None ; 
+
+
+(*        time_of_last_received_block = 0. ;
+        time_of_last_inv_request = 0.; *)
+        blocks_on_request = [ ] ;
 
     (*    db = LevelDB.open_db "mydb"; *)
 
