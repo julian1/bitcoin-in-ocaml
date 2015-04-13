@@ -46,32 +46,59 @@ let initial_getblocks starting_hash =
   header ^ payload
 
 
+let initial_getdata hashes =
+  (* 2 means block hashes only *)
+  let encodeInventory hashes =
+    let encodeInvItem hash = M.encodeInteger32 2 ^ M.encodeHash32 hash in 
+      (* encodeInv - move to Message  - and need to zip *)
+      M.encodeVarInt (L.length hashes )
+      ^ String.concat "" @@ L.map encodeInvItem hashes 
+  in
+  (*  let now = Unix.time () in
+    let index = now |> int_of_float |> (fun x -> x mod List.length peer.blocks_inv) in 
+    let hash = List.nth peer.blocks_inv index in
+  *)
+  let payload = encodeInventory hashes in 
+  let header = M.encodeHeader {
+    magic = Misc.magic;
+    command = "getdata";
+    length = M.strlen payload;
+    checksum = M.checksum payload;
+  }
+  in header ^ payload
+
+
+ 
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
 let manage_chain1 state  e   =
 
   match e with
-    | GotMessage (conn, header, raw_header, payload) ->
-	    (
+    | GotMessage (conn, header, raw_header, payload) -> (
       match header.command with
         | "inv" -> (
           let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)
           let needed_inv_type = 2 in
-          let block_hashes = inv
-          |> L.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
-          |> L.map (fun (_,hash)->hash)
-          (* ignore blocks we already have *)
-          |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
-          (* should ignore pending also *)
+          let block_hashes = 
+            inv
+            |> L.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
+            |> L.map (fun (_,hash)->hash)
+            (* ignore blocks we already have *)
+            |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
           in
-
           match state.inv_pending with 
             | Some fd when fd == conn.fd -> 
+              (* probably in response to a getdata request *)
+              let h = CL.take block_hashes 10 in
+
               { state with
+              blocks_on_request = h;
+              inv_pending = None;
               jobs = state.jobs @ [
                 log @@ format_addr conn ^ " *** WHOOT chainstate got inv "
-                ^ string_of_int @@ List.length block_hashes
+                ^ string_of_int @@ List.length block_hashes;
+                send_message conn (initial_getdata h );
               ]
               }
             | _ ->  state
