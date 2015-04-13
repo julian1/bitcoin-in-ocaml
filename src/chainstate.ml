@@ -30,11 +30,11 @@ module CL = Core.Core_list
 let initial_getblocks starting_hash =
   (* the list are the options, and peer will return a sequence
     from the first valid block in our list *)
+  (* TODO should be list of hashes *)
   let payload =
     M.encodeInteger32 1  (* version *)
     ^ M.encodeVarInt 1
     ^ M.encodeHash32 starting_hash
-                        (* TODO should be list of hashes *)
     ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
   encodeMessage "getblocks" payload 
@@ -48,10 +48,6 @@ let initial_getdata hashes =
       M.encodeVarInt (L.length hashes )
       ^ String.concat "" @@ L.map encodeInvItem hashes 
   in
-  (*  let now = Unix.time () in
-    let index = now |> int_of_float |> (fun x -> x mod List.length peer.blocks_inv) in 
-    let hash = List.nth peer.blocks_inv index in
-  *)
   let payload = encodeInventory hashes in 
   encodeMessage "getdata" payload  
 

@@ -136,6 +136,16 @@ let encodeMessage command payload =
   header ^ payload
 
 
+let encodeSimpleMessage command = 
+ 
+  M.encodeHeader {
+    magic = magic ;
+    command = command;
+    length = 0;
+    (* clients seem to use e2e0f65d - hash of first part of header? *)
+    checksum = 0;
+  } 
+ 
 
 
 

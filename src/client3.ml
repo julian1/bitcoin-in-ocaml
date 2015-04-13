@@ -25,36 +25,15 @@ let initial_version =
       height = 127953;
       relay = 0xff;
   } in
-  let header = M.encodeHeader {
-    magic = magic ;
-    command = "version";
-    length = M.strlen payload;
-    checksum = M.checksum payload;
-  } in
-  header ^ payload
-
+  encodeMessage "version" payload
 
 (* verack response to send *)
 let initial_verack =
-  let header = M.encodeHeader {
-    magic = magic ;
-    command = "verack";
-    length = 0;
-    (* clients seem to use e2e0f65d - hash of first part of header? *)
-    checksum = 0;
-  } in
-  header
+  encodeSimpleMessage "verack"
 
-
+ 
 let initial_getaddr =
-  let header = M.encodeHeader {
-    magic = magic ;
-    command = "getaddr";
-    length = 0;
-    (* clients seem to use e2e0f65d - hash of first part of header? *)
-    checksum = 0;
-  } in
-  header
+  encodeSimpleMessage "getaddr"
 
 
 
