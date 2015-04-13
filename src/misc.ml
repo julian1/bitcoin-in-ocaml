@@ -98,7 +98,7 @@ type my_app_state =
   time_of_last_inv_request : float; *)
 
 
-  inv_pending	 : Lwt_unix.file_descr option ; (* should include time also *) 
+  inv_pending	 : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
 
   blocks_on_request : SSS.t ;
 

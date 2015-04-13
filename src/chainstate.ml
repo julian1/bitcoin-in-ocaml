@@ -51,6 +51,10 @@ let initial_getdata hashes =
   let payload = encodeInventory hashes in 
   encodeMessage "getdata" payload  
 
+(*
+  the only thing we want is a time, so if a node doesn't respond with
+  an inv request, after a period we'll reissue 
+*)
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
 let manage_chain1 state  e   =
@@ -73,7 +77,7 @@ let manage_chain1 state  e   =
             |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
           in
           match state.inv_pending with 
-            | Some fd when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
+            | Some (fd, t) when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
               (* probably in response to a getdata request *)
               (* let h = CL.take block_hashes 10 in *)
               let h = block_hashes in
@@ -125,19 +129,19 @@ let manage_chain2 state  e   =
     | Nop -> state
     | _ ->
       (* we need to check we have completed handshake *)
-
-      (* shouldn't we always issue a request when blocks_on_request 
-      is empty? 
-      - yes except for when we're synched..., when we want to do it every minute or two.
+      (* shouldn't we always issue a request when blocks_on_request *) 
       let now = Unix.time () in
-      && now > state.time_of_last_received_block +. 180.
-
-      - if we lock up a fd descriptor
-      - we want to record the 
-      *) 
+      (* clear a pending inv request, if peer never responded, 
+        should also discard peer? *) 
+      let state = 
+        match state.inv_pending with 
+          | Some (fd, t) when now > t +. 60. ->  
+            { state with inv_pending = None }
+          | _ -> state
+      in 
       (*
-        if we're synched then the inv won't return anything..., which means that
-          inv_pending will stay true which is what we want.
+        if no blocks on request, and have connections, and no inv pending
+        then do an inv request
       *)
       if SSS.is_empty state.blocks_on_request
         && not (CL.is_empty state.connections)
@@ -156,8 +160,7 @@ let manage_chain2 state  e   =
           |> SS.bindings
           |> List.rev_map (fun (tip,_ ) -> tip)
         in
-        (* choose a head at random *)
-        let now = Unix.time () in
+        (* choose a tip at random *)
         let index = now |> int_of_float |> (fun x -> x mod List.length heads) in
         let head = List.nth heads index in
 
@@ -170,7 +173,7 @@ let manage_chain2 state  e   =
           - we should be recording peer version anyway.
         *)
         { state with
-          inv_pending = Some conn.fd ;
+          inv_pending = Some (conn.fd, now ) ;
           jobs = state.jobs @ [
             log @@ " ** requesting blocks " ^ conn.addr ^ ", head is " ^ M.hex_of_string head
            >> send_message conn (initial_getblocks head)
