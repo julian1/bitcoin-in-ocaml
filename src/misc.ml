@@ -123,4 +123,19 @@ let send_message conn s =
     let oc = conn.oc in
     Lwt_io.write oc s >> return Nop  (* message sent *)
 
+module M = Message
+
+
+let make_msg payload command = 
+  let header = M.encodeHeader {
+    magic = magic ;
+    command = command ;
+    length = M.strlen payload;
+    checksum = M.checksum payload;
+  } in
+  header ^ payload
+
+
+
+
 

@@ -37,13 +37,7 @@ let initial_getblocks starting_hash =
                         (* TODO should be list of hashes *)
     ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
-  let header = M.encodeHeader {
-    magic = Misc.magic ;
-    command = "getblocks";
-    length = M.strlen payload;
-    checksum = M.checksum payload;
-  } in
-  header ^ payload
+  make_msg payload "getblocks" 
 
 
 let initial_getdata hashes =
@@ -59,14 +53,7 @@ let initial_getdata hashes =
     let hash = List.nth peer.blocks_inv index in
   *)
   let payload = encodeInventory hashes in 
-  let header = M.encodeHeader {
-    magic = Misc.magic;
-    command = "getdata";
-    length = M.strlen payload;
-    checksum = M.checksum payload;
-  }
-  in header ^ payload
-
+  make_msg payload "getdata" 
 
  
 
