@@ -18,7 +18,12 @@ Actually we ought to be able to have the chainstate structure be completely
   - inv and request is empty and from specific address, then probably
     in response to a get data
 *)
+(*
+  - works really nice to download, since it just ignores everything unless its
+  a response in relation to a request
+  - but won't be so good in downloading from random node,  
 
+*)
 open Misc
 
 module M = Message
@@ -52,8 +57,13 @@ let initial_getdata hashes =
   encodeMessage "getdata" payload  
 
 (*
-  the only thing we want is a time, so if a node doesn't respond with
+  - the only thing we want is a time, so if a node doesn't respond with
   an inv request, after a period we'll reissue 
+
+  - think we might remove the fd test. 
+  - the pending thing, will mean we just ignore stray blocks mostly...
+  yes. a random block will be ok, since we will already have it. when synched
+  and will be ignored, when blocks are on request, when not synched
 *)
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
@@ -68,13 +78,10 @@ let manage_chain1 state  e   =
         | "inv" -> (
           let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)
-          let needed_inv_type = 2 in
           let block_hashes = 
-            inv
-            |> L.filter (fun (inv_type,_) -> inv_type = needed_inv_type )
+            inv 
+            |> L.filter (fun (inv_type,hash) -> inv_type = 2 && not @@ SS.mem hash state.heads )
             |> L.map (fun (_,hash)->hash)
-            (* ignore blocks we already have *)
-            |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
           in
           match state.inv_pending with 
             | Some (fd, t) when fd == conn.fd && not (CL.is_empty block_hashes ) -> 

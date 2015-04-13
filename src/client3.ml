@@ -279,7 +279,8 @@ let run f =
 
       ] in
       (* this code needs to be factored out *)
-      let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in
+      let genesis = M.string_of_hex "000000000000000007ba2de6ea612af406f79d5b2101399145c2f3cbbb37c442" in
+(*      let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in *)
       let heads =
           SS.empty
           |> SS.add genesis
