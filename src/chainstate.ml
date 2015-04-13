@@ -74,22 +74,23 @@ let manage_chain1 state  e   =
               (* probably in response to a getdata request *)
               let h = CL.take block_hashes 10 in
               { state with
-              blocks_on_request = h;
-              inv_pending = None;
-              jobs = state.jobs @ [
-                log @@ format_addr conn ^ " *** WHOOT chainstate got inv "
-                ^ string_of_int @@ List.length block_hashes;
-                send_message conn (initial_getdata h );
-              ]
-              }
+                (* can we already have blocks on request ? *) 
+                blocks_on_request = SSS.of_list h;
+                inv_pending = None;
+                jobs = state.jobs @ [
+                  log @@ format_addr conn ^ " *** WHOOT chainstate got inv "
+                  ^ string_of_int @@ List.length block_hashes;
+                  send_message conn (initial_getdata h );
+                ]
+                }
             | _ ->  state
           )
+
         | "block" -> (
-          (* let _, block = decodeBlock payload 0 in *)
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in 
   
-          (* this isn't right, we should only add if it advances *)
+          (* if don't have block, but links into sequence then include *)
           let heads, height =
             if not (SS.mem hash state.heads ) && (SS.mem header.previous state.heads) then 
                 let height = (SS.find header.previous state.heads) .height + 1 in
@@ -133,7 +134,7 @@ let manage_chain2 state  e   =
         if we're synched then the inv won't return anything..., which means that
           inv_pending will stay true which is what we want.
       *)
-      if CL.is_empty state.blocks_on_request
+      if SSS.is_empty state.blocks_on_request
         && not (CL.is_empty state.connections)
         && state.inv_pending = None then
 

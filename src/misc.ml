@@ -100,7 +100,7 @@ type my_app_state =
 
   inv_pending	 : Lwt_unix.file_descr option ; (* should include time also *) 
 
-  blocks_on_request : string list ;
+  blocks_on_request : SSS.t ;
 
    (* should change to be blocks_fd
       does this file descriptor even need to be here. it doesn't change?
@@ -137,7 +137,6 @@ let encodeMessage command payload =
 
 
 let encodeSimpleMessage command = 
- 
   M.encodeHeader {
     magic = magic ;
     command = command;

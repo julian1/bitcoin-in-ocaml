@@ -298,7 +298,7 @@ let run f =
 
 (*        time_of_last_received_block = 0. ;
         time_of_last_inv_request = 0.; *)
-        blocks_on_request = [ ] ;
+        blocks_on_request = SSS.empty  ;
 
     (*    db = LevelDB.open_db "mydb"; *)
 
