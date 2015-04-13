@@ -58,6 +58,9 @@ let manage_chain1 state  e   =
   match e with
     | GotMessage (conn, header, raw_header, payload) -> (
       match header.command with
+        (* ok there's an issue that any inv is meaning we cancel the block request
+        then it doesn't match the fd *)
+
         | "inv" -> (
           let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)
@@ -70,7 +73,7 @@ let manage_chain1 state  e   =
             |> L.filter (fun hash -> not @@ SS.mem hash state.heads )
           in
           match state.inv_pending with 
-            | Some fd when fd == conn.fd -> 
+            | Some fd when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
               (* probably in response to a getdata request *)
               let h = CL.take block_hashes 10 in
               { state with
