@@ -64,6 +64,9 @@ let initial_getdata hashes =
   - the pending thing, will mean we just ignore stray blocks mostly...
   yes. a random block will be ok, since we will already have it. when synched
   and will be ignored, when blocks are on request, when not synched
+
+  - we need to record the fd of the node that we make the block request
+    to.
 *)
 
 (* let manage_chain (state : Misc.my_app_state ) (e : Misc.my_event)  =   *)
@@ -72,9 +75,6 @@ let manage_chain1 state  e   =
   match e with
     | GotMessage (conn, header, raw_header, payload) -> (
       match header.command with
-        (* ok there's an issue that any inv is meaning we cancel the block request
-        then it doesn't match the fd *)
-
         | "inv" -> (
           let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)

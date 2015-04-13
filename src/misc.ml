@@ -100,6 +100,13 @@ type my_app_state =
 
   inv_pending	 : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
 
+  (* should be a tuple with the file_desc so if it doesn't send we can clear it 
+      - very important - being able to clear the connection, means we avoid
+      accumulating a backlog of slow connections.
+
+      - the test should be, if there are blocks_on_request and no block for
+      x time, then wipe the connection and bloks on request.
+  *)
   blocks_on_request : SSS.t ;
 
    (* should change to be blocks_fd
