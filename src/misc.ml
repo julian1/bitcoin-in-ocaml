@@ -125,8 +125,8 @@ let send_message conn s =
 
 module M = Message
 
-
-let make_msg payload command = 
+(* move this to message, change name to encodeMessage? *) 
+let encodeMessage command payload = 
   let header = M.encodeHeader {
     magic = magic ;
     command = command ;
