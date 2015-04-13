@@ -75,7 +75,8 @@ let manage_chain1 state  e   =
           match state.inv_pending with 
             | Some fd when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
               (* probably in response to a getdata request *)
-              let h = CL.take block_hashes 10 in
+              (* let h = CL.take block_hashes 10 in *)
+              let h = block_hashes in
               { state with
                 (* can we already have blocks on request ? *) 
                 blocks_on_request = SSS.of_list h;
