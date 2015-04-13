@@ -88,9 +88,23 @@ let manage_chain1 state  e   =
           (* let _, block = decodeBlock payload 0 in *)
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in 
+  
+          (* this isn't right, we should only add if it advances *)
+          let heads, height =
+            if not (SS.mem hash state.heads ) && (SS.mem header.previous state.heads) then 
+                let height = (SS.find header.previous state.heads) .height + 1 in
+                SS.add hash { 
+                  previous = header.previous;  
+                  height =  height; 
+                } state.heads, height
+            else
+              state.heads, -999
+          in
+
           { state with
+              heads = heads;
               jobs = state.jobs @ [
-                log @@ format_addr conn ^ " block " ^ M.hex_of_string hash ; 
+                log @@ format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height; 
               ]
           }
 
