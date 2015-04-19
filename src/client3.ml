@@ -26,6 +26,7 @@ type my_app_state =
   chain :  Chain.t; 
 
 
+(*
   (* really should be able to hide this *)
   heads : Misc.my_head Misc.SS.t ;
 
@@ -49,6 +50,7 @@ type my_app_state =
     *)
 (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
   (* db : LevelDB.db ; *)
+*)
 }
 
 
@@ -339,9 +341,11 @@ let run f =
       {
         jobs = jobs;
         connections = [];
-        heads = heads ;
 
         chain = chain ;
+(*
+        heads = heads ;
+
 
         inv_pending	 = None ; 
 
@@ -353,6 +357,7 @@ let run f =
     (*    db = LevelDB.open_db "mydb"; *)
 
       (*  blocks_oc = blocks_oc *)
+*)
       }
     in
 
