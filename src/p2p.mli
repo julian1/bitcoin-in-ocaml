@@ -1,6 +1,11 @@
 
 (*
-	information about peers might be something to hide in a type
+	- information about peers might be something to hide in a type
+	- max number of peers etc.
+
+  - we need the ability to cancel, close connections that are doing a read...	
+    if nothing's read or they're too slow. 
+    metrics...
 *)
 val create : unit -> Misc.jobs_type 
 

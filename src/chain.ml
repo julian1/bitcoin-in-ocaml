@@ -96,6 +96,11 @@ let log s = U.write_stdout s >> return U.Nop
 
 let manage_chain1 state e    =
   match e with
+
+	(* VERY IMPORTANT - we need to look at read errors here 
+		and then reset a request, if the fd is the same. 
+	*)
+
     | U.GotMessage (conn, header, _, payload) -> (
       match header.command with
         | "inv" -> (
@@ -221,13 +226,14 @@ let create () =
   write_stdout "**** CREATE " 
   >> 
     (*  let genesis = Message.string_of_hex "000000000000000007ba2de6ea612af406f79d5b2101399145c2f3cbbb37c442" in *)
-     let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+(*     let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in  *)
+     let genesis = M.string_of_hex "000000000000000015ca13f966458ced05d64dbaf0e4b2d8c7e35c8849c3eaec" in
       let heads =
           U.SS.empty
           |> U.SS.add genesis
            ({
             previous = "";
-            height = 0;
+            height = 352775;
           } : U.my_head )   
  
     in let chain =  {
