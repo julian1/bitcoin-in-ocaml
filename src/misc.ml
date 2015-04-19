@@ -83,6 +83,29 @@ type my_head =
     (* bool have *)
 }
 
+(*
+  - roads, on physical earth
+  - law
+  - currency mint
+  - church
+*)
+(*
+  HERE
+  - so we'd pass chainstate jobs and connections and event to the chainstate module.
+  - and likewise we'd pass p2p, jobs and connections to the p2p module.
+
+  - only only bring stuff together at the end. 
+
+  - each function is responsible for updating some of the state in response
+  to an event.
+
+  - we may want f tuple e, because it's like a fold. 
+  - only the top level has all the chunks in one place.
+
+  - and we can move the my_app_state into it's own thing as well...
+  ------
+  - the issue is that the module m hides module m implementation / state .
+*)
 
 type my_app_state =
 {
