@@ -373,8 +373,8 @@ let run f =
             ^ ", connections " ^ (string_of_int @@ List.length state.connections )
         >>
       *)
-          let new_state = List.fold_left f { state with jobs = incomplete } complete
-          in if List.length new_state.jobs > 0 then
+          let new_state = List.fold_left f { state with jobs = incomplete } complete in 
+          if List.length new_state.jobs > 0 then
             loop new_state
           else
             Lwt_io.write_line Lwt_io.stdout "finishing - no more jobs to run!!"
@@ -404,8 +404,9 @@ let f state e =
 (*  Chain.update e 
   >>= fun (chain, jobs ) -> 
     -- why are our side effect-jobs running ??????
+    -- perhaps we should pass jobs all the way through ...
  *) 
-  { state with chain = chain; (*jobs = state.jobs @ jobs *) }  
+  { state with chain = chain; jobs = state.jobs @ jobs  }  
 
 
 let () = run f

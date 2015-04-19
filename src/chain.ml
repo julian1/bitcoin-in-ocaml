@@ -20,6 +20,9 @@ let create () =
 
 let log s = Misc.write_stdout s >> return Misc.Nop
 
+(*
+	how, why are these jobs running? 
+*)
 
 let update a e  = 
   match e with
