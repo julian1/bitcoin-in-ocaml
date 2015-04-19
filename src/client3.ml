@@ -403,8 +403,9 @@ let f state e =
   let (chain, jobs) = Chain.update state.chain e in 
 (*  Chain.update e 
   >>= fun (chain, jobs ) -> 
+    -- why are our side effect-jobs running ??????
  *) 
-  state
+  { state with chain = chain; (*jobs = state.jobs @ jobs *) }  
 
 
 let () = run f

@@ -21,8 +21,14 @@ let create () =
 let log s = Misc.write_stdout s >> return Misc.Nop
 
 
-let update (a : t) (e : Misc.my_event ) = 
-	let jobs = [ log "whoot"  
+let update a e  = 
+  match e with
+    | Misc.Nop -> (a, [] )
+
+	| _ -> 
+	let jobs = [ 
+		write_stdout "hi" >> return Misc.Nop
+		(*log "whoot2"  *)
 	] in
 	(123, jobs) 
 
