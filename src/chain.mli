@@ -9,9 +9,10 @@ val create : unit -> t Lwt.t
 (*
 	needs the event message...
 
+	ok, we want to return a tuple...
 *)
 
-val update : Misc.my_event -> t Lwt.t
+val update : Misc.my_event -> (t * Misc.jobs_type )  
 
 
 (*

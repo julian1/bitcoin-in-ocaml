@@ -11,6 +11,7 @@ type t = int
 let write_stdout = Lwt_io.write_line Lwt_io.stdout
  
 let create () = 
+	(* is an io function *)
 
 	write_stdout "**** CREATE " 
 	>>
@@ -19,9 +20,7 @@ let create () =
 
 let update (e : Misc.my_event ) = 
 
-	write_stdout "**** update " 
-	>>
-	(return 123 )
+	(123, ([] : Misc.jobs_type )  ) 
 
 
 

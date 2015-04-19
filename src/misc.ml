@@ -67,6 +67,10 @@ type my_event =
    | Nop
 
 
+type jobs_type =  my_event Lwt.t list 
+
+
+
 
 module SS = Map.Make(struct type t = string let compare = compare end)
 

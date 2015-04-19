@@ -13,11 +13,13 @@ module M = Message
 
 
 
+
 type my_app_state =
 {
   (* this structure really should'nt be exposed *)
 
-  jobs :  Misc.my_event Lwt.t list ;
+  (* jobs :  Misc.my_event Lwt.t list ; *)
+  jobs :  Misc.jobs_type  ;
 
   connections : Misc.connection list ;
 
@@ -398,8 +400,10 @@ let f state e =
   let state = Chainstate.manage_chain state e in
 *)
 
-  let _ = Chain.update e in
-  
+  let (chain, jobs) = Chain.update e in 
+(*  Chain.update e 
+  >>= fun (chain, jobs ) -> 
+ *) 
   state
 
 
