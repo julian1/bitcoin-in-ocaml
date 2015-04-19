@@ -109,9 +109,14 @@ type my_head =
 
 type my_app_state =
 {
+  (* this structure really should'nt be exposed *)
+
   jobs :  my_event Lwt.t list ;
 
   connections : connection list ;
+
+  (* responsible for downloading chain *)
+  chain :  Chain.t; 
 
 
   (* really should be able to hide this *)

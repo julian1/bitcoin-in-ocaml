@@ -257,6 +257,8 @@ let run f =
 
   Lwt_main.run (
 
+    Chain.create () 
+    >>= fun chain ->   
 
     (* we actually need to read it as well... as write it... *)
     let state =
@@ -293,6 +295,8 @@ let run f =
         jobs = jobs;
         connections = [];
         heads = heads ;
+
+        chain = chain ;
 
         inv_pending	 = None ; 
 
@@ -341,7 +345,8 @@ let run f =
 
 let f state e =
   let state = manage_p2p state e in
-  Chainstate.manage_chain state e
+  let state = Chainstate.manage_chain state e in
+  state
 
 
 let () = run f
