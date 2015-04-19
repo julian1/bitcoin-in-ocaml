@@ -7,11 +7,24 @@ module CL = Core.Core_list
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
+(*
+  - should we pull the head structure in here?. depends are we going to export that structure
+     hopefully yes... 
+  - also how do we structure the next bit which involves, reading the actual blocks
+    that we have...
+  - we just need to scan the blocks... to load up our data structure, and then write blocks
+    as we get and confirm them
+  - then we have to handle tx indexing and fork arrangements... 
+
+  - I think we need definately need add_block...
+
+  blocks output channel
+*)
 
 type t = { 
   heads : Misc.my_head Misc.SS.t ;
-  (* change name to block_inv_pending *)
-  inv_pending  : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
+  (* change name to block_block_inv_pending *)
+  block_inv_pending  : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
   (* should be a tuple with the file_desc so if it doesn't send we can clear it 
       - very important - being able to clear the connection, means we avoid
       accumulating a backlog of slow connections.
@@ -82,7 +95,7 @@ let manage_chain1 state e    =
             |> L.filter (fun (inv_type,hash) -> inv_type = 2 && not @@ Misc.SS.mem hash state.heads )
             |> L.map (fun (_,hash)->hash)
           in
-          match state.inv_pending with 
+          match state.block_inv_pending with 
             | Some (fd, t) when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
               (* probably in response to a getdata request *)
               (* let h = CL.take block_hashes 10 in *)
@@ -90,20 +103,18 @@ let manage_chain1 state e    =
               ( { state with
                 (* can we already have blocks on request ? *) 
                 blocks_on_request = Misc.SSS.of_list h;
-                inv_pending = None;
+                block_inv_pending = None;
               },
-                (*jobs = state.jobs @ *) [
+                 [
                   log @@ Misc.format_addr conn ^ " *** WHOOT chainstate got inv "
                   ^ string_of_int @@ List.length block_hashes;
                   Misc.send_message conn (initial_getdata h );
                 ] )
             | _ ->  (state, [] )
           )
-
         | "block" -> (
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in 
-  
           (* if don't have block, but links into sequence then include *)
           let heads, height =
             if not (Misc.SS.mem hash state.heads ) && (Misc.SS.mem header.previous state.heads) then 
@@ -121,10 +132,8 @@ let manage_chain1 state e    =
               blocks_on_request = blocks_on_request;
              (* jobs = state.jobs @  *)
           },
-            [
-                log @@ Misc.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height; 
-              ]
-
+          [ log @@ Misc.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height; 
+         ]
         ) 
 		    | _ -> state, []
 	   ) 
@@ -134,6 +143,7 @@ let manage_chain1 state e    =
 
 
 let manage_chain2 state connections  e   =
+  (* make requests for block inv *)
   match e with
     | Misc.Nop -> state, []
     | _ ->
@@ -141,21 +151,18 @@ let manage_chain2 state connections  e   =
       (* shouldn't we always issue a request when blocks_on_request *) 
       let now = Unix.time () in
       (* clear a pending inv request, if peer never responded, 
-        should also discard peer? *) 
+        - should also close peer?  *) 
       let state = 
-        match state.inv_pending with 
+        match state.block_inv_pending with 
           | Some (fd, t) when now > t +. 60. ->  
-            { state with inv_pending = None }
+            { state with block_inv_pending = None }
           | _ -> state
       in 
-      (*
-        - so we do need connections ...
-        - if no blocks on request, and have connections, and no inv pending
-        then do an inv request
-      *)
+      (* - if no blocks on request, and have connections, and no inv pending
+        then do an inv request *)
       if Misc.SSS.is_empty state.blocks_on_request
         && not (CL.is_empty connections)
-        && state.inv_pending = None then
+        && state.block_inv_pending = None then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
@@ -183,7 +190,7 @@ let manage_chain2 state connections  e   =
           - we should be recording peer version anyway.
         *)
         { state with
-          inv_pending = Some (conn.fd, now ) ;
+          block_inv_pending = Some (conn.fd, now ) ;
         },
         [
           log @@ " ** requesting blocks " ^ conn.addr ^ ", head is " ^ M.hex_of_string head
@@ -191,11 +198,6 @@ let manage_chain2 state connections  e   =
           ]
       else
         state,[]
-
-
-
-
-
 
 
 
@@ -219,60 +221,19 @@ let create () =
  
     in let chain =  {
       heads = heads ;
-      inv_pending  = None ; 
+      block_inv_pending  = None ; 
       blocks_on_request = Misc.SSS.empty  ;
   } in
   (return chain)
 
 
-
 (*
   how, why are these jobs running? 
   VERY IMPORTANT - perhaps we need to add a (), no i think the job is scheduled 
-   
-
- let manage_chain state e   =
-  let state = manage_chain1 state  e in
-  manage_chain2 state  e
-
-
 *)
 
-(*
-  ugghhh we have to append jobs ...
-*)
 let update state connections e  = 
   let state, jobs1 = manage_chain1 state e  in
   let state, jobs2 = manage_chain2 state connections e in
   state, jobs1 @ jobs2
-
-
-
-(* works
-let update state connections e  = 
-  manage_chain1 state e 
-*)
-
-(*
-let update state connections e  = 
-  let state = manage_chain1 state e in
-  manage_chain2 state  connections e
-*)
-
-(*
-  match e with
-    | Misc.Nop -> (a, [])
-  | _ -> 
-  let jobs = [ 
-    write_stdout @@ "hi" 
-    >> return Misc.Nop
-    ;
-    write_stdout " there"
-    >> return Misc.Nop
-    (*log "whoot2"  *)
-  ] in
-  (a , jobs) 
-*)
-
-
 
