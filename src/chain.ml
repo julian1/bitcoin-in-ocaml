@@ -27,7 +27,11 @@ let update a e  =
 
 	| _ -> 
 	let jobs = [ 
-		write_stdout "hi" >> return Misc.Nop
+		write_stdout "hi" 
+		>> return Misc.Nop
+		;
+		write_stdout " there"
+		>> return Misc.Nop
 		(*log "whoot2"  *)
 	] in
 	(123, jobs) 
