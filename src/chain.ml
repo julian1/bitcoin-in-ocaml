@@ -71,7 +71,6 @@ let initial_getdata hashes =
 let log s = Misc.write_stdout s >> return Misc.Nop
 
 let manage_chain1 state e    =
-
   match e with
     | Misc.GotMessage (conn, header, raw_header, payload) -> (
       match header.command with
@@ -98,7 +97,6 @@ let manage_chain1 state e    =
                   ^ string_of_int @@ List.length block_hashes;
                   Misc.send_message conn (initial_getdata h );
                 ] )
-
             | _ ->  (state, [] )
           )
 
@@ -135,9 +133,9 @@ let manage_chain1 state e    =
 
 
 
-let manage_chain2 state  e   =
+let manage_chain2 connections state  e   =
   match e with
-    | Nop -> state
+    | Misc.Nop -> state, []
     | _ ->
       (* we need to check we have completed handshake *)
       (* shouldn't we always issue a request when blocks_on_request *) 
@@ -151,24 +149,25 @@ let manage_chain2 state  e   =
           | _ -> state
       in 
       (*
-        if no blocks on request, and have connections, and no inv pending
+        - so we do need connections ...
+        - if no blocks on request, and have connections, and no inv pending
         then do an inv request
       *)
-      if SSS.is_empty state.blocks_on_request
-        && not (CL.is_empty state.connections)
+      if Misc.SSS.is_empty state.blocks_on_request
+        && not (CL.is_empty connections)
         && state.inv_pending = None then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
         let previous =
-          SS.bindings state.heads
-          |> List.rev_map (fun (_,head ) -> head.previous)
-          |> SSS.of_list
+          Misc.SS.bindings state.heads
+          |> List.rev_map (fun (_, (head : Misc.my_head) ) -> head.previous)
+          |> Misc.SSS.of_list
         in
         (* get the tips of the blockchain tree by filtering all block hashes against the set *)
         let heads =
-          SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state.heads
-          |> SS.bindings
+          Misc.SS.filter (fun hash _ -> not @@ Misc.SSS.mem hash previous ) state.heads
+          |> Misc.SS.bindings
           |> List.rev_map (fun (tip,_ ) -> tip)
         in
         (* choose a tip at random *)
@@ -176,8 +175,8 @@ let manage_chain2 state  e   =
         let head = List.nth heads index in
 
         (* choose a conn at random *)
-        let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
-        let conn = List.nth state.connections index in
+        let index = now |> int_of_float |> (fun x -> x mod List.length connections ) in
+        let (conn : Misc.connection) = List.nth connections index in
 
         (* we need to record if handshake has been performed
           - which means a peer structure
@@ -185,13 +184,13 @@ let manage_chain2 state  e   =
         *)
         { state with
           inv_pending = Some (conn.fd, now ) ;
-          jobs = state.jobs @ [
-            log @@ " ** requesting blocks " ^ conn.addr ^ ", head is " ^ M.hex_of_string head
-           >> send_message conn (initial_getblocks head)
+        },
+        [
+          log @@ " ** requesting blocks " ^ conn.addr ^ ", head is " ^ M.hex_of_string head
+           >> Misc.send_message conn (initial_getblocks head)
           ]
-        }
       else
-        state
+        state,[]
 
 
 
