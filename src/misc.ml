@@ -127,7 +127,12 @@ let send_message conn s =
 
 module M = Message
 
-(* move this to message, change name to encodeMessage? *) 
+(* 
+  - move this to message.ml, 
+  issue is that it refers to the magic value ...
+  so we'd have to put that in message also...
+  - or else just parametize message 
+*) 
 let encodeMessage command payload = 
   let header = M.encodeHeader {
     magic = magic ;
@@ -147,6 +152,4 @@ let encodeSimpleMessage command =
     checksum = 0;
   } 
  
-
-
 
