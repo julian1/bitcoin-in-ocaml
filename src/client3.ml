@@ -148,67 +148,64 @@ let get_message (conn : Misc.connection ) =
 let format_addr conn = String.concat "" [ conn.addr ; ":" ; string_of_int conn.port ]
 *)
 
+(* so if we change this function so that it takes
+
+  val update : t -> Misc.connection list -> Misc.my_event -> (connections * Misc.jobs_type)  
+ *) 
 
 (* manage p2p *)
-let manage_p2p (state : my_app_state ) e =
+(* let manage_p2p (state : my_app_state ) e = *)
+let manage_p2p connections e =
 
   match e with
-    | Misc.Nop -> state
+    | Misc.Nop -> connections, [] 
     | Misc.GotConnection conn ->
-      { state with
-        connections = conn :: state.connections;
-        jobs = state.jobs @ [
+      conn :: connections,
+      [
           log @@ Misc.format_addr conn ^  " got connection "  ^
-            ", connections now " ^ ( string_of_int @@ List.length state.connections )
+            ", connections now " ^ ( string_of_int @@ List.length connections )
           >> Misc.send_message conn initial_version
           >> log @@ "*** sent our version " ^ Misc.format_addr conn
           ;
            get_message conn
-        ];
-      }
-
+      ];
+      
     | Misc.GotConnectionError msg ->
-      { state with
-        jobs = state.jobs @ [  log @@ "connection error " ^ msg ]
-      }
+        connections, 
+        [  log @@ "connection error " ^ msg ]
 
     | Misc.GotMessageError ((conn : Misc.connection), msg) ->
-      { state with
-        (* fd test is physical equality *)
-        connections = List.filter (fun (c : Misc.connection) -> c.fd != conn.fd) state.connections;
-        jobs = state.jobs @ [
+      (* fd test is physical equality *)
+        List.filter (fun (c : Misc.connection) -> c.fd != conn.fd) connections, 
+         [
           log @@ Misc.format_addr conn ^ "msg error " ^ msg;
           match Lwt_unix.state conn.fd with
             Opened -> ( Lwt_unix.close conn.fd ) >> return Misc.Nop
             | _ -> return Misc.Nop
         ]
-      }
-
 
     | Misc.GotMessage (conn, header, raw_header, payload) ->
       (
       match header.command with
 
         | "version" ->
-          { state with
-            jobs = state.jobs @ [
+          connections,
+             [
               log @@ Misc.format_addr conn ^ " got version message"
               >> Misc.send_message conn initial_verack
               >> log @@ "*** sent verack " ^ Misc.format_addr conn
               ;
               get_message conn
             ];
-          }
 
         | "verack" ->
-          { state with
-            jobs = state.jobs @ [
+          connections,
+             [
               (* should be 3 separate jobs? *)
               log @@ Misc.format_addr conn ^ " got verack";
               (* >> send_message conn initial_getaddr *)
               get_message conn
             ]
-          }
 
         (* - there's stuff to manage p2p
             - then there's stuff to manage chainstate..
@@ -236,34 +233,30 @@ let manage_p2p (state : my_app_state ) e =
             in
             let a = formatAddress addr in
             (* ignore, same addr instances on different ports *)
-            let already_got = List.exists (fun (c : Misc.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            let already_got = List.exists (fun (c : Misc.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) connections
             in
-            if already_got || List.length state.connections >= 30 then
-              { state with
-                jobs = state.jobs @ [
+            if already_got || List.length connections >= 30 then
+                connections,
+                 [
                   log @@ Misc.format_addr conn ^ " addr - already got or ignore "
                     ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
                   ]
-                }
             else
-              { state with
-              jobs = state.jobs @ [
+              connections,
+               [
                  log @@ Misc.format_addr conn ^ " addr - count "  ^ (string_of_int count )
                     ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
                 ]
-              }
 
         | s ->
-          { state with
-            jobs = state.jobs @ [
+            connections,
+             [
               log @@ Misc.format_addr conn ^ " message " ^ s ;
               get_message conn
               ]
-          }
-
         )
 
 
@@ -335,18 +328,18 @@ let run f =
 
 
 let f state e =
-  let state = manage_p2p state e in
+  let (connections, jobs1) = manage_p2p state.connections e in
 (*
   let state = Chainstate.manage_chain state e in
 *)
 
-  let (chain, jobs) = Chain.update state.chain state.connections e in 
+  let (chain, jobs2) = Chain.update state.chain connections e in 
 (*  Chain.update e 
   >>= fun (chain, jobs ) -> 
     -- why are our side effect-jobs running ??????
     -- perhaps we should pass jobs all the way through ...
  *) 
-  { state with chain = chain; jobs = state.jobs @ jobs  }  
+  { state with chain = chain; connections = connections; jobs =  state.jobs @ jobs1 @ jobs2  }  
 
 
 let () = run f

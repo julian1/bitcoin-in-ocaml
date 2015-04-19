@@ -4,7 +4,7 @@ module L = List
 module CL = Core.Core_list
 
 
-let (>>=) = Lwt.(>>=)
+(*let (>>=) = Lwt.(>>=) *)
 let return = Lwt.return
 
 (*
@@ -24,6 +24,10 @@ let return = Lwt.return
 	- new_block...
 
   blocks output channel
+
+	- we also have mempool that we want to coordinate with  . 
+
+	- VERY IMPORTANT we can post back to the main p2p message loop though...
 *)
 
 type t = { 
@@ -90,7 +94,7 @@ let log s = Misc.write_stdout s >> return Misc.Nop
 
 let manage_chain1 state e    =
   match e with
-    | Misc.GotMessage (conn, header, raw_header, payload) -> (
+    | Misc.GotMessage (conn, header, _, payload) -> (
       match header.command with
         | "inv" -> (
           let _, inv = M.decodeInv payload 0 in
@@ -101,7 +105,7 @@ let manage_chain1 state e    =
             |> L.map (fun (_,hash)->hash)
           in
           match state.block_inv_pending with 
-            | Some (fd, t) when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
+            | Some (fd, _) when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
               (* probably in response to a getdata request *)
               (* let h = CL.take block_hashes 10 in *)
               let h = block_hashes in
@@ -159,7 +163,7 @@ let manage_chain2 state connections  e   =
         - should also close peer?  *) 
       let state = 
         match state.block_inv_pending with 
-          | Some (fd, t) when now > t +. 60. ->  
+          | Some (_, t) when now > t +. 60. ->  
             { state with block_inv_pending = None }
           | _ -> state
       in 
