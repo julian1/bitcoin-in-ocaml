@@ -346,6 +346,9 @@ let run f =
 let f state e =
   let state = manage_p2p state e in
   let state = Chainstate.manage_chain state e in
+
+  let _ = Chain.update () in
+  
   state
 
 

@@ -9,8 +9,9 @@ val create : unit -> t Lwt.t
 (*
 	needs the event message...
 
-val update : unit -> t Lwt.t
 *)
+
+val update : unit -> t Lwt.t
 
 
 (*
