@@ -18,9 +18,13 @@ let create () =
 	(return 123 )
 
 
-let update (e : Misc.my_event ) = 
+let log s = Misc.write_stdout s >> return Misc.Nop
 
-	(123, ([] : Misc.jobs_type )  ) 
+
+let update (a : t) (e : Misc.my_event ) = 
+	let jobs = [ log "whoot"  
+	] in
+	(123, jobs) 
 
 
 

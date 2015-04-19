@@ -12,7 +12,7 @@ val create : unit -> t Lwt.t
 	ok, we want to return a tuple...
 *)
 
-val update : Misc.my_event -> (t * Misc.jobs_type )  
+val update : t -> Misc.my_event -> (t * Misc.jobs_type )  
 
 
 (*

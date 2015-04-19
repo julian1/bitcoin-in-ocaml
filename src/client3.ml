@@ -400,7 +400,7 @@ let f state e =
   let state = Chainstate.manage_chain state e in
 *)
 
-  let (chain, jobs) = Chain.update e in 
+  let (chain, jobs) = Chain.update state.chain e in 
 (*  Chain.update e 
   >>= fun (chain, jobs ) -> 
  *) 
