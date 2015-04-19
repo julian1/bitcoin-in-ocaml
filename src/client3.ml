@@ -3,11 +3,56 @@ corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax 
 
 *)
 
-open Misc
+(* open Misc *)
+
+let (>>=) = Lwt.(>>=)
+let return = Lwt.return
+
+
 
 module M = Message
 
 
+
+type my_app_state =
+{
+  (* this structure really should'nt be exposed *)
+
+  jobs :  Misc.my_event Lwt.t list ;
+
+  connections : Misc.connection list ;
+
+  (* responsible for downloading chain *)
+  chain :  Chain.t; 
+
+
+  (* really should be able to hide this *)
+  heads : Misc.my_head Misc.SS.t ;
+
+ (* time_of_last_received_block : float;
+  time_of_last_inv_request : float; *)
+
+
+  inv_pending	 : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
+
+  (* should be a tuple with the file_desc so if it doesn't send we can clear it 
+      - very important - being able to clear the connection, means we avoid
+      accumulating a backlog of slow connections.
+
+      - the test should be, if there are blocks_on_request and no block for
+      x time, then wipe the connection and bloks on request.
+  *)
+  blocks_on_request : Misc.SSS.t ;
+
+   (* should change to be blocks_fd
+      does this file descriptor even need to be here. it doesn't change?
+    *)
+(*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
+  (* db : LevelDB.db ; *)
+}
+
+
+let log s = Misc.write_stdout s >> return Misc.Nop
 
 (* let m = 0xdbb6c0fb   litecoin *)
 
@@ -25,15 +70,15 @@ let initial_version =
       height = 127953;
       relay = 0xff;
   } in
-  encodeMessage "version" payload
+  Misc.encodeMessage "version" payload
 
 (* verack response to send *)
 let initial_verack =
-  encodeSimpleMessage "verack"
+  Misc.encodeSimpleMessage "verack"
 
  
 let initial_getaddr =
-  encodeSimpleMessage "getaddr"
+  Misc.encodeSimpleMessage "getaddr"
 
 
 
@@ -54,20 +99,20 @@ let get_connection host port =
         (fun  () ->
           Lwt_unix.connect fd a
           >>
-          let conn = {
+          let (conn : Misc.connection) = {
               addr = Unix.string_of_inet_addr a_;
               port = port;
               fd = fd;
               ic = inchan ;
               oc = outchan;
           } in
-          return @@ GotConnection conn
+          return @@ Misc.GotConnection conn
         )
         (fun exn ->
           (* must close *)
           let s = Printexc.to_string exn in
           Lwt_unix.close fd
-          >> return @@ GotConnectionError s
+          >> return @@ Misc.GotConnectionError s
         )
 
 (* read exactly n bytes from channel, returning a string
@@ -91,7 +136,7 @@ let readChannel inchan length (* timeout here *)  =
 
 
 
-let get_message conn =
+let get_message (conn : Misc.connection ) =
     Lwt.catch (
       fun () ->
       (* read header *)
@@ -104,15 +149,15 @@ let get_message conn =
             (* read payload *)
             readChannel ic header.length
             >>= fun p ->
-            return @@ GotMessage ( conn, header, s, p)
+            return @@ Misc.GotMessage ( conn, header, s, p)
           else
-            return @@ GotMessageError (conn, "payload too big - command is "
+            return @@ Misc.GotMessageError (conn, "payload too big - command is "
               ^ header.command
               ^ " size " ^ string_of_int header.length )
       )
       ( fun exn ->
           let s = Printexc.to_string exn in
-          return @@ GotMessageError (conn, "here2 " ^ s)
+          return @@ Misc.GotMessageError (conn, "here2 " ^ s)
       )
 
 
@@ -136,51 +181,51 @@ let format_addr conn = String.concat "" [ conn.addr ; ":" ; string_of_int conn.p
 
 
 (* manage p2p *)
-let manage_p2p state e =
+let manage_p2p (state : my_app_state ) e =
 
   match e with
-    | Nop -> state
-    | GotConnection conn ->
+    | Misc.Nop -> state
+    | Misc.GotConnection conn ->
       { state with
         connections = conn :: state.connections;
         jobs = state.jobs @ [
-          log @@ format_addr conn ^  " got connection "  ^
+          log @@ Misc.format_addr conn ^  " got connection "  ^
             ", connections now " ^ ( string_of_int @@ List.length state.connections )
-          >> send_message conn initial_version
-          >> log @@ "*** sent our version " ^ format_addr conn
+          >> Misc.send_message conn initial_version
+          >> log @@ "*** sent our version " ^ Misc.format_addr conn
           ;
            get_message conn
         ];
       }
 
-    | GotConnectionError msg ->
+    | Misc.GotConnectionError msg ->
       { state with
         jobs = state.jobs @ [  log @@ "connection error " ^ msg ]
       }
 
-    | GotMessageError (conn, msg) ->
+    | Misc.GotMessageError ((conn : Misc.connection), msg) ->
       { state with
         (* fd test is physical equality *)
-        connections = List.filter (fun c -> c.fd != conn.fd) state.connections;
+        connections = List.filter (fun (c : Misc.connection) -> c.fd != conn.fd) state.connections;
         jobs = state.jobs @ [
-          log @@ format_addr conn ^ "msg error " ^ msg;
+          log @@ Misc.format_addr conn ^ "msg error " ^ msg;
           match Lwt_unix.state conn.fd with
-            Opened -> ( Lwt_unix.close conn.fd ) >> return Nop
-            | _ -> return Nop
+            Opened -> ( Lwt_unix.close conn.fd ) >> return Misc.Nop
+            | _ -> return Misc.Nop
         ]
       }
 
 
-    | GotMessage (conn, header, raw_header, payload) ->
+    | Misc.GotMessage (conn, header, raw_header, payload) ->
       (
       match header.command with
 
         | "version" ->
           { state with
             jobs = state.jobs @ [
-              log @@ format_addr conn ^ " got version message"
-              >> send_message conn initial_verack
-              >> log @@ "*** sent verack " ^ format_addr conn
+              log @@ Misc.format_addr conn ^ " got version message"
+              >> Misc.send_message conn initial_verack
+              >> log @@ "*** sent verack " ^ Misc.format_addr conn
               ;
               get_message conn
             ];
@@ -190,7 +235,7 @@ let manage_p2p state e =
           { state with
             jobs = state.jobs @ [
               (* should be 3 separate jobs? *)
-              log @@ format_addr conn ^ " got verack";
+              log @@ Misc.format_addr conn ^ " got verack";
               (* >> send_message conn initial_getaddr *)
               get_message conn
             ]
@@ -222,12 +267,12 @@ let manage_p2p state e =
             in
             let a = formatAddress addr in
             (* ignore, same addr instances on different ports *)
-            let already_got = List.exists (fun c -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            let already_got = List.exists (fun (c : Misc.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
             if already_got || List.length state.connections >= 30 then
               { state with
                 jobs = state.jobs @ [
-                  log @@ format_addr conn ^ " addr - already got or ignore "
+                  log @@ Misc.format_addr conn ^ " addr - already got or ignore "
                     ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
                   ]
@@ -235,7 +280,7 @@ let manage_p2p state e =
             else
               { state with
               jobs = state.jobs @ [
-                 log @@ format_addr conn ^ " addr - count "  ^ (string_of_int count )
+                 log @@ Misc.format_addr conn ^ " addr - count "  ^ (string_of_int count )
                     ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
@@ -245,7 +290,7 @@ let manage_p2p state e =
         | s ->
           { state with
             jobs = state.jobs @ [
-              log @@ format_addr conn ^ " message " ^ s ;
+              log @@ Misc.format_addr conn ^ " message " ^ s ;
               get_message conn
               ]
           }
@@ -284,13 +329,13 @@ let run f =
       let genesis = M.string_of_hex "000000000000000007ba2de6ea612af406f79d5b2101399145c2f3cbbb37c442" in
 (*      let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in *)
       let heads =
-          SS.empty
-          |> SS.add genesis
-           {
+          Misc.SS.empty
+          |> Misc.SS.add genesis
+           ({
             previous = "";
             height = 0;
             (* difficulty = 123; *)
-          }  in
+          } : Misc.my_head )  in
       {
         jobs = jobs;
         connections = [];
@@ -303,7 +348,7 @@ let run f =
 
 (*        time_of_last_received_block = 0. ;
         time_of_last_inv_request = 0.; *)
-        blocks_on_request = SSS.empty  ;
+        blocks_on_request = Misc.SSS.empty  ;
 
     (*    db = LevelDB.open_db "mydb"; *)
 
@@ -345,9 +390,11 @@ let run f =
 
 let f state e =
   let state = manage_p2p state e in
+(*
   let state = Chainstate.manage_chain state e in
+*)
 
-  let _ = Chain.update () in
+  let _ = Chain.update e in
   
   state
 

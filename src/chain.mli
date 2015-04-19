@@ -11,7 +11,7 @@ val create : unit -> t Lwt.t
 
 *)
 
-val update : unit -> t Lwt.t
+val update : Misc.my_event -> t Lwt.t
 
 
 (*

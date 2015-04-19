@@ -67,7 +67,6 @@ type my_event =
    | Nop
 
 
-let log s = write_stdout s >> return Nop
 
 module SS = Map.Make(struct type t = string let compare = compare end)
 
@@ -106,43 +105,6 @@ type my_head =
   ------
   - the issue is that the module m hides module m implementation / state .
 *)
-
-type my_app_state =
-{
-  (* this structure really should'nt be exposed *)
-
-  jobs :  my_event Lwt.t list ;
-
-  connections : connection list ;
-
-  (* responsible for downloading chain *)
-  chain :  Chain.t; 
-
-
-  (* really should be able to hide this *)
-  heads : my_head SS.t ;
-
- (* time_of_last_received_block : float;
-  time_of_last_inv_request : float; *)
-
-
-  inv_pending	 : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
-
-  (* should be a tuple with the file_desc so if it doesn't send we can clear it 
-      - very important - being able to clear the connection, means we avoid
-      accumulating a backlog of slow connections.
-
-      - the test should be, if there are blocks_on_request and no block for
-      x time, then wipe the connection and bloks on request.
-  *)
-  blocks_on_request : SSS.t ;
-
-   (* should change to be blocks_fd
-      does this file descriptor even need to be here. it doesn't change?
-    *)
-(*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
-  (* db : LevelDB.db ; *)
-}
 
 (* this really shouldn't be here - place it in app_state? *)
 

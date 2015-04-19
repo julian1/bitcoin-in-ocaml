@@ -17,7 +17,7 @@ let create () =
 	(return 123 )
 
 
-let update () = 
+let update (e : Misc.my_event ) = 
 
 	write_stdout "**** update " 
 	>>
