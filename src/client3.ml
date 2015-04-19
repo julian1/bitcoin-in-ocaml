@@ -3,7 +3,6 @@ corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax 
 
 *)
 
-(* open Misc *)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
