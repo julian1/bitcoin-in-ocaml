@@ -1,6 +1,7 @@
 
 module M = Message
 module U = Misc
+module S = String
 
 module L = List
 module CL = Core.Core_list
@@ -8,6 +9,14 @@ module CL = Core.Core_list
 
 (*let (>>=) = Lwt.(>>=) *)
 let return = Lwt.return
+
+(*
+	- write  block to blocks
+	- then add lseek to local heads or other data structure 
+	- then we can also start and stop app and load from 
+
+	- then completely separate action, we maintain indexes..
+*)
 
 (*
   - should we pull the head structure in here?. depends are we going to export that structure
@@ -24,12 +33,10 @@ let return = Lwt.return
 	- we can compute work here - and put it the thing.
 
 	- new_block...
-
   blocks output channel
-
 	- we also have mempool that we want to coordinate with  . 
-
 	- VERY IMPORTANT we can post back to the main p2p message loop though...
+
 *)
 
 type t = { 
@@ -112,6 +119,10 @@ let manage_chain1 state e    =
             |> L.map (fun (_,hash)->hash)
           in
           match state.block_inv_pending with 
+			(*	- we should accept an inv that has blocks from anyone, it may be newest block 
+				- but only close the inv request if it's from the fd,
+				- also append not set blocks on request
+			*)
             | Some (fd, _) when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
               (* probably in response to a getdata request *)
               (* let h = CL.take block_hashes 10 in *)
@@ -209,6 +220,8 @@ let manage_chain2 state connections  e   =
           block_inv_pending = Some (conn.fd, now ) ;
         },
         [
+
+          log @@ S.concat "" [ " heads " ;conn.addr; " count " ; string_of_int (L.length heads)]; 
           log @@ " ** requesting blocks " ^ conn.addr ^ ", head is " ^ M.hex_of_string head
            >> U.send_message conn (initial_getblocks head)
           ]
