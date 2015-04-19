@@ -133,7 +133,7 @@ let manage_chain1 state e    =
 
 
 
-let manage_chain2 connections state  e   =
+let manage_chain2 state connections  e   =
   match e with
     | Misc.Nop -> state, []
     | _ ->
@@ -207,8 +207,8 @@ let create () =
   (* is an io function *)
   write_stdout "**** CREATE " 
   >> 
-      let genesis = Message.string_of_hex "000000000000000007ba2de6ea612af406f79d5b2101399145c2f3cbbb37c442" in
-    (* let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in *)
+    (*  let genesis = Message.string_of_hex "000000000000000007ba2de6ea612af406f79d5b2101399145c2f3cbbb37c442" in *)
+     let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
       let heads =
           Misc.SS.empty
           |> Misc.SS.add genesis
@@ -229,14 +229,37 @@ let create () =
 (*
   how, why are these jobs running? 
   VERY IMPORTANT - perhaps we need to add a (), no i think the job is scheduled 
-    
+   
+
+ let manage_chain state e   =
+  let state = manage_chain1 state  e in
+  manage_chain2 state  e
+
+
 *)
 
+(*
+  ugghhh we have to append jobs ...
+*)
+let update state connections e  = 
+  let state, jobs1 = manage_chain1 state e  in
+  let state, jobs2 = manage_chain2 state connections e in
+  state, jobs1 @ jobs2
 
 
 
+(* works
+let update state connections e  = 
+  manage_chain1 state e 
+*)
 
-let update a e  = 
+(*
+let update state connections e  = 
+  let state = manage_chain1 state e in
+  manage_chain2 state  connections e
+*)
+
+(*
   match e with
     | Misc.Nop -> (a, [])
   | _ -> 
@@ -249,7 +272,7 @@ let update a e  =
     (*log "whoot2"  *)
   ] in
   (a , jobs) 
-
+*)
 
 
 

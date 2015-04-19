@@ -396,7 +396,7 @@ let f state e =
   let state = Chainstate.manage_chain state e in
 *)
 
-  let (chain, jobs) = Chain.update state.chain e in 
+  let (chain, jobs) = Chain.update state.chain state.connections e in 
 (*  Chain.update e 
   >>= fun (chain, jobs ) -> 
     -- why are our side effect-jobs running ??????
