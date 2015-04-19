@@ -1,15 +1,7 @@
 
 
-```
-corebuild    -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax -I src tests/test_runner.byte
+corebuild -package leveldb,microecc,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client.byte
 
-corebuild    -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client.byte
-```
-
-# single path
-./test_runner.byte -only-test 'suite:1'
-
-important - think it's possible to nest as much as we like
 
 -----
 
@@ -21,7 +13,6 @@ important - think it's possible to nest as much as we like
 ---
 what's next?
 	- get rid of the strrev and decs  and incorporate into the decs
-
 	- done - decode blocks, 
 	- leveldb, or postgres alt interface (consider lwt)
 	- merkle tree

@@ -26,15 +26,68 @@ type value =
   output_length : int ; 
 }
 
+(* change name to encodeTXOKey and decodeTXOValue to distinguish from 
+  other indexes in db.
+  etc 
+  --- 
+  if we have several types of things - then should we be using variants? 
 
-let encodeKey (h : key ) =
-  M.encodeHash32 h.hash 
-  ^ M.encodeInteger32 h.index
+  encodeTXOKey
+*)
 
 let decodeKey s  =
-  let pos, hash = M.decodeHash32 s 0 in
+  let pos = 1 in
+  let pos, hash = M.decodeHash32 s pos in
   let _, index = M.decodeInteger32 s pos in 
   { hash = hash; index = index } 
+
+let encodeKey (h : key ) =
+  "t"
+  ^ M.encodeHash32 h.hash 
+  ^ M.encodeInteger32 h.index
+
+
+(* - we should use hash 160 if we can, to be independent of implementation, main-net test-net etc. 
+    - although that will lose the ability to lookup a pubkey...
+
+    - but if we store the raw bytes,
+    - then we can't just lookup everything for an address - uggh
+
+    pubkey -> 160, then can find all addresses.
+
+    we might have a separate index for pubkeys.
+    -------
+    IMPORTANT,
+      - why not just index the entire output script? rather than just the bytes...
+
+    - to determine the value in an address. need to see what outputs can spend, means
+      OP_DUP types 
+      CHECKSIG types.
+  
+    - as another alternative, should we just index the output script 
+    - then we can determine irrespective of if we use ...
+      - by just constructing the query in different ways...
+      - but we 
+      - can lookup an address (no can't) we can scan arbitrarily...
+
+    - do we really even care about addresses? unless it's for us to spend.  
+
+    REMEMBER ALSO, 
+      - we still have to add the txo stuff...
+
+    VERY IMPORTANT
+      - we need to be able to unwind the action, on chain-state reorganisation. 
+      no, this is just whether the output is spent, which we avoid recording.
+*) 
+
+let encodeAddressKey (h : key ) =
+  "a"
+  ^ M.encodeString "blah"
+  ^ M.encodeHash32 h.hash 
+  ^ M.encodeInteger32 h.index
+
+
+
 
 
 let decodeValue s =
@@ -63,8 +116,5 @@ let formatValue (h : value)  =
   ^ " tx_length " ^ string_of_int h.tx_length
   ^ " output_pos " ^ string_of_int h.output_pos
   ^ " output_length " ^ string_of_int h.output_length
-
-
-
 
 

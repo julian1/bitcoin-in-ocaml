@@ -1,15 +1,9 @@
 
-(* we should record the value, if only to verify ordering *)
+(* scan blocks and compute tx indexes *)
 
 (*
-  - instead of building index of just utxos we may as well just have an index 
-  of all txo's and
-  then just add bits as required, to mark whether it's spent or not.
-  - and even for unconfirmed tx as well, could go in same.
-
   ------
-  
-  Think that we need a module interface, then we can use leveldb or sql behind it... 
+  Think that we need a module interface, then we can use leveldb or sqllite behind it... 
     add      tx  lseek 
     remove   tx
     check    tx
@@ -19,7 +13,6 @@
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
-
 let (>|=) = Lwt.(>|=)
 
 
@@ -31,17 +24,6 @@ module CL = Core.Core_list
 
 
 
-(*
-  al right we need to pass in the block position as well...
-  to record the lseek pos.
-*)
-
-(* so we can push this stuff out into db, or somewhere else so it's useable by client 
-
-  in fact we could hide the entire thing behind a module and just have
-  get 
-and set
-*) 
 
 let process_tx db block_pos ((hash, tx) : string * M.tx )  = 
   let coinbase = M.zeros 32 
@@ -81,9 +63,8 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
 
 
   
-  (* this thing doesn't use the db, so it should be configured ...
-    all this stuff is still mucky
-  *)
+(* this thing doesn't use the db, so it should be configured ...  all this stuff is still mucky *)
+
  let process_block db payload pos count = 
     let block_pos = pos in
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
@@ -96,7 +77,6 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
       in hash, tx
     ) txs 
     in
-
     if count mod 1000 = 0 then 
       Misc.write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
       (* >> write_stdout @@ string_of_int pos  *)
@@ -110,14 +90,11 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
       txs  
 
 
-
 let run () = 
 
   Lwt_main.run (
 
-    (* we don't really need the count 
-        but we do need the file descriptor...
-    *) 
+    (* we don't really need the count *) 
     let rec loop_blocks fd f count =
       Misc.read_bytes fd 24
       >>= fun x -> match x with 

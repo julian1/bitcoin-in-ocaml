@@ -1,5 +1,5 @@
 (*
-  scan indexes, for spent and unspent and count them 
+  scan tx indexes, for spent and unspent and count them 
 
   - we have all these recursive folding structures over blocks and now txs that aren't abstract enough...
   - should be polymorphic 

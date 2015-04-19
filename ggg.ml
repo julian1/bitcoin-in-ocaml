@@ -1,3 +1,4 @@
+<<<<<<< HEAD:src/client3.ml
 (*
 corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  src/client3.byte
 
@@ -367,17 +368,11 @@ type my_app_state =
     may only be used for fast downloading...
   *)
   time_of_last_valid_block : float; (* change name _time, or condition  *)
+=======
+>>>>>>> devel_module_for_download:ggg.ml
   
-  (* from an inv request - used to quickly prompt another inv request *)
-  last_expected_block : string;
 
-
-  blocks_oc : Lwt_io.output Lwt_io.channel ; 
-
-(*
-  db : LevelDB.db ; 
-*)
-
+<<<<<<< HEAD:src/client3.ml
 }
 
 
@@ -404,44 +399,12 @@ let detach f =
 
 
   let log a = Lwt_io.write_line Lwt_io.stdout a >> return Nop 
+=======
+>>>>>>> devel_module_for_download:ggg.ml
 
   let add_jobs jobs state = { state with jobs = jobs @ state.jobs } 
 
-  let remove_peer peer state = { state with 
-      (* physical equality *)
-      peers = List.filter (fun x -> not (x.conn.fd == peer.conn.fd)) state.peers
-    } 
-  let add_peer peer state =  { state with peers = peer::state.peers } 
-
-  let update_peer new_peer state =  { 
-        state with 
-
-        peers = List.map (fun peer -> if peer.conn.fd == new_peer.conn.fd then new_peer else peer ) state.peers 
-          
-    } 
-
-
-
- 
-  (* will throw *) 
-  let peer_of_conn conn state =  List.find(fun peer -> peer.conn.fd ==  conn.fd ) state.peers
-
-
-(*
- 
-    - the guards on the peers aren't working - we're doing multiple request more inv 
-    and get another block
-
-    VERY IMPORTANT
-    - i think because the peer we bind into the read-message earlier is different to 
-    the peer after other actions.  
-
-    - and we are not correctly shadowing the peers...
-
-    that returns in the read-message.
-*)
-
-  let get_another_block peer state =
+let get_another_block peer state =
 
     if List.length peer.blocks_inv > 0 
     && List.length peer.blocks_pending = 0   then
@@ -470,7 +433,7 @@ let detach f =
         let peer = { peer with 
           blocks_inv = List.filter (fun x -> x != hash ) peer.blocks_inv;
           blocks_pending = hash :: peer.blocks_pending;
-		  }  in add_peer peer state 
+      }  in add_peer peer state 
 
 (*    -- are there two read messages ??? *)
 
@@ -480,54 +443,198 @@ let detach f =
           ^ " inv count " ^ (string_of_int (List.length peer.blocks_inv ) ) 
           ^ " pend count " ^ (string_of_int (List.length peer.blocks_pending ) ) 
         >> send_message peer.conn (header ^ payload);  
-      
-(*  get_message peer ;  *)
-      ] (* { state with last_expected_block = last_expected_block }  *)
 
-    else
-       state 
+Lwt_unix.lseek fd pos Unix.SEEK_SET >>= fun pos' ->
+assert (pos' = pos);
+let block = String.create bs in
+_read_buf fd block 0 bs >>= fun () ->
+Lwt.return block
 
-(*
-  what happens if we do the peer change, but don't send the message?
-*)
-let f state e =
+      (* let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in *)
 
-  (* helpers *)
-
-  (* this is horrible, use a Map or something ? 
-  let peer_compare a b = a.conn.fd = b.conn.fd  in
-  let update_peer new_peer state = { 
-    state with peers = List.map (fun peer -> 
-     if peer_compare peer new_peer then new_peer else peer 
-    )  
-  state.peers } in
-  *)
-
-
-  let format_addr peer = peer.addr ^ " " ^ string_of_int peer.port 
-
-  (* maybe it's the choose() that fails ... *)
-(*
-  let housekeep state = 
-    (* so we need to remove from the connections *)
-    let aged conn = (now -. conn.last_activity) > 30. in 
-    let stale,ok = List.partition aged state.connections in
-    let clean_up_jobs = List.map (fun conn -> 
-        log @@ "*** before purging connection " ^ conn.addr 
-        >> Lwt_unix.close conn.fd 
-        >> log @@ "*** after purging connection " ^ conn.addr 
-    ) stale
+    let read_bytes fd len =
+      let block = Bytes .create len in
+      Lwt_unix.read fd block 0 len >>= 
+      fun ret ->
+        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
+      return (
+        if ret > 0 then Some ( Bytes.to_string block )
+        else None 
+        )
+    in
+    let advance fd len =
+        Lwt_unix.lseek fd len SEEK_CUR 
+        >>= fun r -> 
+        (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+        return ()
+    in
+    (* to scan the messages stored in file *)
+    let rec loop fd heads =
+      read_bytes fd 24
+      >>= fun x -> match x with 
+        | Some s -> ( 
+          let _, header = decodeHeader s 0 in
+          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+          read_bytes fd 80 
+          >>= fun u -> match u with 
+            | Some ss -> 
+              let hash = ss |> Message.sha256d |> Message.strrev  in
+              let _, block_header = decodeBlock ss 0 in
+              (* Lwt_io.write_line Lwt_io.stdout @@ 
+                hex_of_string hash 
+                ^ " " ^ hex_of_string block_header.previous 
+              >> *) advance fd (header.length - 80 )
+              >> let heads = SS.add hash { 
+                  previous = block_header.previous;  
+                  height = 0; 
+                } heads 
+              in
+              loop fd  heads  (* *)
+            | None -> 
+              return heads 
+          )
+        | None -> 
+          return heads 
     in 
-    state 
-    |> add_jobs clean_up_jobs 
-    |> fun state -> { state with connections = ok } 
+
+    (* this bloody thing throws - if it can't open *)
+
+    Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
+    >>= fun fd -> 
+      let u =  (* very strange that this var is needed to typecheck *)
+      match Lwt_unix.state fd with 
+        Opened -> 
+          Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
+          >> loop fd SS.empty  
+          >>= fun heads -> Lwt_unix.close fd
+          >> return heads
+        | _ -> return 
+            ( SS.empty 
+            |>
+            let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+            SS.add genesis 
+           { 
+            previous = ""; 
+            height = 0; 
+          })
+        in u
+*)
+   >>= fun heads ->   
+      Lwt_io.write_line Lwt_io.stdout @@ "blocks read " ^ string_of_int (SS.cardinal heads  )
+
+    >>
+    (* get initial state up 
+      uggh opening the file, non truncate ... 
+    *)
+(*     Lwt_io.open_file ~flags: [O_WRONLY ] Lwt_io.output       "blocks.dat"  *)  
+
+
+
+    Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0  
+    >>= fun fd -> ( 
+      match Lwt_unix.state fd with
+        | Opened -> let blocks_oc = Lwt_io.of_fd ~mode:Lwt_io.output fd  in return ()
+        | _ -> return ()
+    )
+    >>
+(*
+Lwt_unix.lseek fd pos Unix.SEEK_SET >>= fun pos' ->
+assert (pos' = pos);
+let block = String.create bs in
+_read_buf fd block 0 bs >>= fun () ->
+Lwt.return block
+
+      (* let (ic : 'mode Lwt_io.channel )= Lwt_io.of_fd ~mode:Lwt_io.input fd in *)
 *)
 
-  in
-  let new_state =
-    match e with
-      | Nop -> state 
-      | GotConnection conn ->
+    let read_bytes fd len =
+      let block = Bytes .create len in
+      Lwt_unix.read fd block 0 len >>= 
+      fun ret ->
+        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
+      return (
+        if ret > 0 then Some ( Bytes.to_string block )
+        else None 
+        )
+    in
+    let advance fd len =
+        Lwt_unix.lseek fd len SEEK_CUR 
+        >>= fun r -> 
+        (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+        return ()
+    in
+    (* to scan the messages stored in file *)
+    let rec loop fd heads =
+      read_bytes fd 24
+      >>= fun x -> match x with 
+        | Some s -> ( 
+          let _, header = decodeHeader s 0 in
+          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+          read_bytes fd 80 
+          >>= fun u -> match u with 
+            | Some ss -> 
+              let hash = ss |> Message.sha256d |> Message.strrev  in
+              let _, block_header = decodeBlock ss 0 in
+              (* Lwt_io.write_line Lwt_io.stdout @@ 
+                hex_of_string hash 
+                ^ " " ^ hex_of_string block_header.previous 
+              >> *) advance fd (header.length - 80 )
+              >> let heads = SS.add hash { 
+                  previous = block_header.previous;  
+                  height = 0; 
+                } heads 
+              in
+              loop fd  heads  (* *)
+            | None -> 
+              return heads 
+          )
+        | None -> 
+          return heads 
+    in 
+
+    (* this bloody thing throws - if it can't open *)
+
+    Lwt_unix.openfile "blocks.dat"  [O_RDONLY] 0 
+    >>= fun fd -> 
+      let u =  (* very strange that this var is needed to typecheck *)
+      match Lwt_unix.state fd with 
+        Opened -> 
+          Lwt_io.write_line Lwt_io.stdout "scanning blocks..." 
+          >> loop fd SS.empty  
+          >>= fun heads -> Lwt_unix.close fd
+          >> return heads
+        | _ -> return 
+            ( SS.empty 
+            |>
+            let genesis = string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in 
+            SS.add genesis 
+           { 
+            previous = ""; 
+            height = 0; 
+          })
+        in u
+
+
+
+   >>= fun heads ->   
+      Lwt_io.write_line Lwt_io.stdout @@ "blocks read " ^ string_of_int (SS.cardinal heads  )
+
+    >>
+    (* get initial state up 
+      uggh opening the file, non truncate ... 
+    *)
+(*     Lwt_io.open_file ~flags: [O_WRONLY ] Lwt_io.output       "blocks.dat"  *)  
+
+
+
+    Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0  
+    >>= fun fd -> ( 
+      match Lwt_unix.state fd with
+        | Opened -> let blocks_oc = Lwt_io.of_fd ~mode:Lwt_io.output fd  in return ()
+        | _ -> return ()
+    )
+    >>
+
         let peer = { conn = conn; blocks_inv = [] ; blocks_pending  = [] ;   blocks_inv_last_request_time = 0. } in
         state
         |> add_peer  peer
@@ -666,8 +773,13 @@ let f state e =
                 ] 
 
             (* code to keep the inventory full for the peer 
+<<<<<<< HEAD:src/client3.ml
 				change this code to return a tuple of the new heads and new jobs
 			*)
+=======
+        change this code to return a tuple of the new heads and new jobs
+      *)
+>>>>>>> devel_module_for_download:ggg.ml
             |> fun state -> 
               (* this condition is right. if less than 100, we always do it, on timer *)
               if List.length peer.blocks_inv < 100 
@@ -713,15 +825,15 @@ let f state e =
 *)
 
 (*
-	VERY IMPORTNAT
+  VERY IMPORTNAT
   ok, i think this might be done a lot easier by just shadowing everything
-	peer, heads, jobs . rather than our piping stuff
-	then creating 
-	- the only thin is where we factor code off into another function and 
-	will have to return these shad
-	- and this is what we do with if/else as well - rather than return state
-	we just return what we modified. 
-	- limits the scope of the vars, and makes it clear whats being done. 
+  peer, heads, jobs . rather than our piping stuff
+  then creating 
+  - the only thin is where we factor code off into another function and 
+  will have to return these shad
+  - and this is what we do with if/else as well - rather than return state
+  we just return what we modified. 
+  - limits the scope of the vars, and makes it clear whats being done. 
 *)
           | "block" ->
             (* let _, block = decodeBlock payload 0 in *)
@@ -761,7 +873,7 @@ let f state e =
                              
                 |> fun state -> *) (*get_another_block peer  state
 
-				        |> fun state -> *) 
+                |> fun state -> *) 
                 add_jobs [ 
                   log @@ "got block  " ^ conn.addr ^ " " ^  hex_of_string hash; 
                   (*   Lwt_io.write state.blocks_oc (raw_header ^ payload ) >> return Nop ; *)
@@ -853,6 +965,7 @@ let f state e =
 
   in new_state 
 
+<<<<<<< HEAD:src/client3.ml
          
 let run f =
 
@@ -1018,4 +1131,6 @@ Lwt.return block
 let () = run f 
 
 
+=======
+>>>>>>> devel_module_for_download:ggg.ml
 
