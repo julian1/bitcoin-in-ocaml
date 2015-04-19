@@ -15,8 +15,13 @@ let return = Lwt.return
   - we just need to scan the blocks... to load up our data structure, and then write blocks
     as we get and confirm them
   - then we have to handle tx indexing and fork arrangements... 
-
   - I think we need definately need add_block...
+
+	- so we're going to have one head with the most pow. and we need to scan back to common
+	fork points.
+	- we can compute work here - and put it the thing.
+
+	- new_block...
 
   blocks output channel
 *)

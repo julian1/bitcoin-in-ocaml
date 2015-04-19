@@ -7,51 +7,17 @@ corebuild    -package leveldb,microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
-
-
 module M = Message
-
-
 
 
 type my_app_state =
 {
-  (* this structure really should'nt be exposed *)
-
-  (* jobs :  Misc.my_event Lwt.t list ; *)
   jobs :  Misc.jobs_type  ;
 
   connections : Misc.connection list ;
 
   (* responsible for downloading chain *)
   chain :  Chain.t; 
-
-
-(*
-  (* really should be able to hide this *)
-  heads : Misc.my_head Misc.SS.t ;
-
- (* time_of_last_received_block : float;
-  time_of_last_inv_request : float; *)
-
-
-  inv_pending	 : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
-
-  (* should be a tuple with the file_desc so if it doesn't send we can clear it 
-      - very important - being able to clear the connection, means we avoid
-      accumulating a backlog of slow connections.
-
-      - the test should be, if there are blocks_on_request and no block for
-      x time, then wipe the connection and bloks on request.
-  *)
-  blocks_on_request : Misc.SSS.t ;
-
-   (* should change to be blocks_fd
-      does this file descriptor even need to be here. it doesn't change?
-    *)
-(*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
-  (* db : LevelDB.db ; *)
-*)
 }
 
 
@@ -328,33 +294,11 @@ let run f =
         get_connection     "62.80.185.213" 8333;
 
       ] in
-      (* this code needs to be factored out *)
-      let genesis = M.string_of_hex "000000000000000007ba2de6ea612af406f79d5b2101399145c2f3cbbb37c442" in
-(*      let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in *)
-      let heads =
-          Misc.SS.empty
-          |> Misc.SS.add genesis
-           ({
-            previous = "";
-            height = 0;
-            (* difficulty = 123; *)
-          } : Misc.my_head )  in
       {
         jobs = jobs;
         connections = [];
 
         chain = chain ;
-(*
-        heads = heads ;
-        inv_pending	 = None ; 
-(*        time_of_last_received_block = 0. ;
-        time_of_last_inv_request = 0.; *)
-        blocks_on_request = Misc.SSS.empty  ;
-
-    (*    db = LevelDB.open_db "mydb"; *)
-
-      (*  blocks_oc = blocks_oc *)
-*)
       }
     in
 
