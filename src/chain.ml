@@ -111,6 +111,15 @@ let manage_chain1 state e    =
     | U.GotMessage (conn, header, _, payload) -> (
       match header.command with
         | "inv" -> (
+          (*	- we should accept an inv that has blocks from anyone, since we may be synced and 
+              anyone could have the latest
+            - but only close the inv request if it's from the expected conn,
+            - also append not set blocks on request
+
+            - if someone doesn't send us a block, it could stall everything???? 
+                maybe not, because we'll end up readding to blocks_on_request except ...
+                from a different source
+          *)
           let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)
           let block_hashes = 
@@ -118,11 +127,30 @@ let manage_chain1 state e    =
             |> L.filter (fun (inv_type,hash) -> inv_type = 2 && not @@ U.SS.mem hash state.heads )
             |> L.map (fun (_,hash)->hash)
           in
+			    if block_hashes <> [] then	
+            (* clear inv pending if it came from expected fd *)
+            let block_inv_pending = match state.block_inv_pending with 
+              | Some (fd, _) when fd == conn.fd -> None
+              | a -> a
+            in 
+            (* add to blocks on request *)
+            let blocks_on_request = U.SSS.union state.blocks_on_request (U.SSS.of_list block_hashes)
+            in
+            ( { state with
+                block_inv_pending = block_inv_pending;
+                blocks_on_request = blocks_on_request ;
+              }, 
+              [
+                log @@ U.format_addr conn ^ " *** got block inv "
+                  ^ string_of_int @@ List.length block_hashes;
+                  U.send_message conn (initial_getdata block_hashes );
+              ] 
+            )
+          else
+            (state, [] )
+
+       (* 
           match state.block_inv_pending with 
-			(*	- we should accept an inv that has blocks from anyone, it may be newest block 
-				- but only close the inv request if it's from the fd,
-				- also append not set blocks on request
-			*)
             | Some (fd, _) when fd == conn.fd && not (CL.is_empty block_hashes ) -> 
               (* probably in response to a getdata request *)
               (* let h = CL.take block_hashes 10 in *)
@@ -138,6 +166,7 @@ let manage_chain1 state e    =
                   U.send_message conn (initial_getdata h );
                 ] )
             | _ ->  (state, [] )
+        *)
           )
         | "block" -> (
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
@@ -238,15 +267,15 @@ let create () =
   (* is an io function *)
   write_stdout "**** CREATE " 
   >> 
-    (*  let genesis = Message.string_of_hex "000000000000000007ba2de6ea612af406f79d5b2101399145c2f3cbbb37c442" in *)
-(*     let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in  *)
-     let genesis = M.string_of_hex "000000000000000015ca13f966458ced05d64dbaf0e4b2d8c7e35c8849c3eaec" in
+(*     let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in   *)
+(*     let genesis = M.string_of_hex "000000000000000015ca13f966458ced05d64dbaf0e4b2d8c7e35c8849c3eaec" in *)
       let heads =
           U.SS.empty
-          |> U.SS.add genesis
+          |> U.SS.add ( M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") 
            ({
             previous = "";
-            height = 352775;
+            (* height = 352775; *)
+            height = 0;
           } : U.my_head )   
  
     in let chain =  {
