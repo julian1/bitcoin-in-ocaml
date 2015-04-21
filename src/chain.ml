@@ -12,7 +12,22 @@ let return = Lwt.return
 
 let fff fd =
   Lwt_unix.unix_file_descr fd
+
+(*
+  - is there a simpler rule we could use, 
+  - we only need to determine if we haven't got a block from a peer for a while...
+
+  like if a block was just downloaded,,.
+  then we remove it from the on request list.
+
+  - why not remark all the pending with the current time ...
+  - hhmmmmmm
   
+  - it might be interesting to keep fd -> last mapping... around...
+  - can just be a list tuple...
+ 
+ *) 
+
 (*
   - OK. we can create peer objects on our side, just following the Connection
   events
@@ -68,6 +83,9 @@ type t = {
   (* should change to be blocks_fd does this file descriptor even need to be here. it doesn't change?  *)
   (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
   (* db : LevelDB.db ; *)
+
+  (* this would be much nicer as an indexable map *)
+  last_block_received_time : (Lwt_unix.file_descr * float) list ;
 }
 
 
@@ -124,6 +142,8 @@ let manage_chain1 state e    =
     *)
 
     | U.GotMessage (conn, header, _, payload) -> (
+
+      let now = Unix.time () in
       match header.command with
         | "inv" -> (
           (*	- we should accept an inv that has blocks from anyone, since we may be synced and 
@@ -165,20 +185,17 @@ let manage_chain1 state e    =
             |> L.filter (fun (inv_type,hash) -> inv_type = 2 && not @@ U.SS.mem hash state.heads )
             |> L.map (fun (_,hash)->hash)
           in
-			if block_hashes <> [] then	
+			    if block_hashes <> [] then	
             (* clear block_inv_pending if inv came from peer against which we issued request *)
             let block_inv_pending = match state.block_inv_pending with 
               | Some (fd, _) when fd == conn.fd -> None
               | a -> a
             in 
-            (* add to blocks on request, and request them from the peer 
-				how do we append maps????
-				TODO append to the old map data.
-			*)
-			let now = Unix.time () in
-			let blocks_on_request =
-				L.fold_left (fun s h -> U.SS.add h (conn.fd, now) s ) U.SS.empty block_hashes	
-			in
+            (* add to blocks on request, and request them from the peer *)
+            let blocks_on_request =
+              (* Note, we will latest record if request from multiple peers *)
+              L.fold_left (fun m h -> U.SS.add h (conn.fd, now) m) state.blocks_on_request  block_hashes	
+            in
 (*
             let blocks_on_request = (*U.SS.union state.blocks_on_request*) (U.SS.of_list block_hashes)
 *)
@@ -217,6 +234,12 @@ let manage_chain1 state e    =
         | "block" -> (
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in 
+
+          (* update the last received block against the fd *)
+          let last = L.filter (fun (fd,t) -> fd != conn.fd) state.last_block_received_time in
+          let last = (conn.fd, now ):: last
+          in
+
           (* if don't have block, but links into sequence then include *)
           let heads, height =
             if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then 
@@ -232,6 +255,7 @@ let manage_chain1 state e    =
           { state with
               heads = heads;
               blocks_on_request = blocks_on_request;
+              last_block_received_time = last;
              (* jobs = state.jobs @  *)
           },
           [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height; 
@@ -337,6 +361,7 @@ let create () =
       heads = heads2 ;
       block_inv_pending  = None ; 
       blocks_on_request = U.SS.empty  ;
+    last_block_received_time = [];
   } in
   (return chain)
 
