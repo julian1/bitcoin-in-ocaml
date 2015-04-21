@@ -206,7 +206,7 @@ let update connections e =
         | s ->
             connections,
              [
-              log @@ U.format_addr conn ^ " message " ^ s ;
+              (* log @@ U.format_addr conn ^ " message " ^ s ; *)
               get_message conn
               ]
         )

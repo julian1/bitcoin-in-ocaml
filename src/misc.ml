@@ -72,7 +72,8 @@ type jobs_type =  my_event Lwt.t list
 
 
 
-module SS = Map.Make(struct type t = string let compare = compare end)
+(* module SS = Map.Make(struct type t = string let compare = compare end) *)
+module SS = Map.Make( String ) 
 
 module SSS = Set.Make(String);;
 

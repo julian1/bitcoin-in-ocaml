@@ -10,6 +10,21 @@ module CL = Core.Core_list
 (*let (>>=) = Lwt.(>>=) *)
 let return = Lwt.return
 
+let fff fd =
+  Lwt_unix.unix_file_descr fd
+  
+(*
+  - OK. we can create peer objects on our side, just following the Connection
+  events
+  - that would mean we don't even need, to pass connections
+  - we can then record the last block against that peer.
+
+  - alternatively should we use a list ... do we want to keep the ordering...
+	RULE
+	- if a node hasn't given us a block in a period like 10 mins...
+		remove all blocks on request against that peer. 
+*)
+
 (*
 	- write  block to blocks
 	- then add lseek to local heads or other data structure 
@@ -49,7 +64,7 @@ type t = {
       - the test should be, if there are blocks_on_request and no block for
       x time, then wipe the connection and bloks on request.
   *)
-  blocks_on_request : U.SSS.t ;
+  blocks_on_request : (Lwt_unix.file_descr * float ) U.SS.t ;
   (* should change to be blocks_fd does this file descriptor even need to be here. it doesn't change?  *)
   (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
   (* db : LevelDB.db ; *)
@@ -104,21 +119,44 @@ let log s = U.write_stdout s >> return U.Nop
 let manage_chain1 state e    =
   match e with
 
-	(* VERY IMPORTANT - we need to look at read errors here 
-		and then reset a request, if the fd is the same. 
-	*)
+    (* VERY IMPORTANT - we need to look at read errors here 
+      and then reset a request, if the fd is the same. 
+    *)
 
     | U.GotMessage (conn, header, _, payload) -> (
       match header.command with
         | "inv" -> (
           (*	- we should accept an inv that has blocks from anyone, since we may be synced and 
-              anyone could have the latest
+              anyone could have the latest mined block
+            - but we use the block_inv_pending to avoid, sending requests too often when synched 
+              when blocks_on_request is normally empty.
             - but only close the inv request if it's from the expected conn,
             - also append not set blocks on request
 
-            - if someone doesn't send us a block, it could stall everything???? 
-                maybe not, because we'll end up readding to blocks_on_request except ...
-                from a different source
+            - if someone doesn't send us a block they told us about, (eg. they disconnect) 
+                it will stall in blocks_on_request, because we won't re-request it because we only 
+                re-request when blocks_on_request is empty...
+                unless blocks_on_request is empty...
+            - if someone sends us an inv for a block that doesn't exist...
+            - remember we request lots of blocks at a time...
+  
+            - i think the only thing we can do is record the time of the request then filter
+            for being old occasionally...
+            - i don't think we need the idea of a block_inv_pending... 
+            the major thing is if there 
+            --------------
+      
+            - we kind of need to check if the peer is still sending us blocks... 
+            - time of last_valid_block from peer.
+
+            - we only really need to store the fd...
+            - if a peer hasn't sent us anything for a while that it said it would, then clean out the fd
+            - what about a really simple rule that if a block has been on request for an hour
+            we remove it...   it would actual 
+            IMPORTANT - if we can close the peer connection... - then it prevents them continuing to send
+              while we ignore.
+            - if they don't send anything...
+            - we might also remove stuff in an out of order fashion... 
           *)
           let _, inv = M.decodeInv payload 0 in
           (* add inventory blocks to list in peer *)
@@ -127,15 +165,23 @@ let manage_chain1 state e    =
             |> L.filter (fun (inv_type,hash) -> inv_type = 2 && not @@ U.SS.mem hash state.heads )
             |> L.map (fun (_,hash)->hash)
           in
-			    if block_hashes <> [] then	
-            (* clear inv pending if it came from expected fd *)
+			if block_hashes <> [] then	
+            (* clear block_inv_pending if inv came from peer against which we issued request *)
             let block_inv_pending = match state.block_inv_pending with 
               | Some (fd, _) when fd == conn.fd -> None
               | a -> a
             in 
-            (* add to blocks on request *)
-            let blocks_on_request = U.SSS.union state.blocks_on_request (U.SSS.of_list block_hashes)
-            in
+            (* add to blocks on request, and request them from the peer 
+				how do we append maps????
+				TODO append to the old map data.
+			*)
+			let now = Unix.time () in
+			let blocks_on_request =
+				L.fold_left (fun s h -> U.SS.add h (conn.fd, now) s ) U.SS.empty block_hashes	
+			in
+(*
+            let blocks_on_request = (*U.SS.union state.blocks_on_request*) (U.SS.of_list block_hashes)
+*)
             ( { state with
                 block_inv_pending = block_inv_pending;
                 blocks_on_request = blocks_on_request ;
@@ -182,7 +228,7 @@ let manage_chain1 state e    =
             else
               state.heads, -999
           in
-          let blocks_on_request = U.SSS.remove hash state.blocks_on_request in 
+          let blocks_on_request = U.SS.remove hash state.blocks_on_request in 
           { state with
               heads = heads;
               blocks_on_request = blocks_on_request;
@@ -216,7 +262,7 @@ let manage_chain2 state connections  e   =
       in 
       (* - if no blocks on request, and have connections, and no inv pending
         then do an inv request *)
-      if U.SSS.is_empty state.blocks_on_request
+      if U.SS.is_empty state.blocks_on_request
         && not (CL.is_empty connections)
         && state.block_inv_pending = None then
 
@@ -249,10 +295,13 @@ let manage_chain2 state connections  e   =
           block_inv_pending = Some (conn.fd, now ) ;
         },
         [
-
-          log @@ S.concat "" [ " heads " ;conn.addr; " count " ; string_of_int (L.length heads)]; 
-          log @@ " ** requesting blocks " ^ conn.addr ^ ", head is " ^ M.hex_of_string head
-           >> U.send_message conn (initial_getblocks head)
+          log @@ S.concat "" [ 
+            "request addr " ; conn.addr; 
+            "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ; 
+            "\nheads count " ; string_of_int (L.length heads);
+            "\nrequested head is ";  M.hex_of_string head
+          ]; 
+           U.send_message conn (initial_getblocks head)
           ]
       else
         state,[]
@@ -267,21 +316,27 @@ let create () =
   (* is an io function *)
   write_stdout "**** CREATE " 
   >> 
-(*     let genesis = M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" in   *)
-(*     let genesis = M.string_of_hex "000000000000000015ca13f966458ced05d64dbaf0e4b2d8c7e35c8849c3eaec" in *)
-      let heads =
+      let heads1 =
           U.SS.empty
-          |> U.SS.add ( M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") 
+          |> U.SS.add (M.string_of_hex "000000000000000015ca13f966458ced05d64dbaf0e4b2d8c7e35c8849c3eaec") 
            ({
             previous = "";
-            (* height = 352775; *)
+             height = 352775; 
+          } : U.my_head )   
+    	in
+      let heads2 =
+          U.SS.empty
+          |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") 
+           ({
+            previous = "";
             height = 0;
           } : U.my_head )   
  
+ 
     in let chain =  {
-      heads = heads ;
+      heads = heads2 ;
       block_inv_pending  = None ; 
-      blocks_on_request = U.SSS.empty  ;
+      blocks_on_request = U.SS.empty  ;
   } in
   (return chain)
 
