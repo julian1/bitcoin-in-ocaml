@@ -14,30 +14,22 @@ let fff fd =
   Lwt_unix.unix_file_descr fd
 
 (*
-  - is there a simpler rule we could use, 
-  - we only need to determine if we haven't got a block from a peer for a while...
+  Rule, for removing. 
 
-  like if a block was just downloaded,,.
-  then we remove it from the on request list.
 
-  - why not remark all the pending with the current time ...
-  - hhmmmmmm
+  Hang on. 
+    Can't we do it by looking at the minimum time a block has been in the requested blocks. 
+    if anything has been sitting there.
+
+--------
+  - in time on request > 10 mins && last block send > 10mins 
   
-  - it might be interesting to keep fd -> last mapping... around...
-  - can just be a list tuple...
- 
- *) 
+    - if we requested a block at least 10 minutes ago, and haven't received anything for 10 mins 
 
-(*
-  - OK. we can create peer objects on our side, just following the Connection
-  events
-  - that would mean we don't even need, to pass connections
-  - we can then record the last block against that peer.
+    ahh. no. if time requested from minimum in - last block sent, then clear everythgin...
+    - makes it easy...
 
-  - alternatively should we use a list ... do we want to keep the ordering...
-	RULE
-	- if a node hasn't given us a block in a period like 10 mins...
-		remove all blocks on request against that peer. 
+    - so map blocks_on_request and get the smallest time for each fd. 
 *)
 
 (*
@@ -70,22 +62,26 @@ let fff fd =
 *)
 
 type t = { 
+
+  (* the hashes *)
   heads : U.my_head U.SS.t ;
-  (* change name to block_block_inv_pending *)
+
+  (* when we issue an inv request against a peer *) 
   block_inv_pending  : (Lwt_unix.file_descr * float ) option ; (* should include time also *) 
   (* should be a tuple with the file_desc so if it doesn't send we can clear it 
       - very important - being able to clear the connection, means we avoid
       accumulating a backlog of slow connections.
-      - the test should be, if there are blocks_on_request and no block for
-      x time, then wipe the connection and bloks on request.
   *)
   blocks_on_request : (Lwt_unix.file_descr * float ) U.SS.t ;
+
+  (* this would be nicer as an indexable map - we can record any peer stats we like here 
+    to help us. we could also use this as the source of connections against which to do requests
+  *)
+  last_block_received_time : (Lwt_unix.file_descr * float) list ;
+
   (* should change to be blocks_fd does this file descriptor even need to be here. it doesn't change?  *)
   (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
   (* db : LevelDB.db ; *)
-
-  (* this would be much nicer as an indexable map *)
-  last_block_received_time : (Lwt_unix.file_descr * float) list ;
 }
 
 
@@ -179,11 +175,12 @@ let manage_chain1 state e    =
             - we might also remove stuff in an out of order fashion... 
           *)
           let _, inv = M.decodeInv payload 0 in
-          (* add inventory blocks to list in peer *)
+          (* extract inventory blocks we don't know about *)
           let block_hashes = 
             inv 
             |> L.filter (fun (inv_type,hash) -> inv_type = 2 && not @@ U.SS.mem hash state.heads )
             |> L.map (fun (_,hash)->hash)
+            (* should also filter against blocks that are on request *)
           in
 			    if block_hashes <> [] then	
             (* clear block_inv_pending if inv came from peer against which we issued request *)
@@ -191,20 +188,17 @@ let manage_chain1 state e    =
               | Some (fd, _) when fd == conn.fd -> None
               | a -> a
             in 
-            (* add to blocks on request, and request them from the peer *)
+            (* add to the blocks on request, and request them from the peer *)
             let blocks_on_request =
               (* Note, we will latest record if request from multiple peers *)
               L.fold_left (fun m h -> U.SS.add h (conn.fd, now) m) state.blocks_on_request  block_hashes	
             in
-(*
-            let blocks_on_request = (*U.SS.union state.blocks_on_request*) (U.SS.of_list block_hashes)
-*)
             ( { state with
                 block_inv_pending = block_inv_pending;
                 blocks_on_request = blocks_on_request ;
               }, 
               [
-                log @@ U.format_addr conn ^ " *** got block inv "
+                log @@ U.format_addr conn ^ " *** got block inv requesting block/s "
                   ^ string_of_int @@ List.length block_hashes;
                   U.send_message conn (initial_getdata block_hashes );
               ] 
