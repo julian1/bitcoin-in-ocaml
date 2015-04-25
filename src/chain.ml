@@ -221,8 +221,8 @@ let manage_chain1 state e    =
                 blocks_on_request = blocks_on_request ;
               }, 
               [
-                log @@ U.format_addr conn ^ " *** got block inv requesting block/s "
-                  ^ string_of_int @@ List.length block_hashes;
+                log @@ U.format_addr conn ^ " *** got inventory block - on request "
+                  ^ string_of_int @@ U.SS.cardinal blocks_on_request ; 
                   U.send_message conn (initial_getdata block_hashes );
               ] 
             )
@@ -294,8 +294,9 @@ let manage_chain2 state connections  e   =
       (* we need to check we have completed handshake *)
       (* shouldn't we always issue a request when blocks_on_request *) 
       let now = Unix.time () in
-      (* clear a pending inv request, if peer never responded, 
-        - should also close peer?  *) 
+
+      (* if peer never responded to an inv then clear the pending flag 
+      *) 
       let state = 
         match state.block_inv_pending with 
           | Some (_, t) when now > t +. 60. ->  
@@ -303,29 +304,24 @@ let manage_chain2 state connections  e   =
           | _ -> state
       in 
 
-      (* 
-        ok, if someone sends us random invs, then they'll sit in blocks on request 
+      (* ok, if someone sends us random invs, then they'll sit in blocks on request 
         and basically prevent us downloading...
-
-        get descriptors that we haven't received valid blocks for a while 
-        we don't want to be waking over the full set of descriptors every time ...
-        filter and map can be replaced with a single fold...
       *)
-(*      let fds = L.filter (fun (fd,t) -> now > t +. 60.) state.last_block_received_time 
-                |> L.map (fun (fd,t) -> fd )
-      in
- *) 
-      let blocks_on_request = U.SS.filter (fun hash (fd,t) -> 
-        not ( now > t +. 60. 
-          && L.exists (fun (fd_,t_) -> fd_ == fd && now > t_ +. 60.) state.last_block_received_time 
-          )  (* we need an exists using physical equality *) 
-        ) state.blocks_on_request in 
-          
+       
+      (* if a block was requested at least 60 seconds ago, and 
+      we haven't received any valid block from the corresponding peer for at least 60 seconds, then 
+      clear flag to allow re-request *) 
+      let state = { state with
+        blocks_on_request = U.SS.filter (fun hash (fd,t) -> 
+          not ( now > t +. 60. 
+            && L.exists (fun (fd_,t_) -> fd_ == fd && now > t_ +. 60.) state.last_block_received_time 
+            )  
+          ) state.blocks_on_request 
+      } in
 
-
-      (* - if no blocks on request, and have connections, and no inv pending
-        then do an inv request *)
-      if U.SS.is_empty blocks_on_request
+      (* if there are no blocks on request, and have connections, and no inv pending
+        then do an inv request to extend the tips *)
+      if U.SS.is_empty state.blocks_on_request
         && not (CL.is_empty connections)
         && state.block_inv_pending = None then
 
@@ -356,7 +352,6 @@ let manage_chain2 state connections  e   =
         *)
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
-          blocks_on_request = blocks_on_request;
         },
         [
           log @@ S.concat "" [ 
@@ -368,9 +363,7 @@ let manage_chain2 state connections  e   =
            U.send_message conn (initial_getblocks head)
           ]
       else
-        { state with 
-          blocks_on_request = blocks_on_request;
-        } ,[]
+        state,[]
 
 
 
