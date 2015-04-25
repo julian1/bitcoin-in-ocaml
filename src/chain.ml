@@ -39,6 +39,13 @@ let fff fd =
     with some random component.
 *)
 
+type ggg = { 
+  fd : Lwt_unix.file_descr ; 
+  t : float ;
+}
+
+
+
 type t = { 
 
   (* hash structure *)
@@ -51,7 +58,11 @@ type t = {
   blocks_on_request : (Lwt_unix.file_descr * float ) U.SS.t ;
 
   (*   *)
-  last_block_received_time : (Lwt_unix.file_descr * float) list ;
+(*  last_block_received_time : (Lwt_unix.file_descr * float) list ;
+*)
+
+  last_block_received_time : ggg list ;
+
 
   (* should change to be blocks_fd does this file descriptor even need to be here. it doesn't change?  *)
   (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
@@ -113,7 +124,20 @@ let manage_chain1 state e    =
               && not ( U.SS.mem hash state.blocks_on_request)  )
             |> L.map (fun (_,hash) -> hash)
           in
-          (* if we have new blocks *)
+          (* prioritize handling *) 
+			    let block_hashes = 
+              match state.block_inv_pending with 
+              (* take all blocks if solicited *)
+              | Some (fd, _) when fd == conn.fd -> block_hashes
+              (* otherwise only if nothing else already on request from the same peer *)
+              | _ -> 
+                if U.SS.exists (fun k (fd,t) -> fd == conn.fd) state.blocks_on_request then 
+                  []
+                else
+                (* may want to just take the head *)
+                block_hashes
+          in
+          (* blocks we want *)
 			    if block_hashes <> [] then	
             (* clear block_inv_pending if this inv came from peer against which we issued an inv request *)
             let block_inv_pending = match state.block_inv_pending with 
@@ -145,7 +169,7 @@ let manage_chain1 state e    =
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in 
           
-          (* if we don't yet have the block, but it's previous links into sequence then include *)
+          (* if we don't yet have the block, but it's previous hash links into sequence then include *)
           let heads, height =
             if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then 
                 let height = (U.SS.find header.previous state.heads).height + 1 in
@@ -161,8 +185,9 @@ let manage_chain1 state e    =
           let last =  
             if height <> -1 then
               (* update the fd to indicate we got a good block, TODO tidy this *)
-              let last = L.filter (fun (fd,t) -> fd != conn.fd) state.last_block_received_time in
-              (conn.fd, now)::last
+              let last = L.filter (fun x -> x.fd != conn.fd) state.last_block_received_time in
+              { fd = conn.fd; t = now ; 
+              }::last
             else 
               state.last_block_received_time
           in
@@ -212,8 +237,8 @@ let manage_chain2 state connections  e   =
         blocks_on_request = U.SS.filter (fun hash (fd,t) -> 
           not ( 
             now > t +. 60. 
-            && match CL.find state.last_block_received_time (fun (fd_,_) -> fd_ == fd) with 
-              | Some (_, t_) -> now > t_ +. 60.
+            && match CL.find state.last_block_received_time (fun x -> x.fd == fd) with 
+              | Some x -> now > x.t +. 60.
               | None -> true
             )  
           ) state.blocks_on_request 
@@ -257,7 +282,7 @@ let manage_chain2 state connections  e   =
             "\nheads count " ; string_of_int (L.length heads);
             "\nrequested head is ";  M.hex_of_string head ;
 
-            "\n fds\n" ; S.concat "\n" ( L.map (fun (_, now_) -> string_of_float (now -. now_ ) ) state.last_block_received_time )
+            "\n fds\n" ; S.concat "\n" ( L.map (fun x -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ]; 
 
 
@@ -296,7 +321,7 @@ let create () =
       heads = heads2 ;
       block_inv_pending  = None ; 
       blocks_on_request = U.SS.empty  ;
-    last_block_received_time = [];
+      last_block_received_time = [];
   } in
   (return chain)
 
