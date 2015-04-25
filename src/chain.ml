@@ -21,6 +21,24 @@ let fff fd =
 	- then completely separate action, we maintain indexes..
 *)
 
+(*
+  - So a stupid fucking node, can just send us inv blocks, and we feel obligated to download them
+  - because we might be synced and it could advance a fork.
+  - but then they don't link to anything we already have. and it prevents us issuing real requests. 
+*)
+
+(*
+  - so we can be stalled just by having random blocks thrown at us,
+  because even with automated clearing, they continue to keep the requeste blocks full 
+  and prevent us issuing requests.
+ 
+  - can we just issue requests constantly? 
+  - or what about, do an issue 
+
+  - simple metric if the last block from peer, didn't advance us, then thow it away...
+    with some random component.
+*)
+
 type t = { 
 
   (* hash structure *)
@@ -111,8 +129,9 @@ let manage_chain1 state e    =
                 blocks_on_request = blocks_on_request ;
               }, 
               [
-                log @@ U.format_addr conn ^ " *** got inventory block - on request "
-                  ^ string_of_int @@ U.SS.cardinal blocks_on_request ; 
+                log @@ U.format_addr conn 
+                  ^ " *** got inventory blocks " ^ (string_of_int @@ L.length block_hashes  )
+                  ^ " - on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ; 
                   (* request blocks from the peer *)
                   U.send_message conn (initial_getdata block_hashes );
               ] 
@@ -125,12 +144,7 @@ let manage_chain1 state e    =
           (* we received a block *)
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in 
-
-          (* update the fd to indicate we got a good block, TODO tidy this *)
-          let last = L.filter (fun (fd,t) -> fd != conn.fd) state.last_block_received_time in
-          let last = (conn.fd, now)::last
-          in
-
+          
           (* if we don't yet have the block, but it's previous links into sequence then include *)
           let heads, height =
             if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then 
@@ -142,6 +156,17 @@ let manage_chain1 state e    =
             else
               state.heads, -1 (* should be None *)
           in
+
+          (* only record valid block if it really helped us *)
+          let last =  
+            if height <> -1 then
+              (* update the fd to indicate we got a good block, TODO tidy this *)
+              let last = L.filter (fun (fd,t) -> fd != conn.fd) state.last_block_received_time in
+              (conn.fd, now)::last
+            else 
+              state.last_block_received_time
+          in
+
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in 
           { state with
               heads = heads;
@@ -181,12 +206,15 @@ let manage_chain2 state connections  e   =
         and prevent us issuing inv from the current tips...  this is an issue. *)
        
       (* if a block was requested at least 60 seconds ago, and 
-      we haven't received any valid block from the corresponding peer for at least 60 seconds, then 
-      clear in blocks_on_request flag to allow re-request *) 
+      we haven't received any valid blocks from the corresponding peer for at least 60 seconds, then 
+      clear in blocks_on_request flag to allow re-request from another peer *) 
       let state = { state with
         blocks_on_request = U.SS.filter (fun hash (fd,t) -> 
-          not ( now > t +. 60. 
-            && L.exists (fun (fd_,t_) -> fd_ == fd && now > t_ +. 60.) state.last_block_received_time 
+          not ( 
+            now > t +. 60. 
+            && match CL.find state.last_block_received_time (fun (fd_,_) -> fd_ == fd) with 
+              | Some (_, t_) -> now > t_ +. 60.
+              | None -> true
             )  
           ) state.blocks_on_request 
       } in
@@ -227,8 +255,12 @@ let manage_chain2 state connections  e   =
             "request addr " ; conn.addr; 
             "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ; 
             "\nheads count " ; string_of_int (L.length heads);
-            "\nrequested head is ";  M.hex_of_string head
+            "\nrequested head is ";  M.hex_of_string head ;
+
+            "\n fds\n" ; S.concat "\n" ( L.map (fun (_, now_) -> string_of_float (now -. now_ ) ) state.last_block_received_time )
           ]; 
+
+
           (* request blocks *)
            U.send_message conn (initial_getblocks head)
           ]
@@ -268,10 +300,7 @@ let create () =
   } in
   (return chain)
 
-(*
-  there's an issue that jobs are running immediately before placing in choose() ? 
-  VERY IMPORTANT - perhaps we need to add a (), no i think the job is scheduled 
-*)
+(* there's an issue that jobs are running immediately before placing in choose() ?  *)
 
 let update state connections e  = 
   let state, jobs1 = manage_chain1 state e  in
