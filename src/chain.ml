@@ -84,8 +84,28 @@ type t = {
   (* db : LevelDB.db ; *)
 }
 
+(*
+  - we only care about the minimum time, fd 
+  map -> list...
+  - then we'll walk the list....
+  - uggh actually it won't work...
+  - if we requested the blocks 20 minutes ago, then they'll all show an age of 20 minutes...
+  because its when the block was cleared...  no doesn't matter. 
+  - if we know that any block has been on request greater than 10 minutes from a conn, but
+  we haven't received anything from that conn, then we should clear.
+  - ok, rather than organizing by block.  should we organize by fd?
+
+  -----
+  - if we get nothing for 3 minutes it's a read error.
+  - what about if we get no block for 3 minutes then we generate a read error and clear...
+
+  - when do request for a block we'll add to the last_block_received_time...
+    if that exceeds 3 minutes then we'll clear blocks_on_request...
+
+  we have to prevent a newly put block from triggering...
 
 
+*)
 
 let initial_getblocks starting_hash =
   (* the list are the options, and peer will return a sequence
@@ -178,8 +198,11 @@ let manage_chain1 state e    =
           (* extract inventory blocks we don't know about *)
           let block_hashes = 
             inv 
-            |> L.filter (fun (inv_type,hash) -> inv_type = 2 && not @@ U.SS.mem hash state.heads )
+            |> L.filter (fun (inv_type,hash) -> inv_type = 2 
+              && not (U.SS.mem hash state.heads ) 
+              && not ( U.SS.mem hash state.blocks_on_request)  )
             |> L.map (fun (_,hash)->hash)
+
             (* should also filter against blocks that are on request *)
           in
 			    if block_hashes <> [] then	
@@ -243,7 +266,7 @@ let manage_chain1 state e    =
                   height =  height; 
                 } : U.my_head )  state.heads, height
             else
-              state.heads, -999
+              state.heads, -999 (* should be None *)
           in
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in 
           { state with
@@ -252,7 +275,8 @@ let manage_chain1 state e    =
               last_block_received_time = last;
              (* jobs = state.jobs @  *)
           },
-          [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height; 
+          [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
+            ^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ; 
          ]
         ) 
 		    | _ -> state, []
@@ -278,9 +302,30 @@ let manage_chain2 state connections  e   =
             { state with block_inv_pending = None }
           | _ -> state
       in 
+
+      (* 
+        ok, if someone sends us random invs, then they'll sit in blocks on request 
+        and basically prevent us downloading...
+
+        get descriptors that we haven't received valid blocks for a while 
+        we don't want to be waking over the full set of descriptors every time ...
+        filter and map can be replaced with a single fold...
+      *)
+(*      let fds = L.filter (fun (fd,t) -> now > t +. 60.) state.last_block_received_time 
+                |> L.map (fun (fd,t) -> fd )
+      in
+ *) 
+      let blocks_on_request = U.SS.filter (fun hash (fd,t) -> 
+        not ( now > t +. 60. 
+          && L.exists (fun (fd_,t_) -> fd_ == fd && now > t_ +. 60.) state.last_block_received_time 
+          )  (* we need an exists using physical equality *) 
+        ) state.blocks_on_request in 
+          
+
+
       (* - if no blocks on request, and have connections, and no inv pending
         then do an inv request *)
-      if U.SS.is_empty state.blocks_on_request
+      if U.SS.is_empty blocks_on_request
         && not (CL.is_empty connections)
         && state.block_inv_pending = None then
 
@@ -311,6 +356,7 @@ let manage_chain2 state connections  e   =
         *)
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
+          blocks_on_request = blocks_on_request;
         },
         [
           log @@ S.concat "" [ 
@@ -322,7 +368,9 @@ let manage_chain2 state connections  e   =
            U.send_message conn (initial_getblocks head)
           ]
       else
-        state,[]
+        { state with 
+          blocks_on_request = blocks_on_request;
+        } ,[]
 
 
 
