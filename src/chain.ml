@@ -161,7 +161,7 @@ let manage_chain1 state e    =
 
 
 let manage_chain2 state connections  e   =
-  (* make requests for block inv *)
+  (* issue inventory requests to advance the tips *)
   match e with
     | U.Nop -> state, []
     | _ ->
@@ -169,8 +169,7 @@ let manage_chain2 state connections  e   =
       (* shouldn't we always issue a request when blocks_on_request *) 
       let now = Unix.time () in
 
-      (* if peer never responded to an inv then clear the pending flag 
-      *) 
+      (* if peer never responded to an inv, clear the pending flag *) 
       let state = 
         match state.block_inv_pending with 
           | Some (_, t) when now > t +. 60. ->  
@@ -178,13 +177,12 @@ let manage_chain2 state connections  e   =
           | _ -> state
       in 
 
-      (* ok, if someone sends us random invs, then they'll sit in blocks on request 
-        and basically prevent us downloading...
-      *)
+      (* if someone sends us lots random invs, then clog up blocks_on_request 
+        and prevent us issuing inv from the current tips...  this is an issue. *)
        
       (* if a block was requested at least 60 seconds ago, and 
       we haven't received any valid block from the corresponding peer for at least 60 seconds, then 
-      clear flag to allow re-request *) 
+      clear in blocks_on_request flag to allow re-request *) 
       let state = { state with
         blocks_on_request = U.SS.filter (fun hash (fd,t) -> 
           not ( now > t +. 60. 
@@ -194,7 +192,7 @@ let manage_chain2 state connections  e   =
       } in
 
       (* if there are no blocks on request, and have connections, and no inv pending
-        then do an inv request to extend the tips *)
+        then do an inv request blocks to extend the tips *)
       if U.SS.is_empty state.blocks_on_request
         && not (CL.is_empty connections)
         && state.block_inv_pending = None then
@@ -216,14 +214,11 @@ let manage_chain2 state connections  e   =
         let index = now |> int_of_float |> (fun x -> x mod List.length heads) in
         let head = List.nth heads index in
 
-        (* choose a conn at random *)
+        (* choose a peer fd at random *)
         let index = now |> int_of_float |> (fun x -> x mod List.length connections ) in
         let (conn : U.connection) = List.nth connections index in
 
-        (* we need to record if handshake has been performed
-          - which means a peer structure
-          - we should be recording peer version anyway.
-        *)
+        (* TODO we need to record if handshake has been performed *)
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
         },
@@ -234,6 +229,7 @@ let manage_chain2 state connections  e   =
             "\nheads count " ; string_of_int (L.length heads);
             "\nrequested head is ";  M.hex_of_string head
           ]; 
+          (* request blocks *)
            U.send_message conn (initial_getblocks head)
           ]
       else
@@ -241,12 +237,10 @@ let manage_chain2 state connections  e   =
 
 
 
-
-
 let write_stdout = Lwt_io.write_line Lwt_io.stdout
  
 let create () = 
-  (* is an io function *)
+  (* initialization should be an io function? *)
   write_stdout "**** CREATE " 
   >> 
       let heads1 =
@@ -274,9 +268,8 @@ let create () =
   } in
   (return chain)
 
-
 (*
-  how, why are these jobs running? 
+  there's an issue that jobs are running immediately before placing in choose() ? 
   VERY IMPORTANT - perhaps we need to add a (), no i think the job is scheduled 
 *)
 
