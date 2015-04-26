@@ -214,11 +214,15 @@ let manage_chain1 state e    =
 
         - should just lseek the end
 			*)
-            Lwt_mutex.lock state.blocks_fd_m
-            >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
-            >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
-            >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in
-            log @@  " pos " ^ string_of_int (pos ) 
+            if height <> -1 then
+              Lwt_mutex.lock state.blocks_fd_m
+              >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
+              >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
+              >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in return U.Nop(* in
+              log @@  " pos " ^ string_of_int (pos )  *)
+            else
+              return U.Nop
+
             (* we must do a message here, to coordinate state change *)
          ]
         )
@@ -317,7 +321,7 @@ let readBlocks fd =
       return ()
   in
   (* to scan the messages stored in file *)
-  let rec loop fd heads =
+  let rec loop fd ( heads : U.my_head U.SS.t ) =
     U.read_bytes fd 24
     >>= fun x -> match x with 
       | Some s -> ( 
@@ -328,11 +332,20 @@ let readBlocks fd =
           | Some ss -> 
             let hash = ss |> Message.sha256d |> Message.strrev  in
             let _, block_header = M.decodeBlock ss 0 in
-            (**) Lwt_io.write_line Lwt_io.stdout @@ M.hex_of_string hash ^ " " ^ M.hex_of_string block_header.previous 
-            >> (**) advance fd (header.length - 80 )
+
+            (* Core.Core_map.find *)
+            let height = 
+              if (U.SS.mem block_header.previous heads) then 
+                (U.SS.find block_header.previous heads ).height + 1 
+              else
+                1     (* we have a bug, where we never download the first block *)
+            in
+
+            (* Lwt_io.write_line Lwt_io.stdout @@ M.hex_of_string hash ^ " " ^ M.hex_of_string block_header.previous 
+            >> *) advance fd (header.length - 80 )
             >> let heads = U.SS.add hash ({ 
                 previous = block_header.previous;  
-                height = 0; 
+                height = height; 
               } : U.my_head ) heads 
             in
             loop fd  heads  (* *)
