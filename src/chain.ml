@@ -115,6 +115,12 @@ let manage_chain1 state e    =
             have the latest mined block first
             - but we prioritize solicited over unsolicted inventory  
             - also block_inv_pending is used to avoid sending requests too often when synched
+
+            - IMPORTANT the solicited is terrible when synced. a peer can send a spurious block. 
+              and then we get valid block and we'd miss the real block.
+
+            - VERY IMPORTANT ok, but we can change the criteria - if we're only downloading unsolicited
+              blocks then do another inv...
           *)
           (* extract blocks from inventory message, and filter for those we don't know *)
           let _, inv = M.decodeInv payload 0 in
@@ -150,10 +156,11 @@ let manage_chain1 state e    =
               if solicited then 
                 block_hashes 
               else (
-                if U.SS.exists (fun _ (_,_,solicited) -> not solicited) state.blocks_on_request then
+                (* if U.SS.exists (fun _ (_,_,solicited) -> not solicited) state.blocks_on_request then *)
+                if U.SS.exists (fun _ (fd,_,_) -> conn.fd == fd) state.blocks_on_request then
                   []
                 else
-                  block_hashes
+                  block_hashes (* may want just one *)
               )
           in
           (* blocks we want *)
@@ -294,10 +301,15 @@ let manage_chain2 state connections  e   =
           ) state.blocks_on_request
       } in
 
-      (* if there are no blocks on request, and no inv pending then do an inv request *)
-      if U.SS.is_empty state.blocks_on_request
+      (* are there solicited blocks on request *)
+      let has_solicited = 
+        U.SS.exists (fun _ (_,_,solicited) -> solicited) state.blocks_on_request 
+      in
+
+      (* if no solicited blocks on request, and no inv pending then make an inv request *)
+      if not has_solicited 
         && state.block_inv_pending = None 
-        && not (CL.is_empty connections) then
+        && connections <> [] then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
