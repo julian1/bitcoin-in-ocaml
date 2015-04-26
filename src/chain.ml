@@ -199,37 +199,6 @@ let manage_chain1 state e    =
             ^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
 
             let s = "whoot\n" in 
-            (* write fd buf ofs len has the same semantic as Unix.write, but is cooperative 
-                how do we read this block data again. fd though???
-                we're going to have to open the file everytime if we want to be able to lseek the end ...
-
-                - Important rather than spinning through a message....
-
-                - seems that we're not positioned at the end initially...
-
-                  - ughhh, we can't just query the position, and then do a separate function....
-                  because 
-                  - we need a queue or the ability to sequence the writes....
-                  - otherwise recording the position isn't guaranteed...
-
-                23.227.191.50:8333  block 000000000000000007bba9bd66a0198babed0334539318369102c30223008d89 353727 on request 25
-                23.227.191.50:8333  block 000000000000000000408a768f84c20967fac5c12cc6ed00717b19364997eeba 353728 on request 24
-                 pos 30
-                 pos 30
-
-                - we can seek the end when we first open the file...
-				- but what about doing the writing, we're going to have to create an effective mutex...
-				- to synchronize.
-				- so much fucking io.
-					-----
-
-				- IMPORTANT - OK we just use a lwt mutex actually lwt may have mutexes...
-
-				we could return an array that would be 
-					
-				- also in the time that we're trying to write it, we can't clear from blocks_on_request
-				- fuck 	
-            *)
 			(*
 				rather than option monads everywhere, actions ought to take two functions 
 					the intital and the failure (usually log)   problem is the creation functions.
@@ -341,6 +310,60 @@ let manage_chain2 state connections  e   =
 
 let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
+
+
+let readBlocks fd =
+(*
+    let read_bytes fd len =
+      let block = Bytes .create len in
+      Lwt_unix.read fd block 0 len >>= 
+      fun ret ->
+        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
+      return (
+        if ret > 0 then Some ( Bytes.to_string block )
+        else None 
+        )
+    in
+ *)  let advance fd len =
+        Lwt_unix.lseek fd len SEEK_CUR 
+        >>= fun r -> 
+        (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+        return ()
+    in
+    (* to scan the messages stored in file *)
+    let rec loop fd heads =
+      U.read_bytes fd 24
+      >>= fun x -> match x with 
+        | Some s -> ( 
+          let _, header = M.decodeHeader s 0 in
+          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+          U.read_bytes fd 80 
+          >>= fun u -> match u with 
+            | Some ss -> 
+              let hash = ss |> Message.sha256d |> Message.strrev  in
+              let _, block_header = M.decodeBlock ss 0 in
+              (* Lwt_io.write_line Lwt_io.stdout @@ 
+                hex_of_string hash 
+                ^ " " ^ hex_of_string block_header.previous 
+              >> *) advance fd (header.length - 80 )
+              >> let heads = U.SS.add hash ({ 
+                  previous = block_header.previous;  
+                  height = 0; 
+                } : U.my_head ) heads 
+              in
+              loop fd  heads  (* *)
+            | None -> 
+              return heads 
+          )
+        | None -> 
+          return heads 
+     
+  in    
+    loop fd U.SS.empty  
+    >>= fun heads -> return heads
+ 
+
+
 let create () =
   (* initialization should be an io function? 
     
@@ -395,6 +418,39 @@ let update state connections e  =
   let state, jobs2 = manage_chain2 state connections e in
   state, jobs1 @ jobs2
 
+
+
+            (* write fd buf ofs len has the same semantic as Unix.write, but is cooperative 
+                how do we read this block data again. fd though???
+                we're going to have to open the file everytime if we want to be able to lseek the end ...
+
+                - Important rather than spinning through a message....
+
+                - seems that we're not positioned at the end initially...
+
+                  - ughhh, we can't just query the position, and then do a separate function....
+                  because 
+                  - we need a queue or the ability to sequence the writes....
+                  - otherwise recording the position isn't guaranteed...
+
+                23.227.191.50:8333  block 000000000000000007bba9bd66a0198babed0334539318369102c30223008d89 353727 on request 25
+                23.227.191.50:8333  block 000000000000000000408a768f84c20967fac5c12cc6ed00717b19364997eeba 353728 on request 24
+                 pos 30
+                 pos 30
+
+                - we can seek the end when we first open the file...
+				- but what about doing the writing, we're going to have to create an effective mutex...
+				- to synchronize.
+				- so much fucking io.
+					-----
+
+				- IMPORTANT - OK we just use a lwt mutex actually lwt may have mutexes...
+
+				we could return an array that would be 
+					
+				- also in the time that we're trying to write it, we can't clear from blocks_on_request
+				- fuck 	
+            *)
 
 
 
