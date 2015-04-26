@@ -7,7 +7,7 @@ module L = List
 module CL = Core.Core_list
 
 
-(*let (>>=) = Lwt.(>>=) *)
+let (>>=) = Lwt.(>>=) 
 let return = Lwt.return
 
 (*
@@ -158,7 +158,10 @@ let manage_chain1 state e    =
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in
 
-          (* if we don't yet have the block, and it links into chain then include *)
+          (* if we don't yet have the block, and it links into chain then include 
+              ok, we are committed to writing the block to disk and including, 
+              then lets do the io, first not screate another message
+          *)
           let heads, height =
             if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then
                 let height = (U.SS.find header.previous state.heads).height + 1 in
@@ -169,7 +172,7 @@ let manage_chain1 state e    =
             else
               state.heads, -1 (* should be None *)
           in
-          (* record that we got a valid block from the peer *)
+          (* update the time that we got a valid block from the peer *)
           let last =
             if height <> -1 then
               (* update the fd to indicate we got a good block, TODO tidy this *)
@@ -280,7 +283,15 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
 let create () =
   (* initialization should be an io function? *)
-  write_stdout "**** CREATE "
+  write_stdout "**** initializing chain "
+  
+  (* open blocks.dat writer *)
+  >> Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0o644 
+  >>= fun fd -> ( 
+      match Lwt_unix.state fd with
+        | Opened -> let blocks_oc = Lwt_io.of_fd ~mode:Lwt_io.output fd  in return ()
+        | _ -> return ()
+    )
   >>
       let heads1 =
           U.SS.empty
