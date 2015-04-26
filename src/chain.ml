@@ -61,6 +61,8 @@ type t = {
   (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
   (* db : LevelDB.db ; *)
 
+  blocks_fd_m :   Lwt_mutex.t ;
+
   blocks_fd : Lwt_unix.file_descr ;
  
 
@@ -228,10 +230,19 @@ let manage_chain1 state e    =
 				- also in the time that we're trying to write it, we can't clear from blocks_on_request
 				- fuck 	
             *)
+			(*
+				rather than option monads everywhere, actions ought to take two functions 
+					the intital and the failure (usually log)   problem is the creation functions.
 
+        OK, because we're not initially moved to the end of the file, until after we try to write.
+        it might be better to write the file, then substract the length...
+			*)
+            Lwt_mutex.lock state.blocks_fd_m
+            >> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
+            >>= fun count -> 
             Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_CUR
-            >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
-            >> log @@  " pos " ^ string_of_int pos 
+            >>= fun pos -> let () = Lwt_mutex.unlock state.blocks_fd_m in
+            log @@  " pos " ^ string_of_int (pos - count) 
 
          ]
         )
@@ -333,7 +344,9 @@ let create () =
       we kind of also need to catch file exceptions.
    *)
   write_stdout "**** initializing chain "
-  
+ 
+
+ 
   (* open blocks.dat writer *)
   >> Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0o644 
   >>= fun blocks_fd -> 
@@ -360,6 +373,8 @@ let create () =
             block_inv_pending  = None ;
             blocks_on_request = U.SS.empty  ;
             last_block_received_time = [];
+            blocks_fd_m = Lwt_mutex.create (); 
+
             blocks_fd = blocks_fd ;
         } in
         return (Some chain)
