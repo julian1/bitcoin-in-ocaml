@@ -197,8 +197,29 @@ let manage_chain1 state e    =
             ^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
 
             let s = "whoot\n" in 
-(*      write fd buf ofs len has the same semantic as Unix.write, but is cooperative *)
-            Lwt_unix.write state.blocks_fd s 0 (S.length s) >> return U.Nop 
+            (* write fd buf ofs len has the same semantic as Unix.write, but is cooperative 
+                how do we read this block data again. fd though???
+                we're going to have to open the file everytime if we want to be able to lseek the end ...
+
+                - Important rather than spinning through a message....
+
+                - seems that we're not positioned at the end initially...
+
+                  - ughhh, we can't just query the position, and then do a separate function....
+                  because 
+                  - we need a queue or the ability to sequence the writes....
+                  - otherwise recording the position isn't guaranteed...
+
+                23.227.191.50:8333  block 000000000000000007bba9bd66a0198babed0334539318369102c30223008d89 353727 on request 25
+                23.227.191.50:8333  block 000000000000000000408a768f84c20967fac5c12cc6ed00717b19364997eeba 353728 on request 24
+                 pos 30
+                 pos 30
+
+            *)
+
+            Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_CUR
+            >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
+            >> log @@  " pos " ^ string_of_int pos 
 
          ]
         )
