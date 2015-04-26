@@ -10,9 +10,20 @@ module CL = Core.Core_list
 (*let (>>=) = Lwt.(>>=) *)
 let return = Lwt.return
 
+(*
 let fff fd =
   Lwt_unix.unix_file_descr fd
+*)
 
+(*
+  - ok, now we need more block rules (merckle root, difficulty, time checks )
+  - then we need to save...
+
+  - issue is that saving is an async action.  that's ok. 
+    we ought to be able to save, then update the position...
+
+  - can we factor o 
+*)
 
 (*
 	- write block to disk
