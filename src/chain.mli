@@ -4,7 +4,7 @@
 
 type t
 
-val create : unit -> t Lwt.t
+val create : unit -> t option Lwt.t
 
 val update : t -> Misc.connection list -> Misc.my_event -> (t * Misc.jobs_type)  
 

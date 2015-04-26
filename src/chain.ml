@@ -60,6 +60,10 @@ type t = {
   (* should change to be blocks_fd does this file descriptor even need to be here. it doesn't change?  *)
   (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
   (* db : LevelDB.db ; *)
+
+  blocks_fd : Lwt_unix.file_descr ;
+ 
+
 }
 
 
@@ -191,6 +195,11 @@ let manage_chain1 state e    =
           },
           [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
             ^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
+
+            let s = "whoot\n" in 
+(*      write fd buf ofs len has the same semantic as Unix.write, but is cooperative *)
+            Lwt_unix.write state.blocks_fd s 0 (S.length s) >> return U.Nop 
+
          ]
         )
         | _ -> state, []
@@ -282,41 +291,47 @@ let manage_chain2 state connections  e   =
 let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
 let create () =
-  (* initialization should be an io function? *)
+  (* initialization should be an io function? 
+    
+    how can we initialize if the fd failed????
+
+    we could use continuation passing style, so if the action failed, 
+      we could output the error
+      we kind of also need to catch file exceptions.
+   *)
   write_stdout "**** initializing chain "
   
   (* open blocks.dat writer *)
   >> Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0o644 
-  >>= fun fd -> ( 
-      match Lwt_unix.state fd with
-        | Opened -> let blocks_oc = Lwt_io.of_fd ~mode:Lwt_io.output fd  in return ()
-        | _ -> return ()
-    )
-  >>
-      let heads1 =
-          U.SS.empty
-          |> U.SS.add (M.string_of_hex "000000000000000011351a1fcb93ffd9b20eeaca87c78ef7df87153a2237b91f")
-           ({
-            previous = "";
-             height = 353721;
-          } : U.my_head )
-    	in
-      let heads2 =
-          U.SS.empty
-          |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
-           ({
-            previous = "";
-            height = 0;
-          } : U.my_head )
-
-
-    in let chain =  {
-      heads = heads1 ;
-      block_inv_pending  = None ;
-      blocks_on_request = U.SS.empty  ;
-      last_block_received_time = [];
-  } in
-  (return chain)
+  >>= fun blocks_fd -> 
+      match Lwt_unix.state blocks_fd with
+        | Opened -> ( 
+          let heads1 =
+              U.SS.empty
+              |> U.SS.add (M.string_of_hex "000000000000000011351a1fcb93ffd9b20eeaca87c78ef7df87153a2237b91f")
+               ({
+                previous = "";
+                 height = 353721;
+              } : U.my_head )
+          in
+          let heads2 =
+              U.SS.empty
+              |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
+               ({
+                previous = "";
+                height = 0;
+              } : U.my_head )
+          in 
+          let chain =  {
+            heads = heads1 ;
+            block_inv_pending  = None ;
+            blocks_on_request = U.SS.empty  ;
+            last_block_received_time = [];
+            blocks_fd = blocks_fd ;
+        } in
+        return (Some chain)
+        ) 
+      | _ -> return None
 
 (* there's an issue that jobs are running immediately before placing in choose() ?  *)
 
