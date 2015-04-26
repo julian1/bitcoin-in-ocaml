@@ -218,7 +218,12 @@ let manage_chain1 state e    =
               Lwt_mutex.lock state.blocks_fd_m
               >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
               >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
-              >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in return U.Nop(* in
+              (* check here, if return short then throw ? *)
+              >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in 
+              if count <> S.length s then 
+                raise (Failure "uggh")
+              else
+                  return U.Nop(* in
               log @@  " pos " ^ string_of_int (pos )  *)
             else
               return U.Nop
