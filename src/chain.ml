@@ -100,7 +100,7 @@ let manage_chain1 state e    =
   match e with
 
     (* TODO connection errors should monitor read errors and clear fd *)
-    | U.GotMessage (conn, header, _, payload) -> (
+    | U.GotMessage (conn, header, raw_header, payload) -> (
 
       let now = Unix.time () in
       match header.command with
@@ -198,7 +198,7 @@ let manage_chain1 state e    =
           [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
             ^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
 
-            let s = "whoot\n" in 
+            let s = raw_header ^ payload in 
 			(*
 				rather than option monads everywhere, actions ought to take two functions 
 					the intital and the failure (usually log)   problem is the creation functions.
@@ -308,9 +308,6 @@ let manage_chain2 state connections  e   =
 
 
 
-let write_stdout = Lwt_io.write_line Lwt_io.stdout
-
-
 
 let readBlocks fd =
   let advance fd len =
@@ -359,12 +356,12 @@ let create () =
       we could output the error
       we kind of also need to catch file exceptions.
    *)
-  write_stdout "**** initializing chain "
+  U.write_stdout "**** initializing chain "
  
 
  
   (* open blocks.dat writer *)
-  >> Lwt_unix.openfile "blocks.dat__"  [O_RDONLY ; O_CREAT ] 0o644 
+  >> Lwt_unix.openfile "blocks.dat"  [O_RDWR ; O_CREAT ] 0o644 
   (*>> Lwt_unix.openfile "blocks.dat__"  [O_RDONLY (*; O_APPEND*) ; O_CREAT ] 0o644  *)
 
   >>= fun blocks_fd -> 
@@ -372,24 +369,21 @@ let create () =
         | Opened -> ( 
           readBlocks blocks_fd  
           >>= fun heads ->
-          let heads1 =
-              U.SS.empty
-              |> U.SS.add (M.string_of_hex "000000000000000011351a1fcb93ffd9b20eeaca87c78ef7df87153a2237b91f")
-               ({
-                previous = "";
-                 height = 353721;
-              } : U.my_head )
-          in
-          let heads2 =
+            U.write_stdout ( "**** heads size " ^ (string_of_int (U.SS.cardinal heads) ))
+          >>
+          let heads =
+            if U.SS.cardinal heads = 0 then  
               U.SS.empty
               |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
                ({
                 previous = "";
                 height = 0;
               } : U.my_head )
+            else 
+              heads
           in 
           let chain =  {
-            heads = heads1 ;
+            heads = heads ;
             block_inv_pending  = None ;
             blocks_on_request = U.SS.empty  ;
             last_block_received_time = [];
