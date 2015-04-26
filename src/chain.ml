@@ -243,7 +243,7 @@ let manage_chain1 state e    =
             Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_CUR
             >>= fun pos -> let () = Lwt_mutex.unlock state.blocks_fd_m in
             log @@  " pos " ^ string_of_int (pos - count) 
-
+            (* we must do a message here, to coordinate state change *)
          ]
         )
         | _ -> state, []
