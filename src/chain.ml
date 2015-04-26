@@ -236,13 +236,20 @@ let manage_chain1 state e    =
 
         OK, because we're not initially moved to the end of the file, until after we try to write.
         it might be better to write the file, then substract the length...
+
+        Lwt_mutex with lock might be better since handles exceptions - ugghhh.
+
+        - to be able to seek around, we should possibly use the same descriptor 
+        rather than have two descriptors open.
+        - just always use the mutex... 
+
+        - should just lseek the end
 			*)
             Lwt_mutex.lock state.blocks_fd_m
-            >> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
-            >>= fun count -> 
-            Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_CUR
-            >>= fun pos -> let () = Lwt_mutex.unlock state.blocks_fd_m in
-            log @@  " pos " ^ string_of_int (pos - count) 
+            >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
+            >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
+            >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in
+            log @@  " pos " ^ string_of_int (pos ) 
             (* we must do a message here, to coordinate state change *)
          ]
         )
