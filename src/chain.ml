@@ -215,6 +215,18 @@ let manage_chain1 state e    =
                  pos 30
                  pos 30
 
+                - we can seek the end when we first open the file...
+				- but what about doing the writing, we're going to have to create an effective mutex...
+				- to synchronize.
+				- so much fucking io.
+					-----
+
+				- IMPORTANT - OK we just use a lwt mutex actually lwt may have mutexes...
+
+				we could return an array that would be 
+					
+				- also in the time that we're trying to write it, we can't clear from blocks_on_request
+				- fuck 	
             *)
 
             Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_CUR
