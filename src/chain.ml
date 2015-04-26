@@ -313,51 +313,37 @@ let write_stdout = Lwt_io.write_line Lwt_io.stdout
 
 
 let readBlocks fd =
-(*
-    let read_bytes fd len =
-      let block = Bytes .create len in
-      Lwt_unix.read fd block 0 len >>= 
-      fun ret ->
-        (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
-      return (
-        if ret > 0 then Some ( Bytes.to_string block )
-        else None 
+  let advance fd len =
+      Lwt_unix.lseek fd len SEEK_CUR 
+      >>= fun r -> 
+      (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+      return ()
+  in
+  (* to scan the messages stored in file *)
+  let rec loop fd heads =
+    U.read_bytes fd 24
+    >>= fun x -> match x with 
+      | Some s -> ( 
+        let _, header = M.decodeHeader s 0 in
+        (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+        U.read_bytes fd 80 
+        >>= fun u -> match u with 
+          | Some ss -> 
+            let hash = ss |> Message.sha256d |> Message.strrev  in
+            let _, block_header = M.decodeBlock ss 0 in
+            (**) Lwt_io.write_line Lwt_io.stdout @@ M.hex_of_string hash ^ " " ^ M.hex_of_string block_header.previous 
+            >> (**) advance fd (header.length - 80 )
+            >> let heads = U.SS.add hash ({ 
+                previous = block_header.previous;  
+                height = 0; 
+              } : U.my_head ) heads 
+            in
+            loop fd  heads  (* *)
+          | None -> 
+            return heads 
         )
-    in
- *)  let advance fd len =
-        Lwt_unix.lseek fd len SEEK_CUR 
-        >>= fun r -> 
-        (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
-        return ()
-    in
-    (* to scan the messages stored in file *)
-    let rec loop fd heads =
-      U.read_bytes fd 24
-      >>= fun x -> match x with 
-        | Some s -> ( 
-          let _, header = M.decodeHeader s 0 in
-          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
-          U.read_bytes fd 80 
-          >>= fun u -> match u with 
-            | Some ss -> 
-              let hash = ss |> Message.sha256d |> Message.strrev  in
-              let _, block_header = M.decodeBlock ss 0 in
-              (* Lwt_io.write_line Lwt_io.stdout @@ 
-                hex_of_string hash 
-                ^ " " ^ hex_of_string block_header.previous 
-              >> *) advance fd (header.length - 80 )
-              >> let heads = U.SS.add hash ({ 
-                  previous = block_header.previous;  
-                  height = 0; 
-                } : U.my_head ) heads 
-              in
-              loop fd  heads  (* *)
-            | None -> 
-              return heads 
-          )
-        | None -> 
-          return heads 
-     
+      | None -> 
+        return heads 
   in    
     loop fd U.SS.empty  
     >>= fun heads -> return heads
@@ -378,10 +364,14 @@ let create () =
 
  
   (* open blocks.dat writer *)
-  >> Lwt_unix.openfile "blocks.dat"  [O_WRONLY ; O_APPEND ; O_CREAT ] 0o644 
+  >> Lwt_unix.openfile "blocks.dat__"  [O_RDONLY ; O_CREAT ] 0o644 
+  (*>> Lwt_unix.openfile "blocks.dat__"  [O_RDONLY (*; O_APPEND*) ; O_CREAT ] 0o644  *)
+
   >>= fun blocks_fd -> 
       match Lwt_unix.state blocks_fd with
         | Opened -> ( 
+          readBlocks blocks_fd  
+          >>= fun heads ->
           let heads1 =
               U.SS.empty
               |> U.SS.add (M.string_of_hex "000000000000000011351a1fcb93ffd9b20eeaca87c78ef7df87153a2237b91f")
