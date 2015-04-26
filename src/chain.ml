@@ -21,23 +21,6 @@ let fff fd =
 	- then completely separate action, we maintain indexes..
 *)
 
-(*
-  - So a stupid fucking node, can just send us inv blocks, and we feel obligated to download them
-  - because we might be synced and it could advance a fork.
-  - but then they don't link to anything we already have. and it prevents us issuing real requests.
-*)
-
-(*
-  - so we can be stalled just by having random blocks thrown at us,
-  because even with automated clearing, they continue to keep the requeste blocks full
-  and prevent us issuing requests.
-
-  - can we just issue requests constantly?
-  - or what about, do an issue
-
-  - simple metric if the last block from peer, didn't advance us, then thow it away...
-    with some random component.
-*)
 
 type ggg = {
   fd : Lwt_unix.file_descr ;
@@ -45,10 +28,9 @@ type ggg = {
 }
 
 
-
 type t = {
 
-  (* hash structure *)
+  (* tree structure *)
   heads : U.my_head U.SS.t ;
 
   (* set when inv request made to peer *)
@@ -93,7 +75,6 @@ let initial_getdata hashes =
   in
   let payload = encodeInventory hashes in
   U.encodeMessage "getdata" payload
-
 
 
 let log s = U.write_stdout s >> return U.Nop
@@ -177,7 +158,7 @@ let manage_chain1 state e    =
             else
               state.heads, -1 (* should be None *)
           in
-          (* only record valid block if it really helped us *)
+          (* record that we got a valid block from the peer *)
           let last =
             if height <> -1 then
               (* update the fd to indicate we got a good block, TODO tidy this *)
@@ -203,8 +184,6 @@ let manage_chain1 state e    =
     | _ -> state, []
 
 
-
-
 let manage_chain2 state connections  e   =
   (* issue inventory requests to advance the tips *)
   match e with
@@ -227,7 +206,7 @@ let manage_chain2 state connections  e   =
 
       (* if a block was requested at least 60 seconds ago, and
       we haven't received any valid blocks from the corresponding peer for at least 60 seconds, then
-      clear in blocks_on_request flag to allow re-request from another peer *)
+      clear from blocks_on_request to permit re-request from a different peer *)
       let state = { state with
         blocks_on_request = U.SS.filter (fun hash (fd,t) ->
           not (
@@ -239,11 +218,10 @@ let manage_chain2 state connections  e   =
           ) state.blocks_on_request
       } in
 
-      (* if there are no blocks on request, and have connections, and no inv pending
-        then do an inv request blocks to extend the tips *)
+      (* if there are no blocks on request, and no inv pending then do an inv request *)
       if U.SS.is_empty state.blocks_on_request
-        && not (CL.is_empty connections)
-        && state.block_inv_pending = None then
+        && state.block_inv_pending = None 
+        && not (CL.is_empty connections) then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
@@ -279,9 +257,7 @@ let manage_chain2 state connections  e   =
 
             "\n fds\n" ; S.concat "\n" ( L.map (fun x -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ];
-
-
-          (* request blocks *)
+          (* request inv *)
            U.send_message conn (initial_getblocks head)
           ]
       else
@@ -297,10 +273,10 @@ let create () =
   >>
       let heads1 =
           U.SS.empty
-          |> U.SS.add (M.string_of_hex "000000000000000015ca13f966458ced05d64dbaf0e4b2d8c7e35c8849c3eaec")
+          |> U.SS.add (M.string_of_hex "000000000000000011351a1fcb93ffd9b20eeaca87c78ef7df87153a2237b91f")
            ({
             previous = "";
-             height = 352775;
+             height = 353721;
           } : U.my_head )
     	in
       let heads2 =
@@ -313,7 +289,7 @@ let create () =
 
 
     in let chain =  {
-      heads = heads2 ;
+      heads = heads1 ;
       block_inv_pending  = None ;
       blocks_on_request = U.SS.empty  ;
       last_block_received_time = [];
