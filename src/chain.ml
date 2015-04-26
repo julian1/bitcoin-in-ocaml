@@ -30,6 +30,12 @@ let fff fd =
 	- add lseek to local heads or other data structure
 	- then we can also start and stop app and load heads from disk
 	- then completely separate action, we maintain indexes..
+  --------------------
+
+  OK, so even if we only take one entry - if there are multiple peers sending
+  us crap, then 
+
+
 *)
 
 
@@ -48,7 +54,7 @@ type t = {
   block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
 
   (* blocks peer, time   *)
-  blocks_on_request : (Lwt_unix.file_descr * float ) U.SS.t ;
+  blocks_on_request : (Lwt_unix.file_descr * float * bool ) U.SS.t ;
 
   (*   *)
 (*  last_block_received_time : (Lwt_unix.file_descr * float) list ;
@@ -121,16 +127,34 @@ let manage_chain1 state e    =
             |> L.map (fun (_,hash) -> hash)
           in
           (* prioritize handling *)
-          let block_hashes =
+          let solicited =
               match state.block_inv_pending with
+              | Some (fd, _) when fd == conn.fd -> true
+              | _ -> false
+          in
+(*
+               match state.block_inv_pending with
               (* take all the blocks if solicited *)
               | Some (fd, _) when fd == conn.fd -> block_hashes
-              (* discard if already have blocks on request from the same peer *)
-              | _ ->
-                if U.SS.exists (fun _ (fd,_) -> fd == conn.fd) state.blocks_on_request then
+              (* discard if already have blocks on request from the same peer 
+                doesn't work. since multiple peers sending us junk will keep it flooded...
+                - ways to fix - record whether it was 
+                - only except if
+                  - not already unsolicited on download.
+              *)
+
+            only taking one unsolicited block means we could miss stuff...
+*)
+
+          let block_hashes =
+              if solicited then 
+                block_hashes 
+              else (
+                if U.SS.exists (fun _ (_,_,solicited) -> not solicited) state.blocks_on_request then
                   []
                 else
                   block_hashes
+              )
           in
           (* blocks we want *)
           if block_hashes <> [] then
@@ -141,7 +165,7 @@ let manage_chain1 state e    =
             in
             (* record in blocks now on request *)
             let blocks_on_request =
-              L.fold_left (fun m h -> U.SS.add h (conn.fd, now) m) state.blocks_on_request block_hashes
+              L.fold_left (fun m h -> U.SS.add h (conn.fd, now, solicited) m) state.blocks_on_request block_hashes
             in
             ( { state with
                 block_inv_pending = block_inv_pending;
@@ -260,7 +284,7 @@ let manage_chain2 state connections  e   =
       we haven't received any valid blocks from the corresponding peer for at least 60 seconds, then
       clear from blocks_on_request to permit re-request from a different peer *)
       let state = { state with
-        blocks_on_request = U.SS.filter (fun hash (fd,t) ->
+        blocks_on_request = U.SS.filter (fun hash (fd,t, solicited) ->
           not (
             now > t +. 60.
             && match CL.find state.last_block_received_time (fun x -> x.fd == fd) with
