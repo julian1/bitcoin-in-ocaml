@@ -114,13 +114,8 @@ let manage_chain1 state e    =
           (*	- we accept a block inventory from any peer, since if synced any peer could 
             have the latest mined block first
             - but we prioritize solicited over unsolicted inventory  
+            - if unsolicited then we ignore if already have unsolicited from peer
             - also block_inv_pending is used to avoid sending requests too often when synched
-
-            - IMPORTANT the solicited is terrible when synced. a peer can send a spurious block. 
-              and then we get valid block and we'd miss the real block.
-
-            - VERY IMPORTANT ok, but we can change the criteria - if we're only downloading unsolicited
-              blocks then do another inv...
           *)
           (* extract blocks from inventory message, and filter for those we don't know *)
           let _, inv = M.decodeInv payload 0 in
@@ -132,35 +127,22 @@ let manage_chain1 state e    =
               && not ( U.SS.mem hash state.blocks_on_request)  )
             |> L.map (fun (_,hash) -> hash)
           in
-          (* prioritize handling *)
+          (* did we ask for this inv *)
           let solicited =
               match state.block_inv_pending with
               | Some (fd, _) when fd == conn.fd -> true
               | _ -> false
           in
-(*
-               match state.block_inv_pending with
-              (* take all the blocks if solicited *)
-              | Some (fd, _) when fd == conn.fd -> block_hashes
-              (* discard if already have blocks on request from the same peer 
-                doesn't work. since multiple peers sending us junk will keep it flooded...
-                - ways to fix - record whether it was 
-                - only except if
-                  - not already unsolicited on download.
-              *)
-
-            only taking one unsolicited block means we could miss stuff...
-*)
-
+          (* prioritize handling *)
           let block_hashes =
               if solicited then 
                 block_hashes 
               else (
-                (* if U.SS.exists (fun _ (_,_,solicited) -> not solicited) state.blocks_on_request then *)
+                (* ignore if already have blocks on request from same peer  *)
                 if U.SS.exists (fun _ (fd,_,_) -> conn.fd == fd) state.blocks_on_request then
                   []
                 else
-                  block_hashes (* may want just one *)
+                  block_hashes (* may want to take just one *)
               )
           in
           (* blocks we want *)
