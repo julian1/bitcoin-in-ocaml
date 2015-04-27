@@ -10,19 +10,10 @@ module CL = Core.Core_list
 let (>>=) = Lwt.(>>=) 
 let return = Lwt.return
 
-(*
-let fff fd =
-  Lwt_unix.unix_file_descr fd
-*)
 
 (*
   - ok, now we need more block rules (merckle root, difficulty, time checks )
   - then we need to save...
-
-  - issue is that saving is an async action.  that's ok. 
-    we ought to be able to save, then update the position...
-
-  - can we factor o 
 *)
 
 (*
@@ -30,12 +21,6 @@ let fff fd =
 	- add lseek to local heads or other data structure
 	- then we can also start and stop app and load heads from disk
 	- then completely separate action, we maintain indexes..
-  --------------------
-
-  OK, so even if we only take one entry - if there are multiple peers sending
-  us crap, then 
-
-
 *)
 
 
@@ -53,25 +38,17 @@ type t = {
   (* set when inv request made to peer *)
   block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
 
-  (* blocks peer, time   *)
+  (* blocks requested - peer, time, solicited *)
   blocks_on_request : (Lwt_unix.file_descr * float * bool ) U.SS.t ;
 
-  (*   *)
-(*  last_block_received_time : (Lwt_unix.file_descr * float) list ;
-*)
-
+  (*  last_block_received_time : (Lwt_unix.file_descr * float) list ; *)
   last_block_received_time : ggg list ;
 
-
-  (* should change to be blocks_fd does this file descriptor even need to be here. it doesn't change?  *)
-  (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
-  (* db : LevelDB.db ; *)
-
-  blocks_fd_m :   Lwt_mutex.t ;
+  blocks_fd_m : Lwt_mutex.t ;
 
   blocks_fd : Lwt_unix.file_descr ;
  
-
+  (* db : LevelDB.db ; *)
 }
 
 
@@ -113,7 +90,7 @@ let manage_chain1 state e    =
         | "inv" -> (
           (*	- we accept a block inventory from any peer, since if synced any peer could 
             have the latest mined block first
-            - but we prioritize solicited over unsolicted inventory  
+            - but we prioritize solicited inventory over unsolicted inventory  
             - if unsolicited then we ignore if already have unsolicited from peer
             - also block_inv_pending is used to avoid sending requests too often when synched
           *)
@@ -138,7 +115,7 @@ let manage_chain1 state e    =
               if solicited then 
                 block_hashes 
               else (
-                (* ignore if already have blocks on request from same peer  *)
+                (* ignore if already have blocks on request from the same peer *)
                 if U.SS.exists (fun _ (fd,_,_) -> conn.fd == fd) state.blocks_on_request then
                   []
                 else
@@ -259,15 +236,12 @@ let manage_chain2 state connections  e   =
       let now = Unix.time () in
 
       (* if peer never responded to an inv, clear the pending flag *)
-      let state =
-        match state.block_inv_pending with
-          | Some (_, t) when now > t +. 60. ->
-            { state with block_inv_pending = None }
-          | _ -> state
+      let state = { state with 
+        block_inv_pending = match state.block_inv_pending with
+          | Some (_, t) when now > t +. 60. -> None
+          | x -> x 
+        }
       in
-
-      (* if someone sends us lots random invs, then clog up blocks_on_request
-        and prevent us issuing inv from the current tips...  this is an issue. *)
 
       (* if a block was requested at least 60 seconds ago, and
       we haven't received any valid blocks from the corresponding peer for at least 60 seconds, then
@@ -288,7 +262,7 @@ let manage_chain2 state connections  e   =
         U.SS.exists (fun _ (_,_,solicited) -> solicited) state.blocks_on_request 
       in
 
-      (* if no solicited blocks on request, and no inv pending then make an inv request *)
+      (* if only unsolicited blocks on request, and no inv pending then make an inv request *)
       if not has_solicited 
         && state.block_inv_pending = None 
         && connections <> [] then
