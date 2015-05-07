@@ -33,6 +33,7 @@ let run f =
 
           } : Misc.my_app_state )
         in
+
         let rec loop (state : Misc.my_app_state ) =
           Lwt.catch (
           fun () -> Lwt.nchoose_split state.jobs
@@ -44,9 +45,9 @@ let run f =
                 ^ ", connections " ^ (string_of_int @@ List.length state.connections )
             >>
           *)
-              let new_state = List.fold_left f { state with jobs = incomplete } complete in 
-              if List.length new_state.jobs > 0 then
-                loop new_state
+              let state = List.fold_left f { state with jobs = incomplete } complete in 
+              if List.length state.jobs > 0 then
+                loop state
               else
                 Lwt_io.write_line Lwt_io.stdout "finishing - no more jobs to run!!"
                 >> return ()
