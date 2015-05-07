@@ -5,13 +5,6 @@ let return = Lwt.return
 module M = Message
 
 
-type my_app_state =
-{
-  (* change name to p2p type *)
-  jobs :  Misc.jobs_type  ;
-  connections : Misc.connection list ;
-  chain :  Chain.t; 
-}
 
 
 
@@ -23,16 +16,24 @@ let run f =
     >>= fun result ->   
 
     match result with 
-      Some chain -> (
+      Some (tree, blocks_m, blocks_fd) -> (
         (* we actually need to read it as well... as write it... *)
         let state =
-          {
-            jobs = P2p.create () ;
+          ({
+			jobs = P2p.create();
             connections = [];
-            chain = chain ;
-          }
+			heads = tree;
+			blocks_fd_m = blocks_m;
+			blocks_fd = blocks_fd;
+
+			(* should be hidden ?? *)
+			  block_inv_pending  = None; 
+			  blocks_on_request = Misc.SS.empty; 
+			  last_block_received_time = [];
+
+          } : Misc.my_app_state )
         in
-        let rec loop state =
+        let rec loop (state : Misc.my_app_state ) =
           Lwt.catch (
           fun () -> Lwt.nchoose_split state.jobs
 
@@ -64,14 +65,16 @@ let run f =
 
 
 let f state e =
-  let (connections, jobs1) = P2p.update state.connections e in
-  let (chain, jobs2) = Chain.update state.chain connections e in 
+  let state = P2p.update state e in
+  let state = Chain.update state e in 
+	state
+(*
   { state with 
     chain = chain; 
     connections = connections; 
     jobs =  state.jobs @ jobs1 @ jobs2  
   }
-
+*)
 
 let () = run f
 

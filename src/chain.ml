@@ -24,37 +24,12 @@ let return = Lwt.return
 *)
 
 
-type ggg = {
-  fd : Lwt_unix.file_descr ;
-  t : float ;
-}
 
-
+(*
 type t = {
 
-  (* tree structure *)
-  heads : U.my_head U.SS.t ;
-
-  (* set when inv request made to peer *)
-  block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
-
-  (* blocks requested - peer, time, solicited *)
-  blocks_on_request : (Lwt_unix.file_descr * float * bool ) U.SS.t ;
-
-  (*  last_block_received_time : (Lwt_unix.file_descr * float) list ; *)
-  last_block_received_time : ggg list ;
-
-  blocks_fd_m : Lwt_mutex.t ;
-
-  blocks_fd : Lwt_unix.file_descr ;
- 
-  (* db : LevelDB.db ; *)
-}
-
-let get_heads state = state.heads
- 
-let get_jobs state = [] 
-
+  }
+*)
 
 let initial_getblocks starting_hash =
   (* the list are the options, and peer will return a sequence
@@ -83,11 +58,11 @@ let initial_getdata hashes =
 
 let log s = U.write_stdout s >> return U.Nop
 
-let manage_chain1 state e    =
+let manage_chain1 (state : Misc.my_app_state) e    =
   match e with
 
     (* TODO connection errors should monitor read errors and clear fd *)
-    | U.GotMessage (conn, header, raw_header, payload) -> (
+    | U.GotMessage ( conn , header, raw_header, payload) -> (
 
       let now = Unix.time () in
       match header.command with
@@ -140,7 +115,7 @@ let manage_chain1 state e    =
             ( { state with
                 block_inv_pending = block_inv_pending;
                 blocks_on_request = blocks_on_request ;
-              },
+				jobs = state.jobs @  
               [
                 log @@ U.format_addr conn
                   ^ " *** got inventory blocks " ^ (string_of_int @@ L.length block_hashes  )
@@ -148,9 +123,10 @@ let manage_chain1 state e    =
                   (* request blocks from the peer *)
                   U.send_message conn (initial_getdata block_hashes );
               ]
+				}
             )
           else
-            (state, [] )
+            state
           )
 
         | "block" -> (
@@ -176,9 +152,9 @@ let manage_chain1 state e    =
           let last =
             if height <> -1 then
               (* update the fd to indicate we got a good block, TODO tidy this *)
-              let last = L.filter (fun x -> x.fd != conn.fd) state.last_block_received_time in
-              { fd = conn.fd; t = now ;
-              }::last
+              let last = L.filter (fun (x : Misc.ggg) -> x.fd != conn .fd) state.last_block_received_time in
+              ({ fd = conn.fd; t = now ;
+              } : Misc.ggg )::last
             else
               state.last_block_received_time
           in
@@ -188,52 +164,53 @@ let manage_chain1 state e    =
               heads = heads;
               blocks_on_request = blocks_on_request;
               last_block_received_time = last;
-          },
-          [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
-            ^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
+			  jobs = state.jobs @ 
+			  [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
+				^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
 
-            let s = raw_header ^ payload in 
-			(*
-				rather than option monads everywhere, actions ought to take two functions 
-					the intital and the failure (usually log)   problem is the creation functions.
+				let s = raw_header ^ payload in 
+				(*
+					rather than option monads everywhere, actions ought to take two functions 
+						the intital and the failure (usually log)   problem is the creation functions.
 
-        OK, because we're not initially moved to the end of the file, until after we try to write.
-        it might be better to write the file, then substract the length...
+			OK, because we're not initially moved to the end of the file, until after we try to write.
+			it might be better to write the file, then substract the length...
 
-        Lwt_mutex with lock might be better since handles exceptions - ugghhh.
+			Lwt_mutex with lock might be better since handles exceptions - ugghhh.
 
-        - to be able to seek around, we should possibly use the same descriptor 
-        rather than have two descriptors open.
-        - just always use the mutex... 
+			- to be able to seek around, we should possibly use the same descriptor 
+			rather than have two descriptors open.
+			- just always use the mutex... 
 
-        - should just lseek the end
-			*)
-            if height <> -1 then
-              Lwt_mutex.lock state.blocks_fd_m
-              >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
-              >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
-              (* check here, if return short then throw ? *)
-              >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in 
-              if count <> S.length s then 
-                raise (Failure "uggh")
-              else
-                  return U.Nop(* in
-              log @@  " pos " ^ string_of_int (pos )  *)
-            else
-              return U.Nop
+			- should just lseek the end
+				*)
+				if height <> -1 then
+				  Lwt_mutex.lock state.blocks_fd_m
+				  >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
+				  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
+				  (* check here, if return short then throw ? *)
+				  >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in 
+				  if count <> S.length s then 
+					raise (Failure "uggh")
+				  else
+					  return U.Nop(* in
+				  log @@  " pos " ^ string_of_int (pos )  *)
+				else
+				  return U.Nop
 
-            (* we must do a message here, to coordinate state change *)
-         ]
+				(* we must do a message here, to coordinate state change *)
+			 ]
+			}
         )
-        | _ -> state, []
+        | _ -> state
       )
-    | _ -> state, []
+    | _ -> state
 
 
-let manage_chain2 state connections  e   =
+let manage_chain2 (state : Misc.my_app_state) e  =
   (* issue inventory requests to advance the tips *)
   match e with
-    | U.Nop -> state, []
+    | U.Nop -> state
     | _ ->
       (* we need to check we have completed handshake *)
       (* shouldn't we always issue a request when blocks_on_request *)
@@ -269,7 +246,7 @@ let manage_chain2 state connections  e   =
       (* if only unsolicited blocks on request, and no inv pending then make an inv request *)
       if not has_solicited 
         && state.block_inv_pending = None 
-        && connections <> [] then
+        && state.connections <> [] then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
@@ -289,13 +266,14 @@ let manage_chain2 state connections  e   =
         let head = List.nth heads index in
 
         (* choose a peer fd at random *)
-        let index = now |> int_of_float |> (fun x -> x mod List.length connections ) in
-        let (conn : U.connection) = List.nth connections index in
+        let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
+        let (conn : U.connection) = List.nth state.connections index in
 
         (* TODO we need to record if handshake has been performed *)
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
-        },
+       
+		 jobs = state.jobs @ 
         [
           log @@ S.concat "" [
             "request addr " ; conn.addr;
@@ -303,13 +281,14 @@ let manage_chain2 state connections  e   =
             "\nheads count " ; string_of_int (L.length heads);
             "\nrequested head is ";  M.hex_of_string head ;
 
-            "\n fds\n" ; S.concat "\n" ( L.map (fun x -> string_of_float (now -. x.t ) ) state.last_block_received_time )
+            "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ];
           (* request inv *)
            U.send_message conn (initial_getblocks head)
           ]
+		}
       else
-        state,[]
+        state
 
 
 
@@ -396,25 +375,36 @@ let create () =
             else 
               heads
           in 
-          let chain =  {
-            heads = heads ;
-            block_inv_pending  = None ;
-            blocks_on_request = U.SS.empty  ;
-            last_block_received_time = [];
-            blocks_fd_m = Lwt_mutex.create (); 
+(*  (Misc.my_head Misc.SS.t 
+  * Lwt_mutex.t 
+  * Lwt_unix.file_descr 
+*)
 
-            blocks_fd = blocks_fd ;
-        } in
-        return (Some chain)
+         let ret =   heads , Lwt_mutex.create (), blocks_fd 
+         in
+        return (Some  ret )
         ) 
       | _ -> return None
 
 (* there's an issue that jobs are running immediately before placing in choose() ?  *)
 
+
+
+
+(* val update : my_app_state -> Misc.my_event -> my_app_state  *)
+
+(*
 let update state connections e  =
   let state, jobs1 = manage_chain1 state e  in
   let state, jobs2 = manage_chain2 state connections e in
   state, jobs1 @ jobs2
+*)
+
+
+let update state e =
+  let state = manage_chain1 state e in
+  let state = manage_chain2 state e in
+  state
 
 
 

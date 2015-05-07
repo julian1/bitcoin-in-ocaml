@@ -9,6 +9,8 @@
 *)
 val create : unit -> Misc.jobs_type 
 
-val update : Misc.connection list -> Misc.my_event -> (Misc.connection list * Misc.jobs_type)  
+(* val update : Misc.connection list -> Misc.my_event -> (Misc.connection list * Misc.jobs_type)   *)
+
+val update : Misc.my_app_state -> Misc.my_event -> Misc.my_app_state   
 
 

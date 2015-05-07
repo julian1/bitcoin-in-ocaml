@@ -2,11 +2,23 @@
 	like a fold, with an initial and transition/update function
 *)
 
-type t
+(* type t *)
 
-val create : unit -> t option Lwt.t
+(* val create : unit -> option Lwt.t *)
+val create : unit -> 
+  (Misc.my_head Misc.SS.t 
+  * Lwt_mutex.t 
+  * Lwt_unix.file_descr 
 
+
+	)
+	option Lwt.t
+ 
+
+(*
 val update : t -> Misc.connection list -> Misc.my_event -> (t * Misc.jobs_type)  
+*)
+val update : Misc.my_app_state -> Misc.my_event -> Misc.my_app_state 
 
 
 (*
@@ -32,7 +44,8 @@ val get_jobs : t -> Misc.jobs_type
 
 
 	so we have a single top level structure.
-	
 	think this is good,	
+
+	so we'll pass ... 
 *)
 

@@ -87,6 +87,61 @@ type my_head =
     (* bool have *)
 }
 
+
+(* shared between different p2p, chain functions etc 
+	think it's going to be a problem .... with recursive stuff...
+
+	Ok, doesn't work because the chain module refers to misc 
+	and misc module refers to chain.
+
+	- So let's move the Chain structure in here as well for the moment...
+	- hmmm 
+----------------------
+
+	No we don't drag the chain in here we just expand the type ...
+*)
+
+type ggg = {
+  fd : Lwt_unix.file_descr ;
+  t : float ;
+}
+
+
+type my_app_state =
+{
+  (* change name to p2p type *)
+  jobs :  jobs_type  ;
+
+  connections : connection list ;
+
+
+(* ***** updated by chain *******)
+	(* tree structure  - change name tree *)
+  heads : my_head SS.t ;
+
+  (* set when inv request made to peer *)
+  block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
+
+  (* blocks requested - peer, time, solicited *)
+  blocks_on_request : (Lwt_unix.file_descr * float * bool ) SS.t ;
+
+  (*  last_block_received_time : (Lwt_unix.file_descr * float) list ; *)
+  last_block_received_time : ggg list ;
+
+  blocks_fd_m : Lwt_mutex.t ;
+
+  blocks_fd : Lwt_unix.file_descr ;
+ 
+  (* db : LevelDB.db ; *)
+
+
+  (* chain :  Chain.t;  *)
+}
+
+
+
+
+
 (*
   - roads, on physical earth
   - law

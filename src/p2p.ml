@@ -120,11 +120,15 @@ let get_message (conn : U.connection ) =
 - app state is effectively a fold over the network events...
 *)
 
-let update connections e =
+(* let update connections e = *)
+let update (state : Misc.my_app_state) e =
   match e with
-    | U.Nop -> connections, [] 
+    | U.Nop -> state 
     | U.GotConnection conn ->
-      conn :: connections,
+		let connections = conn :: state.connections in
+	{ state with
+		connections = connections;
+		jobs = state.jobs @
       [
           log @@ U.format_addr conn ^  " got connection "  ^
             ", connections now " ^ ( string_of_int @@ List.length connections )
@@ -132,44 +136,47 @@ let update connections e =
           >> log @@ "*** sent our version " ^ U.format_addr conn
           ;
            get_message conn
-      ];
+      ] }
       
     | U.GotConnectionError msg ->
-      connections, 
-      [  log @@ "connection error " ^ msg ]
+	  { state with 
+      jobs = state.jobs @ [  log @@ "connection error " ^ msg ]
+		}
 
     | U.GotMessageError ((conn : U.connection), msg) ->
       (* fd test is physical equality *)
-      List.filter (fun (c : U.connection) -> c.fd != conn.fd) connections, 
+	  { state with 
+		connections = List.filter (fun (c : U.connection) -> c.fd != conn.fd) state.connections;
+		jobs = state.jobs @
        [
         log @@ U.format_addr conn ^ "msg error " ^ msg;
         match Lwt_unix.state conn.fd with
           Opened -> ( Lwt_unix.close conn.fd ) >> return U.Nop
           | _ -> return U.Nop
-      ]
+      ] }
 
     | U.GotMessage (conn, header, raw_header, payload) ->
       (
       match header.command with
 
         | "version" ->
-          connections,
-             [
+		{ state with 
+             jobs = state.jobs @ [
               log @@ U.format_addr conn ^ " got version message"
               >> U.send_message conn initial_verack
               >> log @@ "*** sent verack " ^ U.format_addr conn
               ;
               get_message conn
-            ];
+            ] }
 
         | "verack" ->
-          connections,
-             [
+			{ state with 
+             jobs = state.jobs @ [
               (* should be 3 separate jobs? *)
               log @@ U.format_addr conn ^ " got verack";
               (* >> send_message conn initial_getaddr *)
               get_message conn
-            ]
+            ] }
 
         | "addr" ->
             let pos, count = M.decodeVarInt payload 0 in
@@ -185,30 +192,32 @@ let update connections e =
             in
             let a = formatAddress addr in
             (* ignore, same addr instances on different ports *)
-            let already_got = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) connections
+            let already_got = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
-            if already_got || List.length connections >= 8 then
-                connections,
-                 [
+            if already_got || List.length state.connections >= 8 then
+				{ state with 
+                 jobs = state.jobs @ [
                   log @@ U.format_addr conn ^ " addr - already got or ignore "
                     ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
-                  ]
+                  ] }
             else
-              connections,
-               [
+				{ state with 
+					jobs = state.jobs @
+				[
                  log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count )
                     ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
-                ]
+                ] }
 
         | s ->
-            connections,
+			{ state with 
+				jobs = state.jobs @ 
              [
               (* log @@ U.format_addr conn ^ " message " ^ s ; *)
               get_message conn
-              ]
+              ] }
         )
 
 
