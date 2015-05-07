@@ -187,7 +187,7 @@ let update connections e =
             (* ignore, same addr instances on different ports *)
             let already_got = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) connections
             in
-            if already_got || List.length connections >= 30 then
+            if already_got || List.length connections >= 8 then
                 connections,
                  [
                   log @@ U.format_addr conn ^ " addr - already got or ignore "

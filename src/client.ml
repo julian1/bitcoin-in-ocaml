@@ -7,6 +7,7 @@ module M = Message
 
 type my_app_state =
 {
+  (* change name to p2p type *)
   jobs :  Misc.jobs_type  ;
   connections : Misc.connection list ;
   chain :  Chain.t; 

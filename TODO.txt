@@ -1,4 +1,106 @@
 
+technical and civic/legal solutions to secure libery, property, economic freedom.  
+
+---
+OK. it is possible to have a queue for synchronization if we want in the main structure?
+
+- inputs and outputs are different hence why we return (state, jobs) tuple ... 
+think we can really consolidate this..
+
+SO WIHT THE extra JOBS WE ARE ALREADY SHUFFLING THE CONSTRUCTION...
+
+----
+the problem of sharing data structures between the modules.
+it's messy.
+
+1) every function has access to everything else.
+	- issue is sharing of structure to functions that don't read or
+	return the fields. 
+
+2) we expose the type in the mli, so that the top level would create it with the
+	needed fields for the update() and create() functions 
+
+3) even better. read fields and return values and create() are going to be different be different. 
+	so maybe use tuples?.
+
+think the second option is best .
+
+
+-------
+- there's a couple of ways of communicating...
+
+- linking together functions at the top level to the various bits. 
+- or using particular messages.
+
+- what we should avoid is having one module call another call another 
+ - because then it's not composable.
+
+- for the chainstate all we do is add blocks... reorganisations 
+	who should calculate difficulty?  and merckles, and timing? 
+
+- ughhhh we're going to have to pass stuff about...
+	maybe maybo	
+	- eg. the heads, and the fd for the blocks, and the fd mutex will need to be
+	exposed to enable chainstate reorganisation.
+
+	- theres nothing really wrong with having something that's writes updates/data. 
+	and then accessing bits and plugging somewhere else.
+
+	- the way we do with connections
+
+	- but what's messy is maintaining our own details about connections...
+	actually it would be ok. 
+	- we should just sync
+
+	- actually we use Message.. and share connections
+	
+	--- we could use Block and pass the heads, fd mutex as a message.  
+
+	--- AND WE DON'T need to pass connections between functions at all.
+		can just monitor... the reads and closes.
+	--- Actually create a message when have handshake, then we can just
+		record those...
+
+	-- this makes it all self contained... without having to reach into
+		structures.
+
+	-- and correctly event driven... eg. we only do block updates on receipt
+		of a block message.  
+	
+	-- there's a problem, if have two blocks go through, then if update the
+	heads with new, rather than aggregate then it's a race condition . 
+	as to which updates.
+		- instead... we have to push the block without the heads.
+		(same problem when we tried to bind conns into return closures)
+	
+	IMPORTANT
+	-- there's another issue that if we wait for the io action of writing
+	the block before updating the heads. then we could receive a block in 
+	the meantime but because the head hasn't updated, we won't recognize it.  
+	ouch
+
+	-- issue of race conditions...
+
+	- think we almost have to separate out these actions...
+	- update the heads when we can.
+	- and update the pos in the heads when we can...
+
+	- ultimately we can't pass heads via message. because it's not a queue - it's 
+		a race condition what gets there first.
+	- so when get a block update heads immediately
+
+	IMPORTANT
+	- if we decide to just pass aspects of state to the next function 
+		(like connections from p2p to chain) then we avoid these sync issues. 
+	
+	- the module system allows easy separate initialization...
+	
+	- we are really only interested in when we get a new block. but...
+	we may still want to do io. 
+
+	
+-----
+
 block <- tx <- address
 
 isn't quite right because an address may be mentioned multiple times in different tx

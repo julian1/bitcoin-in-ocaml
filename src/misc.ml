@@ -44,6 +44,7 @@ type connection =
   (* addr : ip_address;
     when checking if connecting to same node, should check ip not dns name
     *)
+	(* we also ought to be able to get the addr and port from the fd *)
   addr : string ;
   port : int;
   fd :  Lwt_unix.file_descr ;

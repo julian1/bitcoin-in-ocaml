@@ -51,6 +51,10 @@ type t = {
   (* db : LevelDB.db ; *)
 }
 
+let get_heads state = state.heads
+ 
+let get_jobs state = [] 
+
 
 let initial_getblocks starting_hash =
   (* the list are the options, and peer will return a sequence
