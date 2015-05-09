@@ -7,6 +7,7 @@ module L = List
 module CL = Core.Core_list
 
 
+
 let (>>=) = Lwt.(>>=) 
 let return = Lwt.return
 
@@ -57,6 +58,7 @@ let initial_getdata hashes =
 
 
 let log s = U.write_stdout s >> return U.Nop
+
 
 let manage_chain1 (state : Misc.my_app_state) e    =
   match e with

@@ -109,13 +109,50 @@ type ggg = {
 
 type my_app_state =
 {
-  (* change name to p2p type *)
   jobs :  jobs_type  ;
+
+  (*
+    - we have jobs that are async, (network management) could complete at any time (eg. new connection)
+    - we also have io jobs that kind of need to be synchronized
+
+      block -> validate (io - eg. check uxto) -> add to heads -> write to blocks.dat -> update indexes
+
+    - these can potentially involve race conditions... eg. two blocks arriving adjacent in time
+    - we could have a queue of pending actions... where lwt would be () type...
+    - the main client would pick a job, and put in jobs queue. then when it's run it would
+      take the next job if there was one... 
+
+    - yes - we need to have multiple connection attempts in parallel. any one could complete 
+    -----------
+    - we either use a queue and messages... 
+
+    - else the entire sequence has to take a mutex and be allowed to run to completion, using joins ... 
+      which is kind of easier...
+     
+    --- so we receive a block it's put on a queue.
+
+    - then the block processing sequence takes it and a mutex, and runs everything in sequence program...
+      eg. 
+		>>= verify block, against heads hash, uxtos etc... 
+		>>= write_block 
+		>>= update heads 
+		>>= determine pow
+		>>= update indexes 
+
+		BUT. importantly if it accesses the heads structure - nothing else should be reading it ... 
+
+		problem of the heads...
+			- can fix by splitting sequence two and coordinating around the heads update...
+
+		>>= is the natural way to sequence. compared with breaking up messages.:w 
+			and we can use mutex which is the same as a queue.
+		-----
+		- issue is the chain management has to read heads to handle chain download...
+  *)
 
   connections : connection list ;
 
-
-(* ***** updated by chain *******)
+  (****** updated by chain ******)
 	(* tree structure  - change name tree *)
   heads : my_head SS.t ;
 
