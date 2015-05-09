@@ -1,4 +1,9 @@
 
+Ok, we can now access the blocks mutex and descriptor and heads etc. 
+
+
+-------
+
 technical and civic/legal solutions to secure libery, property, economic freedom.  
 
 ---
