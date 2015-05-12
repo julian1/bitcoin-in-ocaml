@@ -68,6 +68,8 @@ type my_event =
 
 	(* GotProvisionBlock an apparent good block  raw_header, payload *)
    | GotBlock of string * string 
+	(* hash, lseek *)
+   | SavedBlock of string * int
 
    | Nop
 
