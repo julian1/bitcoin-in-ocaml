@@ -123,7 +123,6 @@ let get_message (conn : U.connection ) =
 (* let update connections e = *)
 let update (state : Misc.my_app_state) e =
   match e with
-    | U.Nop -> state 
     | U.GotConnection conn ->
 		let connections = conn :: state.connections in
 	{ state with
@@ -219,6 +218,8 @@ let update (state : Misc.my_app_state) e =
               get_message conn
               ] }
         )
+
+    | _ -> state 
 
 
 (* initial jobs *)

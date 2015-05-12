@@ -65,6 +65,10 @@ type my_event =
    | GotConnectionError of string
    | GotMessage of connection * Message.header * string * string
    | GotMessageError of connection * string
+
+	(* GotProvisionBlock an apparent good block  raw_header, payload *)
+   | GotBlock of string * string 
+
    | Nop
 
 
@@ -113,7 +117,7 @@ type my_app_state =
 
   (*
     - we have jobs that are async, (network management) could complete at any time (eg. new connection)
-    - we also have io jobs that kind of need to be synchronized
+    - we also have io jobs that kind of need to be sequenced/synchronized
 
       block -> validate (io - eg. check uxto) -> add to heads -> write to blocks.dat -> update indexes
 
@@ -148,6 +152,75 @@ type my_app_state =
 			and we can use mutex which is the same as a queue.
 		-----
 		- issue is the chain management has to read heads to handle chain download...
+		----------
+		shouldn't update head until block is saved. (because something could go wrong later) 
+		------
+
+		- perhaps we don't need mutex... 
+		- we do around block saving and bulk index read/write actions...
+			- to get a synchronized view.
+
+		- alternatively (we have sync point - blocks_fd) why not set it to Nothing
+			to indicate a job is using it?
+
+		GotBlock1 
+			- acquire mutx 
+			- check head again - that haven't got it (race)
+			- save to blocks
+			- release mutex
+		GotBlock2/SavedBlock
+			- update head
+			- determine pow
+			- update indexes
+		GotBlock3/SavedIndexes
+			- we'd clean up mem pool of tx's that were included etc	
+
+		---- 
+		is there an alternative to leveldb. eg. memory mapped file...
+		- eg. we have all the blocks hashes in memory, and transiently sync to disk?
+		- keep all txs in memory/ backed by files 
+
+		-- use in memory, and then just push it out to disk intermitently...
+		-- describe what we want to do...
+		-----------------------
+
+		OK - rather than creating a new Message for every state change...	
+	
+		Why not have a generic Message, that will just take 
+
+		We can set-up the continuation at the initial point...
+		
+		a >>= b >>= return GotContinuation ( c >>= e >>= d ) 	
+
+		But we have to interact with the main structure. 
+		rather than an io action. why not a state transition function
+
+		and that state transition function, can load up the new IO jobs.
+
+		GotContinuation  (f s -> s )  
+		
+		- It's kind of like an internal event... where the event is new code to run
+
+		- io p2p is inherently parallel, anything could happen at any time.
+		- after that we kind of want sequential processing.
+		
+		----
+		- We can force sequential processing with a mutex easily. just grab it for the 
+		entire sequence of continuations (watch out for exceptions)
+
+		- i don't think it matters if we used the continuation, or named Messages
+		f s e -> s
+			or
+		f s -> s
+
+		Very Important. 
+
+		Blocks can arrive out-of-order when synched, (but we'll actually reject it )
+		----	
+
+		- we can provisionally update heads. record we got a valid block etc.
+		if the block fails later, then we can remove it from heads which will force
+		it to be downloaded from another peer ...
   *)
 
   connections : connection list ;

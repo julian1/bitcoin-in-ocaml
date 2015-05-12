@@ -162,6 +162,7 @@ let manage_chain1 (state : Misc.my_app_state) e    =
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
+		  (* return state *)	
           { state with
               heads = heads;
               blocks_on_request = blocks_on_request;
@@ -187,6 +188,7 @@ let manage_chain1 (state : Misc.my_app_state) e    =
 			- should just lseek the end
 				*)
 				if height <> -1 then
+(*
 				  Lwt_mutex.lock state.blocks_fd_m
 				  >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
 				  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
@@ -197,6 +199,10 @@ let manage_chain1 (state : Misc.my_app_state) e    =
 				  else
 					  return U.Nop(* in
 				  log @@  " pos " ^ string_of_int (pos )  *)
+*)
+				  return @@ U.GotBlock (raw_header, payload) 
+
+
 				else
 				  return U.Nop
 
@@ -369,7 +375,8 @@ let create () =
           let heads =
             if U.SS.cardinal heads = 0 then  
               U.SS.empty
-              |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
+              |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") 
+              (* |> U.SS.add ( M.zeros 32) *) (* for some reason nodes respond with second block,... *)
                ({
                 previous = "";
                 height = 0;
