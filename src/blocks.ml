@@ -11,7 +11,7 @@ let return = Lwt.return
   - we've already recorded in heads, which means if the save fails 
 it will all go wrong 
   
-  
+  - block is still provisional, we can remove it from heads... if it fails a test...  
 
   - now we write the block to disk.
   - then we'll update lseek position in heads structure ... 
@@ -35,6 +35,8 @@ it will all go wrong
       obviously the pos advances) 
 
   - i think we almost certainly want to record the height.
+
+  - we'll have a fold between current, new and just walk back prev, alternating even/odd. 
 *) 
 
 let log s = U.write_stdout s >> return U.Nop
