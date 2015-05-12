@@ -23,13 +23,25 @@ it will all go wrong
 
   - it doesn't actually matter when we do the block save, it just has to be before
   the actual chain update, when we have to potentially read it again... 
+
+  - string best_pow_hash.  
+  finding the common fork point ought to be easy. just a set, and start, adding items. 
+
+  hmmm but to do it quickly...
+  laziness would be nice in tracing back the paths to the common fork point. 
+
+  - is there any guarantee that writes will be ordered, as they extend the chain?  
+      they will need to be, to detect valid fork points (possibly because obtaining the 
+      obviously the pos advances) 
+
+  - i think we almost certainly want to record the height.
 *) 
 
 let log s = U.write_stdout s >> return U.Nop
 
 let update (state : Misc.my_app_state) e = 
 	match e with 
-	| U.GotBlock (raw_header, payload) -> 
+	| U.GotBlock (height, raw_header, payload) -> 
     { state with jobs = state.jobs @ [
 		
       (* write the block to disk *) 	
@@ -44,13 +56,13 @@ let update (state : Misc.my_app_state) e =
         if count <> S.length s then 
           raise (Failure "uggh")
         else
-          return @@ U.SavedBlock ("test", pos )
+          return @@ U.SavedBlock ("hash", height, pos )
 	] }
 
 
-  | U.SavedBlock (hash, pos) -> 
+  | U.SavedBlock (hash, height, pos) -> 
     { state with jobs = state.jobs @ [
-  	  log @@ "whoot saved block " ^ string_of_int pos; 
+  	  log @@ "whoot saved block height " ^ string_of_int height ^ " " ^ string_of_int pos ; 
   ]}
 
 	| _ -> state

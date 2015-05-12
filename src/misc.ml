@@ -66,10 +66,10 @@ type my_event =
    | GotMessage of connection * Message.header * string * string
    | GotMessageError of connection * string
 
-	(* GotProvisionBlock an apparent good block  raw_header, payload *)
-   | GotBlock of string * string 
-	(* hash, lseek *)
-   | SavedBlock of string * int
+	(* GotProvisionBlock an apparent good block  height, raw_header, payload *)
+   | GotBlock of int * string * string 
+	(* hash, height, lseek *)
+   | SavedBlock of string * int * int
 
    | Nop
 
