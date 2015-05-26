@@ -80,6 +80,12 @@ let update (state : Misc.my_app_state) e =
 	] }
 *)
 
+  | U.SeqJobFinished -> 
+    { state with jobs = state.jobs @ [
+
+		  log "sequence job finished"; 
+	] }
+
 	| _ -> state
 
 
