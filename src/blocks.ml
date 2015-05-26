@@ -8,9 +8,9 @@ let return = Lwt.return
 
 let log s = U.write_stdout s >> return U.Nop
 
-(* so we allow, the networking to run independenly and ahead, of the sequenced io actions 
-  this allows blocks to always be added when they are received, even if cannot immediately
-  process.
+(* - we allow networking to run independenly of the sequenced io actions. 
+  this allows blocks to always be accepted when they are received, even if cannot process immediately
+  - block is still provisional, if it fails a check we can coordinate to remove from p2p heads
 *) 
 
 let update1 e (state : Misc.my_app_state) =
@@ -68,40 +68,16 @@ let update state e =
 
 (*
   - Important a block may arrive out of order - but we'll reject it.
-  - we've already recorded in heads, which means if the save fails
-it will all go wrong
-
-  - block is still provisional, we can remove it from heads... if it fails a test...
 
   - now we write the block to disk.
   - then we'll update lseek position in heads structure ... no we'll store on disk
-
   - then we'll determine the chain with most pow (should be easy)
   - and we'll have the last position already recorded
   - so we'll compute common fork point
   - and set of index update actions
 
-  - it doesn't actually matter when we do the block save, it just has to be before
-  the actual chain update, when we have to potentially read it again...
-
-  - string best_pow_hash.
   finding the common fork point ought to be easy. just a set, and start, adding items.
 
-  hmmm but to do it quickly...
   laziness would be nice in tracing back the paths to the common fork point.
-
-  - is there any guarantee that writes will be ordered, as they extend the chain?
-      they will need to be, to detect valid fork points (possibly because obtaining the
-      obviously the pos advances)
-
-  - i think we almost certainly want to record the height.
-
-  - we'll have a fold between current, new and just walk back prev, alternating even/odd.
-*)
-
-(*
-  - ok, we want to explore the entries in the db...
-  - and we want to sequence these io actions
-  - remove the mutex
 *)
 
