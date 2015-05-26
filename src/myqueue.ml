@@ -1,5 +1,5 @@
 
-type 'a myqueue = MyQueue of 'a list * 'a list
+type 'a t = MyQueue of 'a list * 'a list
  
 let empty = MyQueue ([], []);;
  
