@@ -10,9 +10,6 @@ let return = Lwt.return
 let log s = U.write_stdout s >> return U.Nop
 
 
-let q = Myqueue.empty 
-
-
 
 
 let update1 (state : Misc.my_app_state) e = 

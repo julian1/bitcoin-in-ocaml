@@ -5,22 +5,19 @@ let return = Lwt.return
 module M = Message
 
 
-let y () = (return Misc.SeqJobFinished) 
-
-
 
 let run f =
 
   Lwt_main.run (
 
-	
-	Db.open_db "mydb" 
-	>>= fun db ->  
 
-    Chain.create () 
-    >>= fun result ->   
+	Db.open_db "mydb"
+	>>= fun db ->
 
-    match result with 
+    Chain.create ()
+    >>= fun result ->
+
+    match result with
       Some (tree, blocks_m, blocks_fd) -> (
         (* we actually need to read it as well... as write it... *)
         let state =
@@ -28,15 +25,15 @@ let run f =
 			jobs = P2p.create();
             connections = [];
 			heads = tree;
-(*			blocks_fd_m = blocks_m; *)
+
 			blocks_fd = blocks_fd;
 
 			(* should be hidden ?? *)
-			block_inv_pending  = None; 
-			blocks_on_request = Misc.SS.empty; 
+			block_inv_pending  = None;
+			blocks_on_request = Misc.SS.empty;
 			last_block_received_time = [];
 
-			seq_jobs_pending = Myqueue.empty (*|> Myqueue.add y *) ;
+			seq_jobs_pending = Myqueue.empty;
 			seq_job_running = false;
 
 			db = db;
@@ -55,7 +52,7 @@ let run f =
                 ^ ", connections " ^ (string_of_int @@ List.length state.connections )
             >>
           *)
-              let state = List.fold_left f { state with jobs = incomplete } complete in 
+              let state = List.fold_left f { state with jobs = incomplete } complete in
               if List.length state.jobs > 0 then
                 loop state
               else
@@ -77,15 +74,15 @@ let run f =
 
 let f state e =
   let state = P2p.update state e in
-  let state = Chain.update state e in 
-  let state = Blocks.update state e in 
+  let state = Chain.update state e in
+  let state = Blocks.update state e in
   state
 
 (*
-  { state with 
-    chain = chain; 
-    connections = connections; 
-    jobs =  state.jobs @ jobs1 @ jobs2  
+  { state with
+    chain = chain;
+    connections = connections;
+    jobs =  state.jobs @ jobs1 @ jobs2
   }
 *)
 
