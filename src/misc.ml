@@ -37,8 +37,6 @@ let pad s length =
       s
 
 
-
-
 type connection =
 {
   (* addr : ip_address;
@@ -84,27 +82,15 @@ module SSS = Set.Make(String);;
 
 type my_head =
 {
+  (* downloaded block, not necessarirly saved/and processed *)
   (*  hash : string; *)
     previous : string;  (* could be a list pointer at my_head *)
     height : int;   (* if known? *)
    (*  difficulty : int ; *) (* aggregated *)
-    (* bool have *)
 }
 
 
-(* shared between different p2p, chain functions etc 
-	think it's going to be a problem .... with recursive stuff...
-
-	Ok, doesn't work because the chain module refers to misc 
-	and misc module refers to chain.
-
-	- So let's move the Chain structure in here as well for the moment...
-	- hmmm 
-----------------------
-
-	No we don't drag the chain in here we just expand the type ...
-*)
-
+(* revert this back to a tuple instead *)
 type ggg = {
   fd : Lwt_unix.file_descr ;
   t : float ;
@@ -115,118 +101,9 @@ type my_app_state =
 {
   jobs :  jobs_type  ;
 
-  (*
-    - we have jobs that are async, (network management) could complete at any time (eg. new connection)
-    - we also have io jobs that kind of need to be sequenced/synchronized
-
-      block -> validate (io - eg. check uxto) -> add to heads -> write to blocks.dat -> update indexes
-
-    - these can potentially involve race conditions... eg. two blocks arriving adjacent in time
-    - we could have a queue of pending actions... where lwt would be () type...
-    - the main client would pick a job, and put in jobs queue. then when it's run it would
-      take the next job if there was one... 
-
-    - yes - we need to have multiple connection attempts in parallel. any one could complete 
-    -----------
-    - we either use a queue and messages... 
-
-    - else the entire sequence has to take a mutex and be allowed to run to completion, using joins ... 
-      which is kind of easier...
-     
-    --- so we receive a block it's put on a queue.
-
-    - then the block processing sequence takes it and a mutex, and runs everything in sequence program...
-      eg. 
-		>>= verify block, against heads hash, uxtos etc... 
-		>>= write_block 
-		>>= update heads 
-		>>= determine pow
-		>>= update indexes 
-
-		BUT. importantly if it accesses the heads structure - nothing else should be reading it ... 
-
-		problem of the heads...
-			- can fix by splitting sequence two and coordinating around the heads update...
-
-		>>= is the natural way to sequence. compared with breaking up messages.:w 
-			and we can use mutex which is the same as a queue.
-		-----
-		- issue is the chain management has to read heads to handle chain download...
-		----------
-		shouldn't update head until block is saved. (because something could go wrong later) 
-		------
-
-		- perhaps we don't need mutex... 
-		- we do around block saving and bulk index read/write actions...
-			- to get a synchronized view.
-
-		- alternatively (we have sync point - blocks_fd) why not set it to Nothing
-			to indicate a job is using it?
-
-		GotBlock1 
-			- acquire mutx 
-			- check head again - that haven't got it (race)
-			- save to blocks
-			- release mutex
-		GotBlock2/SavedBlock
-			- update head
-			- determine pow
-			- update indexes
-		GotBlock3/SavedIndexes
-			- we'd clean up mem pool of tx's that were included etc	
-
-		---- 
-		is there an alternative to leveldb. eg. memory mapped file...
-		- eg. we have all the blocks hashes in memory, and transiently sync to disk?
-		- keep all txs in memory/ backed by files 
-
-		-- use in memory, and then just push it out to disk intermitently...
-		-- describe what we want to do...
-		-----------------------
-
-		OK - rather than creating a new Message for every state change...	
-	
-		Why not have a generic Message, that will just take 
-
-		We can set-up the continuation at the initial point...
-		
-		a >>= b >>= return GotContinuation ( c >>= e >>= d ) 	
-
-		But we have to interact with the main structure. 
-		rather than an io action. why not a state transition function
-
-		and that state transition function, can load up the new IO jobs.
-
-		GotContinuation  (f s -> s )  
-		
-		- It's kind of like an internal event... where the event is new code to run
-
-		- io p2p is inherently parallel, anything could happen at any time.
-		- after that we kind of want sequential processing.
-		
-		----
-		- We can force sequential processing with a mutex easily. just grab it for the 
-		entire sequence of continuations (watch out for exceptions)
-
-		- i don't think it matters if we used the continuation, or named Messages
-		f s e -> s
-			or
-		f s -> s
-
-		Very Important. 
-
-		Blocks can arrive out-of-order when synched, (but we'll actually reject it )
-		----	
-
-		- we can provisionally update heads. record we got a valid block etc.
-		if the block fails later, then we can remove it from heads which will force
-		it to be downloaded from another peer ...
-  *)
-
   connections : connection list ;
 
-  (****** updated by chain ******)
-	(* tree structure  - change name tree *)
+  (* tree structure  - change name tree *)
   heads : my_head SS.t ;
 
   (* set when inv request made to peer *)
@@ -238,12 +115,7 @@ type my_app_state =
   (*  last_block_received_time : (Lwt_unix.file_descr * float) list ; *)
   last_block_received_time : ggg list ;
 
-(*
-  blocks_fd_m : Lwt_mutex.t ;
-*)
 
-
-  (* seq_jobs_pending : (unit -> my_event Lwt.t ) Queue;*)	
   seq_jobs_pending : (unit -> my_event Lwt.t ) Myqueue.t;	
 
   seq_job_running : bool ;
@@ -251,40 +123,13 @@ type my_app_state =
   blocks_fd : Lwt_unix.file_descr ;
  
   db : LevelDB.db ; 
-
-
-  (* chain :  Chain.t;  *)
 }
 
 
 
 
 
-(*
-  - roads, on physical earth
-  - law
-  - currency mint
-  - church
-*)
-(*
-  HERE
-  - so we'd pass chainstate jobs and connections and event to the chainstate module.
-  - and likewise we'd pass p2p, jobs and connections to the p2p module.
-
-  - only only bring stuff together at the end. 
-
-  - each function is responsible for updating some of the state in response
-  to an event.
-
-  - we may want f tuple e, because it's like a fold. 
-  - only the top level has all the chunks in one place.
-
-  - and we can move the my_app_state into it's own thing as well...
-  ------
-  - the issue is that the module m hides module m implementation / state .
-*)
-
-(* this really shouldn't be here - place it in app_state? *)
+(* the head structure shouldn't be here - place it in app_state? *)
 
 (*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
   testnet magic_head: "\xFA\xBF\xB5\xDA",

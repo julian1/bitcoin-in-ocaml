@@ -19,11 +19,12 @@ let update1 e (state : Misc.my_app_state) =
     let y () =
       (* save block *)
    		let s = raw_header ^ payload in
+      let len = S.length s in
 		  Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END
-		  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s)
+		  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 len 
 		  (* check here, if return short then throw ? *)
 		  >>= fun count ->
-        if count <> S.length s then
+        if count <> len then
           raise (Failure "uggh")
         else
       (* save index *)
@@ -62,8 +63,6 @@ let update2 _ (state : Misc.my_app_state) =
 
 let update state e =
   state |> update1 e |> update2 e
-
-
 
 
 (*
