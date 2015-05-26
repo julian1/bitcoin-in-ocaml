@@ -200,7 +200,7 @@ let manage_chain1 (state : Misc.my_app_state) e    =
 					  return U.Nop(* in
 				  log @@  " pos " ^ string_of_int (pos )  *)
 *)
-				  return @@ U.GotBlock (height, raw_header, payload) 
+				  return @@ U.GotBlock (hash, height, raw_header, payload) 
 
 
 				else

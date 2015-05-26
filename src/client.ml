@@ -12,6 +12,10 @@ let run f =
 
   Lwt_main.run (
 
+	
+	Db.open_db "mydb" 
+	>>= fun db ->  
+
     Chain.create () 
     >>= fun result ->   
 
@@ -27,9 +31,11 @@ let run f =
 			blocks_fd = blocks_fd;
 
 			(* should be hidden ?? *)
-			  block_inv_pending  = None; 
-			  blocks_on_request = Misc.SS.empty; 
-			  last_block_received_time = [];
+			block_inv_pending  = None; 
+			blocks_on_request = Misc.SS.empty; 
+			last_block_received_time = [];
+
+			db = db;
 
           } : Misc.my_app_state )
         in

@@ -1,6 +1,7 @@
 
 module U = Misc
 module S = String
+module M = Message
 
 
 let (>>=) = Lwt.(>>=) 
@@ -43,7 +44,7 @@ let log s = U.write_stdout s >> return U.Nop
 
 let update (state : Misc.my_app_state) e = 
 	match e with 
-	| U.GotBlock (height, raw_header, payload) -> 
+	| U.GotBlock (hash, height, raw_header, payload) -> 
     { state with jobs = state.jobs @ [
 		
       (* write the block to disk *) 	
@@ -58,14 +59,12 @@ let update (state : Misc.my_app_state) e =
         if count <> S.length s then 
           raise (Failure "uggh")
         else
-          return @@ U.SavedBlock ("hash", height, pos )
+
+			Db.put state.db "key" "value" 
+			>>
+			  log @@ "saved block - " ^ " hash " ^ (M.hex_of_string hash) ^ " height " ^ string_of_int height ; 
 	] }
 
-
-  | U.SavedBlock (hash, height, pos) -> 
-    { state with jobs = state.jobs @ [
-  	  log @@ "whoot saved block height " ^ string_of_int height ^ " " ^ string_of_int pos ; 
-  ]}
 
 	| _ -> state
 

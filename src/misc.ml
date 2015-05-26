@@ -66,10 +66,11 @@ type my_event =
    | GotMessage of connection * Message.header * string * string
    | GotMessageError of connection * string
 
-	(* GotProvisionBlock an apparent good block  height, raw_header, payload *)
-   | GotBlock of int * string * string 
+	(* GotProvisionBlock an apparent good block  hash, height, raw_header, payload *)
+   | GotBlock of string * int * string * string 
+
 	(* hash, height, lseek *)
-   | SavedBlock of string * int * int
+   (*| SavedBlock of string * int * int *)
 
    | Nop
 
@@ -244,7 +245,7 @@ type my_app_state =
 
   blocks_fd : Lwt_unix.file_descr ;
  
-  (* db : LevelDB.db ; *)
+  db : LevelDB.db ; 
 
 
   (* chain :  Chain.t;  *)
