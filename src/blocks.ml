@@ -50,17 +50,19 @@ let log s = U.write_stdout s >> return U.Nop
 let update (state : Misc.my_app_state) e = 
 	match e with 
 	| U.GotBlock (hash, height, raw_header, payload) -> 
+    state
+(*
     { state with jobs = state.jobs @ [
 		
       (* write the block to disk *) 	
 		  log "whoot got block"; 
 
-		let s = raw_header ^ payload in 
-		  Lwt_mutex.lock state.blocks_fd_m
+  		let s = raw_header ^ payload in 
+		  (*Lwt_mutex.lock state.blocks_fd_m *)
 		  >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
 		  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
 		  (* check here, if return short then throw ? *)
-		  >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in 
+		  >>= fun count -> (*let () = Lwt_mutex.unlock state.blocks_fd_m in  *)
         if count <> S.length s then 
           raise (Failure "uggh")
         else
@@ -74,8 +76,9 @@ let update (state : Misc.my_app_state) e =
             " height: "; string_of_int height ;
 				    " pos: " ^ string_of_int pos; 
 				  ]
+      >> return U.SeqJobFinished 
 	] }
-
+*)
 
 	| _ -> state
 

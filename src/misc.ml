@@ -69,6 +69,8 @@ type my_event =
 	(* GotProvisionBlock an apparent good block  hash, height, raw_header, payload *)
    | GotBlock of string * int * string * string 
 
+	| SeqJobFinished 
+
 	(* hash, height, lseek *)
    (*| SavedBlock of string * int * int *)
 
@@ -241,7 +243,14 @@ type my_app_state =
   (*  last_block_received_time : (Lwt_unix.file_descr * float) list ; *)
   last_block_received_time : ggg list ;
 
+(*
   blocks_fd_m : Lwt_mutex.t ;
+*)
+
+
+  seq_jobs_pending : (unit -> my_event Lwt.t ) list;	
+
+  seq_job_running : bool ;
 
   blocks_fd : Lwt_unix.file_descr ;
  

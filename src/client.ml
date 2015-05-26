@@ -5,6 +5,8 @@ let return = Lwt.return
 module M = Message
 
 
+(* let f () = (return Misc.SeqJobFinished) *)
+let y () = (return Misc.Nop )
 
 
 
@@ -27,13 +29,16 @@ let run f =
 			jobs = P2p.create();
             connections = [];
 			heads = tree;
-			blocks_fd_m = blocks_m;
+(*			blocks_fd_m = blocks_m; *)
 			blocks_fd = blocks_fd;
 
 			(* should be hidden ?? *)
 			block_inv_pending  = None; 
 			blocks_on_request = Misc.SS.empty; 
 			last_block_received_time = [];
+
+			seq_jobs_pending =  [ y ] ;
+			seq_job_running = false;
 
 			db = db;
 
