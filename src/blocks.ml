@@ -40,6 +40,11 @@ it will all go wrong
   - we'll have a fold between current, new and just walk back prev, alternating even/odd. 
 *) 
 
+(*
+  - ok, we want to explore the entries in the db... 
+  - and we want to sequence these io actions
+  - remove the mutex
+*)
 let log s = U.write_stdout s >> return U.Nop
 
 let update (state : Misc.my_app_state) e = 
@@ -50,7 +55,7 @@ let update (state : Misc.my_app_state) e =
       (* write the block to disk *) 	
 		  log "whoot got block"; 
 
-			let s = raw_header ^ payload in 
+		let s = raw_header ^ payload in 
 		  Lwt_mutex.lock state.blocks_fd_m
 		  >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
 		  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
@@ -60,9 +65,15 @@ let update (state : Misc.my_app_state) e =
           raise (Failure "uggh")
         else
 
-			Db.put state.db "key" "value" 
+      (* save index *)
+			Db.put state.db ("block/" ^ hash ^ "/pos") (M.encodeInteger64 (Int64.of_int pos))
 			>>
-			  log @@ "saved block - " ^ " hash " ^ (M.hex_of_string hash) ^ " height " ^ string_of_int height ; 
+			  log @@ String.concat "" [
+            "saved block - ";
+            "hash: "; (M.hex_of_string hash);
+            " height: "; string_of_int height ;
+				    " pos: " ^ string_of_int pos; 
+				  ]
 	] }
 
 

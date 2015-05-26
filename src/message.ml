@@ -605,13 +605,9 @@ let encodeTx (tx : tx) =
   [ encodeInteger32 tx.version;
     encodeVarInt @@ List.length tx.inputs;
     List.map encodeInput tx.inputs |> String.concat ""; 
-
-   encodeVarInt @@ List.length tx.outputs;
-
+	encodeVarInt @@ List.length tx.outputs;
     List.map encodeOutput tx.outputs |> String.concat ""; 
-
 	encodeInteger32 tx.lockTime 
-
   ]
 
 
