@@ -47,7 +47,7 @@ it will all go wrong
 *)
 let log s = U.write_stdout s >> return U.Nop
 
-let update (state : Misc.my_app_state) e = 
+let update1 (state : Misc.my_app_state) e = 
 	match e with 
 	| U.GotBlock (hash, height, raw_header, payload) -> 
     state
@@ -81,11 +81,32 @@ let update (state : Misc.my_app_state) e =
 *)
 
   | U.SeqJobFinished -> 
-    { state with jobs = state.jobs @ [
+    { state with 
+      seq_job_running = false; 
+      jobs = state.jobs @ [
 
 		  log "sequence job finished"; 
 	] }
-
 	| _ -> state
+
+
+let update2 (state : Misc.my_app_state) e = 
+  if state.seq_job_running = false && state.seq_jobs_pending <> [] then 
+    let h::t = state.seq_jobs_pending in
+    { state with 
+      seq_job_running = true;
+      seq_jobs_pending  = t;
+      jobs = state.jobs @ [ h () ];
+    }
+  else
+    state
+
+
+let update state e =
+  let state = update1 state e in
+  let state = update2 state e in 
+  state
+
+
 
 
