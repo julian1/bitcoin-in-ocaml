@@ -50,6 +50,34 @@ let log s = U.write_stdout s >> return U.Nop
 let update1 (state : Misc.my_app_state) e = 
 	match e with 
 	| U.GotBlock (hash, height, raw_header, payload) -> 
+
+
+    let y () = 
+   		let s = raw_header ^ payload in 
+		  (*Lwt_mutex.lock state.blocks_fd_m *)
+		  Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
+		  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
+		  (* check here, if return short then throw ? *)
+		  >>= fun count -> (*let () = Lwt_mutex.unlock state.blocks_fd_m in  *)
+        if count <> S.length s then 
+          raise (Failure "uggh")
+        else
+
+      (* save index *)
+			Db.put state.db ("block/" ^ hash ^ "/pos") (M.encodeInteger64 (Int64.of_int pos))
+			>>
+			  log @@ String.concat "" [
+            "saved block - ";
+            "hash: "; (M.hex_of_string hash);
+            " height: "; string_of_int height ;
+				    " pos: " ^ string_of_int pos; 
+				  ]
+      >> return U.SeqJobFinished 
+
+
+ 
+  	    in
+
     state
 (*
     { state with jobs = state.jobs @ [
@@ -90,13 +118,14 @@ let update1 (state : Misc.my_app_state) e =
 	| _ -> state
 
 
+(* transfer a sequence job into the jobs list *)
 let update2 (state : Misc.my_app_state) e = 
   if state.seq_job_running = false && state.seq_jobs_pending <> [] then 
     let h::t = state.seq_jobs_pending in
     { state with 
       seq_job_running = true;
       seq_jobs_pending  = t;
-      jobs = state.jobs @ [ h () ];
+      jobs = h () :: state.jobs ;
     }
   else
     state
