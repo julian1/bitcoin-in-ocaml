@@ -248,7 +248,8 @@ type my_app_state =
 *)
 
 
-  seq_jobs_pending : (unit -> my_event Lwt.t ) list;	
+  (* seq_jobs_pending : (unit -> my_event Lwt.t ) Queue;*)	
+  seq_jobs_pending : (unit -> my_event Lwt.t ) Myqueue.myqueue ;	
 
   seq_job_running : bool ;
 

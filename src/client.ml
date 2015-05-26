@@ -36,7 +36,7 @@ let run f =
 			blocks_on_request = Misc.SS.empty; 
 			last_block_received_time = [];
 
-			seq_jobs_pending =  [ y ] ;
+			seq_jobs_pending = Myqueue.empty (*|> Myqueue.add y *) ;
 			seq_job_running = false;
 
 			db = db;

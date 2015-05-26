@@ -9,6 +9,12 @@ let return = Lwt.return
 
 let log s = U.write_stdout s >> return U.Nop
 
+
+let q = Myqueue.empty 
+
+
+
+
 let update1 (state : Misc.my_app_state) e = 
 	match e with 
 	| U.GotBlock (hash, height, raw_header, payload) -> 
@@ -38,24 +44,23 @@ let update1 (state : Misc.my_app_state) e =
 
     (* ok, we need a fifo queue *)
     { state with  
-      seq_jobs_pending = y :: state.seq_jobs_pending
+      seq_jobs_pending = Myqueue.add state.seq_jobs_pending y
     }
 
   | U.SeqJobFinished -> 
     { state with 
       seq_job_running = false; 
-      jobs = state.jobs @ [
-
-		  log "sequence job finished"; 
-	] }
+      (*jobs = state.jobs @ [
+		    log "sequence job finished"; 
+	]*) }
 	| _ -> state
 
 
 (* transfer a sequence job into the jobs list *)
 (* rewrite this as a match and when *)
 let update2 (state : Misc.my_app_state) e = 
-  if state.seq_job_running = false && state.seq_jobs_pending <> [] then 
-    let h::t = state.seq_jobs_pending in
+  if state.seq_job_running = false && state.seq_jobs_pending <> Myqueue.empty then 
+    let h,t = Myqueue.take state.seq_jobs_pending in
     { state with 
       seq_job_running = true;
       seq_jobs_pending  = t;
@@ -63,7 +68,6 @@ let update2 (state : Misc.my_app_state) e =
     }
   else
     state
-
 
 let update state e =
   let state = update1 state e in
