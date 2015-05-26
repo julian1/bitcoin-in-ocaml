@@ -127,8 +127,6 @@ type my_app_state =
 
 
 
-
-
 (* the head structure shouldn't be here - place it in app_state? *)
 
 (*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",

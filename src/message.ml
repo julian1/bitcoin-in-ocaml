@@ -737,6 +737,3 @@ let formatTx tx =
   ^ "\n lockTime " ^ string_of_int tx.lockTime
 
 
-
-
-
