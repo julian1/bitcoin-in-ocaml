@@ -1,0 +1,34 @@
+
+334000 0000000000000000199cd3ccb5feefff667d6ade51eb5e92531018d5b9cf197f
+
+real    260m57.528s
+user    406m35.676s
+sys     70m8.364s
+
+17m u = 150m s
+= 170m tx
+
+260minutes * 60 = seconds
+
+= 10k second. .
+
+-----
+
+finished - unspent 15606962  spent 132730116
+
+echo $(( (15606962 + 132730116) / (260 * 60) ))
+9508k / s 
+
+= 14.8 million
+real    161m6.906s
+
+-----
+just tracking unspent, took 90 minutes, 
+
+echo $(( (15606962 + 132730116) / (90 * 60) ))
+27469
+
+I've written a custom bitcoin blockchain parser that will index  all tx outputs (not addresses) at close to 10k/ s, using leveldb and cooperative threading. Hardware is a pro level ssd.
+
+Using an in-memory data-structure to track only utxos,  it will index in about 90 minutes, but uses 1.7G memory. 
+
