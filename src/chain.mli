@@ -7,10 +7,7 @@
 (* val create : unit -> option Lwt.t *)
 val create : unit -> 
   (Misc.my_head Misc.SS.t 
-  * Lwt_mutex.t 
   * Lwt_unix.file_descr 
-
-
 	)
 	option Lwt.t
  

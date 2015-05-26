@@ -17,20 +17,6 @@ let return = Lwt.return
   - then we need to save...
 *)
 
-(*
-	- write block to disk
-	- add lseek to local heads or other data structure
-	- then we can also start and stop app and load heads from disk
-	- then completely separate action, we maintain indexes..
-*)
-
-
-
-(*
-type t = {
-
-  }
-*)
 
 let initial_getblocks starting_hash =
   (* the list are the options, and peer will return a sequence
@@ -175,38 +161,11 @@ let manage_chain1 (state : Misc.my_app_state) e    =
 				(*
 					rather than option monads everywhere, actions ought to take two functions 
 						the intital and the failure (usually log)   problem is the creation functions.
-
-			OK, because we're not initially moved to the end of the file, until after we try to write.
-			it might be better to write the file, then substract the length...
-
-			Lwt_mutex with lock might be better since handles exceptions - ugghhh.
-
-			- to be able to seek around, we should possibly use the same descriptor 
-			rather than have two descriptors open.
-			- just always use the mutex... 
-
-			- should just lseek the end
 				*)
 				if height <> -1 then
-(*
-				  Lwt_mutex.lock state.blocks_fd_m
-				  >> Lwt_unix.lseek state.blocks_fd 0 Unix.SEEK_END 
-				  >>= fun pos -> Lwt_unix.write state.blocks_fd s 0 (S.length s) 
-				  (* check here, if return short then throw ? *)
-				  >>= fun count -> let () = Lwt_mutex.unlock state.blocks_fd_m in 
-				  if count <> S.length s then 
-					raise (Failure "uggh")
-				  else
-					  return U.Nop(* in
-				  log @@  " pos " ^ string_of_int (pos )  *)
-*)
 				  return @@ U.GotBlock (hash, height, raw_header, payload) 
-
-
 				else
 				  return U.Nop
-
-				(* we must do a message here, to coordinate state change *)
 			 ]
 			}
         )
@@ -384,12 +343,8 @@ let create () =
             else 
               heads
           in 
-(*  (Misc.my_head Misc.SS.t 
-  * Lwt_mutex.t 
-  * Lwt_unix.file_descr 
-*)
 
-         let ret =   heads , Lwt_mutex.create (), blocks_fd 
+         let ret =   heads , blocks_fd 
          in
         return (Some  ret )
         ) 
@@ -398,16 +353,6 @@ let create () =
 (* there's an issue that jobs are running immediately before placing in choose() ?  *)
 
 
-
-
-(* val update : my_app_state -> Misc.my_event -> my_app_state  *)
-
-(*
-let update state connections e  =
-  let state, jobs1 = manage_chain1 state e  in
-  let state, jobs2 = manage_chain2 state connections e in
-  state, jobs1 @ jobs2
-*)
 
 
 let update state e =

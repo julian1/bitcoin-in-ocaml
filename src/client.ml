@@ -18,7 +18,7 @@ let run f =
     >>= fun result ->
 
     match result with
-      Some (tree, blocks_m, blocks_fd) -> (
+      Some (tree, blocks_fd) -> (
         (* we actually need to read it as well... as write it... *)
         let state =
           ({

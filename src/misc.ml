@@ -66,19 +66,14 @@ type my_event =
    | GotMessage of connection * Message.header * string * string
    | GotMessageError of connection * string
 
-	(* GotProvisionBlock an apparent good block  hash, height, raw_header, payload *)
+	(* hash, height, raw_header, payload *)
    | GotBlock of string * int * string * string 
 
-	| SeqJobFinished 
-
-	(* hash, height, lseek *)
-   (*| SavedBlock of string * int * int *)
-
+	| SeqJobFinished  (* SeqJobOK , SeqJobFailed? *)
    | Nop
 
 
 type jobs_type =  my_event Lwt.t list 
-
 
 
 
