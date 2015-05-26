@@ -37,13 +37,12 @@ let pad s length =
       s
 
 
-
-
 type connection =
 {
   (* addr : ip_address;
     when checking if connecting to same node, should check ip not dns name
     *)
+	(* we also ought to be able to get the addr and port from the fd *)
   addr : string ;
   port : int;
   fd :  Lwt_unix.file_descr ;
@@ -64,11 +63,15 @@ type my_event =
    | GotConnectionError of string
    | GotMessage of connection * Message.header * string * string
    | GotMessageError of connection * string
+
+	(* hash, height, raw_header, payload *)
+   | GotBlock of string * int * string * string 
+
+	| SeqJobFinished  (* SeqJobOK , SeqJobFailed? *)
    | Nop
 
 
 type jobs_type =  my_event Lwt.t list 
-
 
 
 
@@ -79,38 +82,52 @@ module SSS = Set.Make(String);;
 
 type my_head =
 {
+  (* downloaded block, not necessarirly saved/and processed *)
   (*  hash : string; *)
     previous : string;  (* could be a list pointer at my_head *)
     height : int;   (* if known? *)
    (*  difficulty : int ; *) (* aggregated *)
-    (* bool have *)
 }
 
-(*
-  - roads, on physical earth
-  - law
-  - currency mint
-  - church
-*)
-(*
-  HERE
-  - so we'd pass chainstate jobs and connections and event to the chainstate module.
-  - and likewise we'd pass p2p, jobs and connections to the p2p module.
 
-  - only only bring stuff together at the end. 
+(* revert this back to a tuple instead *)
+type ggg = {
+  fd : Lwt_unix.file_descr ;
+  t : float ;
+}
 
-  - each function is responsible for updating some of the state in response
-  to an event.
 
-  - we may want f tuple e, because it's like a fold. 
-  - only the top level has all the chunks in one place.
+type my_app_state =
+{
+  jobs :  jobs_type  ;
 
-  - and we can move the my_app_state into it's own thing as well...
-  ------
-  - the issue is that the module m hides module m implementation / state .
-*)
+  connections : connection list ;
 
-(* this really shouldn't be here - place it in app_state? *)
+  (* tree structure  - change name tree *)
+  heads : my_head SS.t ;
+
+  (* set when inv request made to peer *)
+  block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
+
+  (* blocks requested - peer, time, solicited *)
+  blocks_on_request : (Lwt_unix.file_descr * float * bool ) SS.t ;
+
+  (*  last_block_received_time : (Lwt_unix.file_descr * float) list ; *)
+  last_block_received_time : ggg list ;
+
+
+  seq_jobs_pending : (unit -> my_event Lwt.t ) Myqueue.t;	
+
+  seq_job_running : bool ;
+
+  blocks_fd : Lwt_unix.file_descr ;
+ 
+  db : LevelDB.db ; 
+}
+
+
+
+(* the head structure shouldn't be here - place it in app_state? *)
 
 (*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
   testnet magic_head: "\xFA\xBF\xB5\xDA",

@@ -43,6 +43,3 @@ let get db key = detach @@ LevelDB.get db key
 
 let seek i key = detach @@ LevelDB.Iterator.seek i key 0 (String.length key) 
 
-
-
-

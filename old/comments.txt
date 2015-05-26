@@ -1,0 +1,233 @@
+
+Go back to prior implementation
+	- calculate heads
+	- issue inv request against random peer	
+	- mark as pending. 
+
+- we don't even need an inv, just the pending blocks. if nothing pending, or timeout then issue
+a new request. 
+
+- what about the time between an inv request, and getting that data, we don't other inv 
+being sent.  so we have a guard.
+
+- time_of_last_block
+- time_of_last_inv_request  (set to 0 when start receiving) 
+- inv_pending
+
+- should we get rid of the peer as well...?
+
+- note that we can immediately issue request for more blocks once have some,
+	by checking if inv_pending
+
+(*
+  app state, is a fold over state and events 
+  - f s e -> s
+
+  what does one call this state record ?
+*)
+
+(*
+
+
+          (* do we have to close the channels as well as the descriptor?? *)
+          Lwt_unix.close conn.fd 
+          >>
+
+let filterTerminated jobs =
+  (* ok, hang on this might miss
+    because several finish - but only one gets returned
+
+    we need to use choosen instead.
+  *)
+  let f t =
+   match Lwt.state t with
+     | Return _ -> false
+     | Fail _ -> false
+     | _ -> true
+  in
+  List.filter f jobs
+*)
+
+
+(* we can also easily put a heartbeat timer *)
+
+(*
+  ok, it's not so easy...
+
+  because the map is not going to accumulate
+  changes if there are more than one...
+
+  if we return the continuation then map
+  can be used...
+
+  VERY IMPORTANT we can use nchoose_split and get rid of the scanning...
+*)
+  (*
+          - ok need
+            - check we're not already connected - maintain a list in state
+            - track the inbound...
+            - protection against end of files. put in a banned list.
+            - combine the fd,ic,oc address into a structure...
+            - close conns...
+
+        *)
+                (* we sure it's not a version? 
+                  ok, we want to look a bit closer...
+          -- we actually want to read the raw bytes...
+
+          1 114 58 13 85 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255 255 31 186 250 186 32 141
+                *)
+
+
+
+
+(* 
+	if we use this - then change name to expected 
+
+type pending_request =
+{
+    addr1 : string  ; (* or conn? *)
+}
+*)
+
+(*
+	heads can be computed by scanning the indexes at startup.
+	there's no point maintaining fast lookup memory map and leveldb btree indexes.
+*)
+
+(*
+  TODO
+ 
+  - we need a ping/pong response, to ensure we stay connected
+
+    - if we've saturated max connections, and a connection hasn't sent anything
+    for a period (eg. 2 minutes) then drop one connection. this ought to 
+    enable us to cycle to always active not just open connections.
+
+    - done - let read top level loop handle closing of sockets. this enables comparison
+    on fd first to remove the connection. instead of addr port.
+      (actually not really needed now using physical equality comparison) 
+
+    - done - guard payload length to ocaml max string length - no it's huge on 64bit. 
+
+    - change the order of add_job so we can pipe it...
+        actually we should pass an array for multiple jobs. 
+*)
+
+
+
+(* we can aggregate actions together
+
+  as much as we want, up until the point that
+  we want to manipulate the main state.
+
+  eg.
+    resolve -> connect -> send -> version -> receive ack
+
+  can be done in one sequence, after which we probably
+  want to add the connections and log stuff
+
+  Except - with a choose - it will have to restart everything
+
+  no, they will be sub threads
+*)
+
+
+-----
+- parallel downloading is not an optimisation we should really care about
+- should be trying to get the indexing working correctly...
+
+
+(*
+                very importnat 
+                  - our approach for filling in tips heads can be leveraged
+                  to do parallel download. instead of always rejecting blocks
+                  we could always accept them. 
+      
+                - we can provisionally accept them - eg. they
+                - request 500 blocks
+                - mark that we will accept even if not sequential
+                - then divide up the 500 blocks amongst different conns - eg 10 x 50 
+
+				- yes keep a list of pending blocks.
+				- allow download in any order.
+				- but do an additional calculation to determine if can calculate root.
+
+				- i dont think we even need pending. (except as a count to trigger another inv ) 
+				rather than call it pending. call it requested - and record only when request.
+
+				- We can also issue block requests in a much better way. eg. just request a single
+				block receive, then issue request for the next etc.
+					- o
+				----------------------------------------
+
+					- so if the set of pending is < 100, then get next 500
+						- this won't work... because it will keep issuing requests - needs a timer as well. 
+					- whenevnever we get a block on a conn, issue a request for another one.
+						-- we need to record this against the conn...
+
+					- with 30 conns - we can be saturated with random blocks from random invs.
+
+					- there's a problem - trying to take inv from a node that may not have it.
+
+					-- ahhhh. 
+						- why not do an inv against a peer - and record for the peer. 
+						- then randomly work through the list and filter according to chain whether it has already 
+							been downloaded.
+						- we will sometimes download the same thing twice - but it's going to be rare.
+
+						- and it means we only requst inventory, if peer says it has it. 
+
+						- and we follow that nodes forks if it has them
+
+	
+					-- only issue is marking heads so they trace to root, we'll need to walk
+						everything. but that's only linear.gg 
+              *) 
+ 
+              (* round robin making requests to advance the head 
+              - setting this to low value of 10 secs, meant it timed out a lot given large blocks
+              whiich meant sending lots of spurious inv		
+				which appeared to led us to be rejected by other peers - with connections 30 down to 5.
+				--
+				if we haven't received a block for a long time, we shouldn't be doing an inv request
+				instead we should be requesting that block from someone else.
+				
+              *)
+
+
+trusted zero-confirmation send using a third-party that guarantees not to 
+double spend.
+
+agent guarantees that will not double-spend.
+
+funds in escrow.  
+
+is this what green-address are already doing.
+-------
+
+- network consensus about
+
+- if someone tries to double spend, the only thing required is that
+
+0 or 1 or the tx gets included in the block
+
+no it forks.
+eg. a could take one tx, and b could take the other tx, and we have a fork.
+---
+why not have the good fork is the one with the smallest output hash.
+---
+doesn't work because someone could spend then later double spent with lower value ... to
+cause a fork.
+----
+
+
+
+
+----
+mining is valuable in that it determines an initial distribution  . it establishes
+a prices. people pay. 
+
+
+
+

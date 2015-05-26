@@ -7,67 +7,15 @@ module L = List
 module CL = Core.Core_list
 
 
-(*let (>>=) = Lwt.(>>=) *)
+
+let (>>=) = Lwt.(>>=) 
 let return = Lwt.return
 
-let fff fd =
-  Lwt_unix.unix_file_descr fd
-
 
 (*
-	- write block to disk
-	- add lseek to local heads or other data structure
-	- then we can also start and stop app and load heads from disk
-	- then completely separate action, we maintain indexes..
+  - ok, now we need more block rules (merckle root, difficulty, time checks )
+  - then we need to save...
 *)
-
-(*
-  - So a stupid fucking node, can just send us inv blocks, and we feel obligated to download them
-  - because we might be synced and it could advance a fork.
-  - but then they don't link to anything we already have. and it prevents us issuing real requests.
-*)
-
-(*
-  - so we can be stalled just by having random blocks thrown at us,
-  because even with automated clearing, they continue to keep the requeste blocks full
-  and prevent us issuing requests.
-
-  - can we just issue requests constantly?
-  - or what about, do an issue
-
-  - simple metric if the last block from peer, didn't advance us, then thow it away...
-    with some random component.
-*)
-
-type ggg = {
-  fd : Lwt_unix.file_descr ;
-  t : float ;
-}
-
-
-
-type t = {
-
-  (* hash structure *)
-  heads : U.my_head U.SS.t ;
-
-  (* set when inv request made to peer *)
-  block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
-
-  (* blocks peer, time   *)
-  blocks_on_request : (Lwt_unix.file_descr * float ) U.SS.t ;
-
-  (*   *)
-(*  last_block_received_time : (Lwt_unix.file_descr * float) list ;
-*)
-
-  last_block_received_time : ggg list ;
-
-
-  (* should change to be blocks_fd does this file descriptor even need to be here. it doesn't change?  *)
-  (*  blocks_oc : Lwt_io.output Lwt_io.channel ; *)
-  (* db : LevelDB.db ; *)
-}
 
 
 let initial_getblocks starting_hash =
@@ -95,21 +43,22 @@ let initial_getdata hashes =
   U.encodeMessage "getdata" payload
 
 
-
 let log s = U.write_stdout s >> return U.Nop
 
-let manage_chain1 state e    =
+
+let manage_chain1 (state : Misc.my_app_state) e    =
   match e with
 
     (* TODO connection errors should monitor read errors and clear fd *)
-    | U.GotMessage (conn, header, _, payload) -> (
+    | U.GotMessage ( conn , header, raw_header, payload) -> (
 
       let now = Unix.time () in
       match header.command with
         | "inv" -> (
           (*	- we accept a block inventory from any peer, since if synced any peer could 
             have the latest mined block first
-            - but we prioritize solicited over unsolicted inventory  
+            - but we prioritize solicited inventory over unsolicted inventory  
+            - if unsolicited then we ignore if already have unsolicited from peer
             - also block_inv_pending is used to avoid sending requests too often when synched
           *)
           (* extract blocks from inventory message, and filter for those we don't know *)
@@ -122,17 +71,23 @@ let manage_chain1 state e    =
               && not ( U.SS.mem hash state.blocks_on_request)  )
             |> L.map (fun (_,hash) -> hash)
           in
+          (* did we ask for this inv *)
+          let solicited =
+              match state.block_inv_pending with
+              | Some (fd, _) when fd == conn.fd -> true
+              | _ -> false
+          in
           (* prioritize handling *)
           let block_hashes =
-              match state.block_inv_pending with
-              (* take all the blocks if solicited *)
-              | Some (fd, _) when fd == conn.fd -> block_hashes
-              (* discard if already have blocks on request from the same peer *)
-              | _ ->
-                if U.SS.exists (fun _ (fd,_) -> fd == conn.fd) state.blocks_on_request then
+              if solicited then 
+                block_hashes 
+              else (
+                (* ignore if already have blocks on request from the same peer *)
+                if U.SS.exists (fun _ (fd,_,_) -> conn.fd == fd) state.blocks_on_request then
                   []
                 else
-                  block_hashes
+                  block_hashes (* may want to take just one *)
+              )
           in
           (* blocks we want *)
           if block_hashes <> [] then
@@ -143,12 +98,12 @@ let manage_chain1 state e    =
             in
             (* record in blocks now on request *)
             let blocks_on_request =
-              L.fold_left (fun m h -> U.SS.add h (conn.fd, now) m) state.blocks_on_request block_hashes
+              L.fold_left (fun m h -> U.SS.add h (conn.fd, now, solicited) m) state.blocks_on_request block_hashes
             in
             ( { state with
                 block_inv_pending = block_inv_pending;
                 blocks_on_request = blocks_on_request ;
-              },
+				jobs = state.jobs @  
               [
                 log @@ U.format_addr conn
                   ^ " *** got inventory blocks " ^ (string_of_int @@ L.length block_hashes  )
@@ -156,9 +111,10 @@ let manage_chain1 state e    =
                   (* request blocks from the peer *)
                   U.send_message conn (initial_getdata block_hashes );
               ]
+				}
             )
           else
-            (state, [] )
+            state
           )
 
         | "block" -> (
@@ -166,7 +122,10 @@ let manage_chain1 state e    =
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in
 
-          (* if we don't yet have the block, and it links into chain then include *)
+          (* if we don't yet have the block, and it links into chain then include 
+              ok, we are committed to writing the block to disk and including, 
+              then lets do the io, first not screate another message
+          *)
           let heads, height =
             if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then
                 let height = (U.SS.find header.previous state.heads).height + 1 in
@@ -177,59 +136,66 @@ let manage_chain1 state e    =
             else
               state.heads, -1 (* should be None *)
           in
-          (* only record valid block if it really helped us *)
+          (* update the time that we got a valid block from the peer *)
           let last =
             if height <> -1 then
               (* update the fd to indicate we got a good block, TODO tidy this *)
-              let last = L.filter (fun x -> x.fd != conn.fd) state.last_block_received_time in
-              { fd = conn.fd; t = now ;
-              }::last
+              let last = L.filter (fun (x : Misc.ggg) -> x.fd != conn .fd) state.last_block_received_time in
+              ({ fd = conn.fd; t = now ;
+              } : Misc.ggg )::last
             else
               state.last_block_received_time
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
+		  (* return state *)	
           { state with
               heads = heads;
               blocks_on_request = blocks_on_request;
               last_block_received_time = last;
-          },
-          [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
-            ^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
-         ]
+			  jobs = state.jobs @ 
+			  [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
+				^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
+
+				let s = raw_header ^ payload in 
+				(*
+					rather than option monads everywhere, actions ought to take two functions 
+						the intital and the failure (usually log)   problem is the creation functions.
+				*)
+				if height <> -1 then
+				  return @@ U.GotBlock (hash, height, raw_header, payload) 
+				else
+				  return U.Nop
+			 ]
+			}
         )
-        | _ -> state, []
+        | _ -> state
       )
-    | _ -> state, []
+    | _ -> state
 
 
-
-
-let manage_chain2 state connections  e   =
+let manage_chain2 (state : Misc.my_app_state) e  =
   (* issue inventory requests to advance the tips *)
   match e with
-    | U.Nop -> state, []
+    | U.Nop -> state
     | _ ->
       (* we need to check we have completed handshake *)
       (* shouldn't we always issue a request when blocks_on_request *)
       let now = Unix.time () in
 
       (* if peer never responded to an inv, clear the pending flag *)
-      let state =
-        match state.block_inv_pending with
-          | Some (_, t) when now > t +. 60. ->
-            { state with block_inv_pending = None }
-          | _ -> state
+      let state = { state with 
+        block_inv_pending = match state.block_inv_pending with
+          | Some (_, t) when now > t +. 60. -> None
+          | x -> x 
+        }
       in
-
-      (* if someone sends us lots random invs, then clog up blocks_on_request
-        and prevent us issuing inv from the current tips...  this is an issue. *)
 
       (* if a block was requested at least 60 seconds ago, and
       we haven't received any valid blocks from the corresponding peer for at least 60 seconds, then
-      clear in blocks_on_request flag to allow re-request from another peer *)
+      clear from blocks_on_request to permit re-request from a different peer *)
       let state = { state with
-        blocks_on_request = U.SS.filter (fun hash (fd,t) ->
+        blocks_on_request = U.SS.filter (fun hash (fd,t, solicited) ->
           not (
             now > t +. 60.
             && match CL.find state.last_block_received_time (fun x -> x.fd == fd) with
@@ -239,11 +205,15 @@ let manage_chain2 state connections  e   =
           ) state.blocks_on_request
       } in
 
-      (* if there are no blocks on request, and have connections, and no inv pending
-        then do an inv request blocks to extend the tips *)
-      if U.SS.is_empty state.blocks_on_request
-        && not (CL.is_empty connections)
-        && state.block_inv_pending = None then
+      (* are there solicited blocks on request *)
+      let has_solicited = 
+        U.SS.exists (fun _ (_,_,solicited) -> solicited) state.blocks_on_request 
+      in
+
+      (* if only unsolicited blocks on request, and no inv pending then make an inv request *)
+      if not has_solicited 
+        && state.block_inv_pending = None 
+        && state.connections <> [] then
 
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
@@ -263,13 +233,14 @@ let manage_chain2 state connections  e   =
         let head = List.nth heads index in
 
         (* choose a peer fd at random *)
-        let index = now |> int_of_float |> (fun x -> x mod List.length connections ) in
-        let (conn : U.connection) = List.nth connections index in
+        let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
+        let (conn : U.connection) = List.nth state.connections index in
 
         (* TODO we need to record if handshake has been performed *)
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
-        },
+       
+		 jobs = state.jobs @ 
         [
           log @@ S.concat "" [
             "request addr " ; conn.addr;
@@ -277,56 +248,151 @@ let manage_chain2 state connections  e   =
             "\nheads count " ; string_of_int (L.length heads);
             "\nrequested head is ";  M.hex_of_string head ;
 
-            "\n fds\n" ; S.concat "\n" ( L.map (fun x -> string_of_float (now -. x.t ) ) state.last_block_received_time )
+            "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ];
-
-
-          (* request blocks *)
+          (* request inv *)
            U.send_message conn (initial_getblocks head)
           ]
+		}
       else
-        state,[]
+        state
 
 
 
-let write_stdout = Lwt_io.write_line Lwt_io.stdout
+
+let readBlocks fd =
+  let advance fd len =
+      Lwt_unix.lseek fd len SEEK_CUR 
+      >>= fun r -> 
+      (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
+      return ()
+  in
+  (* to scan the messages stored in file *)
+  let rec loop fd ( heads : U.my_head U.SS.t ) =
+    U.read_bytes fd 24
+    >>= fun x -> match x with 
+      | Some s -> ( 
+        let _, header = M.decodeHeader s 0 in
+        (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+        U.read_bytes fd 80 
+        >>= fun u -> match u with 
+          | Some ss -> 
+            let hash = ss |> Message.sha256d |> Message.strrev  in
+            let _, block_header = M.decodeBlock ss 0 in
+
+            (* Core.Core_map.find *)
+            let height = 
+              if (U.SS.mem block_header.previous heads) then 
+                (U.SS.find block_header.previous heads ).height + 1 
+              else
+                1     (* we have a bug, where we never download the first block *)
+            in
+
+            (* Lwt_io.write_line Lwt_io.stdout @@ M.hex_of_string hash ^ " " ^ M.hex_of_string block_header.previous 
+            >> *) advance fd (header.length - 80 )
+            >> let heads = U.SS.add hash ({ 
+                previous = block_header.previous;  
+                height = height; 
+              } : U.my_head ) heads 
+            in
+            loop fd  heads  (* *)
+          | None -> 
+            return heads 
+        )
+      | None -> 
+        return heads 
+  in    
+    loop fd U.SS.empty  
+    >>= fun heads -> return heads
+ 
+
 
 let create () =
-  (* initialization should be an io function? *)
-  write_stdout "**** CREATE "
-  >>
-      let heads1 =
-          U.SS.empty
-          |> U.SS.add (M.string_of_hex "000000000000000015ca13f966458ced05d64dbaf0e4b2d8c7e35c8849c3eaec")
-           ({
-            previous = "";
-             height = 352775;
-          } : U.my_head )
-    	in
-      let heads2 =
-          U.SS.empty
-          |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
-           ({
-            previous = "";
-            height = 0;
-          } : U.my_head )
+  (* initialization should be an io function? 
+    
+    how can we initialize if the fd failed????
 
+    we could use continuation passing style, so if the action failed, 
+      we could output the error
+      we kind of also need to catch file exceptions.
+   *)
+  U.write_stdout "**** initializing chain "
+ 
 
-    in let chain =  {
-      heads = heads2 ;
-      block_inv_pending  = None ;
-      blocks_on_request = U.SS.empty  ;
-      last_block_received_time = [];
-  } in
-  (return chain)
+ 
+  (* open blocks.dat writer *)
+  >> Lwt_unix.openfile "blocks.dat"  [O_RDWR ; O_CREAT ] 0o644 
+  (*>> Lwt_unix.openfile "blocks.dat__"  [O_RDONLY (*; O_APPEND*) ; O_CREAT ] 0o644  *)
+
+  >>= fun blocks_fd -> 
+      match Lwt_unix.state blocks_fd with
+        | Opened -> ( 
+          readBlocks blocks_fd  
+          >>= fun heads ->
+            U.write_stdout ( "**** heads size " ^ (string_of_int (U.SS.cardinal heads) ))
+          >>
+          let heads =
+            if U.SS.cardinal heads = 0 then  
+              U.SS.empty
+              |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") 
+              (* |> U.SS.add ( M.zeros 32) *) (* for some reason nodes respond with second block,... *)
+               ({
+                previous = "";
+                height = 0;
+              } : U.my_head )
+            else 
+              heads
+          in 
+
+         let ret =   heads , blocks_fd 
+         in
+        return (Some  ret )
+        ) 
+      | _ -> return None
 
 (* there's an issue that jobs are running immediately before placing in choose() ?  *)
 
-let update state connections e  =
-  let state, jobs1 = manage_chain1 state e  in
-  let state, jobs2 = manage_chain2 state connections e in
-  state, jobs1 @ jobs2
 
+
+
+let update state e =
+  let state = manage_chain1 state e in
+  let state = manage_chain2 state e in
+  state
+
+
+
+            (* write fd buf ofs len has the same semantic as Unix.write, but is cooperative 
+                how do we read this block data again. fd though???
+                we're going to have to open the file everytime if we want to be able to lseek the end ...
+
+                - Important rather than spinning through a message....
+
+                - seems that we're not positioned at the end initially...
+
+                  - ughhh, we can't just query the position, and then do a separate function....
+                  because 
+                  - we need a queue or the ability to sequence the writes....
+                  - otherwise recording the position isn't guaranteed...
+
+                23.227.191.50:8333  block 000000000000000007bba9bd66a0198babed0334539318369102c30223008d89 353727 on request 25
+                23.227.191.50:8333  block 000000000000000000408a768f84c20967fac5c12cc6ed00717b19364997eeba 353728 on request 24
+                 pos 30
+                 pos 30
+
+                - we can seek the end when we first open the file...
+				- but what about doing the writing, we're going to have to create an effective mutex...
+				- to synchronize.
+				- so much fucking io.
+					-----
+
+				- IMPORTANT - OK we just use a lwt mutex actually lwt may have mutexes...
+
+				we could return an array that would be 
+					
+				- also in the time that we're trying to write it, we can't clear from blocks_on_request
+				- fuck 	
+            *)
 
 
 

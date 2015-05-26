@@ -1,11 +1,14 @@
 (*
 	like a fold, with an initial and transition/update function
+	- maybe change name, since job is to download
 *)
 
-type t
+val create : unit -> 
+  (Misc.my_head Misc.SS.t 
+  * Lwt_unix.file_descr 
+	)
+	option Lwt.t
+ 
 
-val create : unit -> t Lwt.t
-
-val update : t -> Misc.connection list -> Misc.my_event -> (t * Misc.jobs_type)  
-
+val update : Misc.my_app_state -> Misc.my_event -> Misc.my_app_state 
 
