@@ -12,7 +12,7 @@ let log s = U.write_stdout s >> return U.Nop
 
 
 
-let update1 (state : Misc.my_app_state) e = 
+let update1 e (state : Misc.my_app_state) = 
 	match e with 
 	| U.GotBlock (hash, height, raw_header, payload) -> 
 
@@ -55,7 +55,7 @@ let update1 (state : Misc.my_app_state) e =
 
 (* transfer a sequence job into the jobs list *)
 (* rewrite this as a match and when *)
-let update2 (state : Misc.my_app_state) e = 
+let update2 e (state : Misc.my_app_state) = 
   if state.seq_job_running = false && state.seq_jobs_pending <> Myqueue.empty then 
     let h,t = Myqueue.take state.seq_jobs_pending in
     { state with 
@@ -67,9 +67,12 @@ let update2 (state : Misc.my_app_state) e =
     state
 
 let update state e =
+  state |> update1 e |> update2 e 
+(*  let state = update2 
   let state = update1 state e in
   let state = update2 state e in 
   state
+*)
 
 
 

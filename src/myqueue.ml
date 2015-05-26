@@ -1,4 +1,6 @@
 
+(* Purely functional queue, https://gist.github.com/23Skidoo/1347308 *)
+
 type 'a t = MyQueue of 'a list * 'a list
  
 let empty = MyQueue ([], []);;
