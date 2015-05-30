@@ -7,27 +7,33 @@ module M = Message
 	we don't need to compute the 5-wif key, all we need are the compressed and uncompressed bitcoin addresses.
  *)
 
-let privkey = M.sha256 "" in
+let privkey = M.sha256 "a" in
 
 let () = print_endline (M.hex_of_string privkey) in
 
 let pubkey = match Microecc.compute_public_key privkey with 
 	| None -> "none" 
-	| Some s -> "\x04" ^ s
+	| Some s -> s
 in
-(* 
-	der encoded - 04a34b99f22c790c4e36b2b3c2c35a36db06226e41c692fc82b8b56ac1c540c5bd5b8dec5235a0fa8722476c7709c02559e3aa73aa03918ba2d492eea75abea235 
-	ours            a34b99f22c790c4e36b2b3c2c35a36db06226e41c692fc82b8b56ac1c540c5bd5b8dec5235a0fa8722476c7709c02559e3aa73aa03918ba2d492eea75abea235
+let () = print_endline (M.hex_of_string ("\x04" ^ pubkey)) in 
 
-*)
-let () = print_endline (M.hex_of_string pubkey) in 
+let compressed_pubkey = Microecc.compress pubkey in 
+let () = print_endline (M.hex_of_string compressed_pubkey) in 
 
-let addr = 
+
+
+let addr_from_pubkey pubkey = 
 	  pubkey 
 	  |> Message.sha256 
 	  |> Message.ripemd160 
 	  |> Address.btc_address_of_hash160 in
 	
 
-print_endline (addr ) 
+let () = print_endline (addr_from_pubkey ("\x04" ^ pubkey)) in
+let () = print_endline (addr_from_pubkey compressed_pubkey ) in
+
+
+
+(* needs something more for wif encoding. let () = print_endline ( Address.base58_of_string privkey ) in *) 
+() 
 
