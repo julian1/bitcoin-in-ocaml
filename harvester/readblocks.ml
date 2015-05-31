@@ -80,27 +80,26 @@ let process_block payload count =
       in hash, tx
     ) txs 
     in
-	(* we should not be doing this here - in this general purpose function *)
-    if count mod 1000 = 0 then 
-      Misc.write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
-      (* >> write_stdout @@ string_of_int pos  *)
-    else 
-      return ()
-    ;
-    >>
     L.fold_left (fun a b ->  
-       a >> process_tx b ) 
+       a >> process_tx b )
       (return ())  
       txs  
 
 
 
-(* we don't really need the count *) 
+(* we don't really need the count 
+
+  should be binding the process_block in
+*) 
 
 
-let loop_blocks fd process_block =
-	let rec loop_blocks' count =
-	  Misc.read_bytes fd 24
+let process_blocks process_block fd =
+	let rec process_blocks' count =
+    (match count mod 1000 = 0 with
+      | true -> Misc.write_stdout @@ string_of_int count 
+      | _ -> return ()
+    )
+    >> Misc.read_bytes fd 24
 	  >>= function 
       | None -> return ()
       | Some s -> ( 
@@ -114,22 +113,18 @@ let loop_blocks fd process_block =
           | Some payload -> 
             process_block payload count 
             >> 
-            loop_blocks' (succ count)
+            process_blocks' (succ count)
 		  )
-  in loop_blocks' 0 
+  in process_blocks' 0 
 
 	 
 
 let () = 
   Lwt_main.run (
-
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 
     >>= fun fd -> Misc.write_stdout "scanning blocks..." 
-    >> loop_blocks fd process_block 
+    >> process_blocks process_block fd 
     >> Lwt_unix.close fd
    )
 in ()
-
-
-
 
