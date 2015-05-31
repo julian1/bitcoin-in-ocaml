@@ -81,6 +81,7 @@ let process_block payload pos count =
       in hash, tx
     ) txs 
     in
+	(* we should not be doing this here - in this general purpose function *)
     if count mod 1000 = 0 then 
       Misc.write_stdout @@ string_of_int count ^ " " ^ M.hex_of_string block_hash
       (* >> write_stdout @@ string_of_int pos  *)
@@ -94,31 +95,34 @@ let process_block payload pos count =
       txs  
 
 
+
+(* we don't really need the count *) 
+let rec loop_blocks fd f count =
+  Misc.read_bytes fd 24
+  >>= fun x -> match x with 
+	| None -> return ()
+	| Some s -> ( 
+
+	  Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
+
+	  let _, header = M.decodeHeader s 0 in
+	  (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+
+	  Misc.read_bytes fd header.length 
+	  >>= fun u -> match u with 
+		| None -> return ()
+		| Some payload -> 
+		  f payload pos count 
+		  >> 
+		  loop_blocks fd f (count + 1)
+	  )
+ 
+
 let run () = 
 
   Lwt_main.run (
 
-    (* we don't really need the count *) 
-    let rec loop_blocks fd f count =
-      Misc.read_bytes fd 24
-      >>= fun x -> match x with 
-        | None -> return ()
-        | Some s -> ( 
 
-          Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
-
-          let _, header = M.decodeHeader s 0 in
-          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
-
-          Misc.read_bytes fd header.length 
-          >>= fun u -> match u with 
-            | None -> return ()
-            | Some payload -> 
-              f payload pos count 
-              >> 
-              loop_blocks fd f (count + 1)
-          )
-    in 
 
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
       match Lwt_unix.state fd with 
