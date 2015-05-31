@@ -65,12 +65,11 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
   
 (* this thing doesn't use the db, so it should be configured ...  all this stuff is still mucky *)
 
-let process_tx block_pos ((hash, tx) : string * M.tx )  = 
+let process_tx ((hash, tx) : string * M.tx )  = 
 	return ()
  
 
-let process_block payload pos count = 
-    let block_pos = pos in
+let process_block payload count = 
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -90,7 +89,7 @@ let process_block payload pos count =
     ;
     >>
     L.fold_left (fun a b ->  
-       a >> process_tx block_pos b ) 
+       a >> process_tx b ) 
       (return ())  
       txs  
 
@@ -106,30 +105,26 @@ let loop_blocks fd process_block =
       | None -> return ()
       | Some s -> ( 
         Lwt_unix.lseek fd 0 SEEK_CUR 
-          >>= fun pos ->  
+        >>= fun pos ->  
           let _, header = M.decodeHeader s 0 in
           (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
           Misc.read_bytes fd header.length 
         >>= function
           | None -> return ()
           | Some payload -> 
-            process_block payload pos count 
+            process_block payload count 
             >> 
             loop_blocks' (succ count)
 		  )
   in loop_blocks' 0 
 
-in
 	 
 
 let () = 
   Lwt_main.run (
 
-
-
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 
-    >>= fun fd -> 
-      Misc.write_stdout "scanning blocks..." 
+    >>= fun fd -> Misc.write_stdout "scanning blocks..." 
     >> loop_blocks fd process_block 
     >> Lwt_unix.close fd
    )
