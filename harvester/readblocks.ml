@@ -76,6 +76,7 @@ let log = Lwt_io.write_line Lwt_io.stdout
 
 let process_output index output =
   log @@ string_of_int index ^ " " ^ string_of_int (Int64.to_int output.value ) 
+  >> log @@ "\n  script: " ^ (output.script |> decode_script |> M.format_script ) 
 
 
 let process_tx hash tx =
