@@ -11,7 +11,6 @@ module M = Message
 module U = Misc
 
 
-
 let addr_from_string s =
   let privkey = M.sha256 s in
   match Microecc.compute_public_key privkey with
@@ -20,13 +19,12 @@ let addr_from_string s =
       let compressed_pubkey = Microecc.compress pubkey in
       let addr_from_pubkey pubkey =
           pubkey
-          |> Message.sha256
-          |> Message.ripemd160
+          |> M.sha256
+          |> M.ripemd160
           |> Address.btc_address_of_hash160
       in
       ( addr_from_pubkey pubkey )
     | None -> "none"
-
 in
 
 let log = Lwt_io.write_line Lwt_io.stdout
@@ -38,7 +36,6 @@ let process_line db line =
 (*  log @@ (U.pad line 10) ^ " " ^ (addr_from_string line)  *)
   Db.put db addr line
 in
-
 
 let process_lines process_line ic =
   let rec process_lines' count =
