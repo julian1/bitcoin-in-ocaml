@@ -39,6 +39,17 @@ let process_line line =
 in  
 
 
+let rec process_lines ic =
+  Lwt_io.read_line_opt ic
+  >>= function
+    | Some line -> 
+      process_line line
+      (*  Lwt_io.write_line Lwt_io.stdout line *)
+      >> process_lines ic 
+
+    | _ -> return ()
+in
+
 Lwt_main.run
 (
   Lwt.catch
@@ -53,17 +64,7 @@ fun () ->
   >>= fun fd ->
     let ic = Lwt_io.of_fd ~mode:Lwt_io.input fd in
 
-    let rec loop () =
-      Lwt_io.read_line_opt ic
-      >>= function
-        | Some line -> 
-          process_line line
-          (*  Lwt_io.write_line Lwt_io.stdout line *)
-          >> loop ()
-
-        | _ -> return ()
-
-    in loop ()
+    process_lines ic
 
 	)
   (fun exn ->
