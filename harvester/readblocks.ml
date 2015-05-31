@@ -69,7 +69,7 @@ let process_tx ((hash, tx) : string * M.tx )  =
 	return ()
  
 
-let process_block payload count = 
+let process_block payload = 
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -111,7 +111,7 @@ let process_blocks process_block fd =
         >>= function
           | None -> return ()
           | Some payload -> 
-            process_block payload count 
+            process_block payload
             >> 
             process_blocks' (succ count)
 		  )
