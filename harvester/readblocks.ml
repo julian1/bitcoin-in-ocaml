@@ -60,7 +60,6 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
   (* process in parallel inputs, then outputs in sequence *)
   Lwt.join ( L.map process_input tx.inputs )
   >> Lwt.join ( L.mapi (process_output hash) tx.outputs )
-
 *)
 
 (* this thing doesn't use the db, so it should be configured ...  all this stuff is still mucky *)
@@ -72,8 +71,16 @@ let log = Lwt_io.write_line Lwt_io.stdout
     ok, i don't think we wanted to keep a data structure
 *)
 
-let process_tx hash payload =
+let process_output index (output : M.tx_out) =
+  return ()
+
+
+
+
+let process_tx hash ( tx : M.tx ) =
   log @@ M.hex_of_string hash
+  >>  Lwt.join ( L.mapi process_output tx.outputs )
+
 
 
 let process_block process_tx payload =
@@ -120,7 +127,8 @@ let process_blocks process_block fd =
 
 let process_file () =
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0
-    >>= fun fd -> log "scanning blocks..."
+    >>= fun fd -> 
+      log "scanning blocks..."
     >> let process_block = process_block process_tx in
       process_blocks process_block fd
     >> Lwt_unix.close fd
