@@ -102,22 +102,20 @@ let process_block payload pos count =
 let loop_blocks fd f =
 	let rec loop_blocks' count =
 	  Misc.read_bytes fd 24
-	  >>= fun x -> match x with 
-		| None -> return ()
-		| Some s -> ( 
-
-		  Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
-
-		  let _, header = M.decodeHeader s 0 in
-		  (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
-
-		  Misc.read_bytes fd header.length 
-		  >>= fun u -> match u with 
-			| None -> return ()
-			| Some payload -> 
-			  f payload pos count 
-			  >> 
-			  loop_blocks' (succ count)
+	  >>= function 
+      | None -> return ()
+      | Some s -> ( 
+        Lwt_unix.lseek fd 0 SEEK_CUR 
+          >>= fun pos ->  
+          let _, header = M.decodeHeader s 0 in
+          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+          Misc.read_bytes fd header.length 
+        >>= function
+          | None -> return ()
+          | Some payload -> 
+            f payload pos count 
+            >> 
+            loop_blocks' (succ count)
 		  )
   in loop_blocks' 0 
 
