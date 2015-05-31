@@ -65,11 +65,16 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
   
 (* this thing doesn't use the db, so it should be configured ...  all this stuff is still mucky *)
 
-let process_tx ((hash, tx) : string * M.tx )  = 
-	return ()
+
+let log = Lwt_io.write_line Lwt_io.stdout
+
+
+
+let process_tx hash payload =
+  log @@ M.hex_of_string hash  
  
 
-let process_block payload = 
+let process_block process_tx payload = 
     let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -80,17 +85,11 @@ let process_block payload =
       in hash, tx
     ) txs 
     in
-    L.fold_left (fun a b ->  
-       a >> process_tx b )
+    L.fold_left 
+      (fun a (hash,payload) -> a 
+        >> process_tx hash payload)
       (return ())  
       txs  
-
-
-
-(* we don't really need the count 
-
-  should be binding the process_block in
-*) 
 
 
 let process_blocks process_block fd =
@@ -123,7 +122,9 @@ let () =
   Lwt_main.run (
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 
     >>= fun fd -> Misc.write_stdout "scanning blocks..." 
-    >> process_blocks process_block fd 
+    >> 
+      let  process_block = process_block process_tx in
+      process_blocks process_block fd 
     >> Lwt_unix.close fd
    )
 in ()
