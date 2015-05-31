@@ -97,29 +97,34 @@ let process_block payload pos count =
 
 
 (* we don't really need the count *) 
-let rec loop_blocks fd f count =
-  Misc.read_bytes fd 24
-  >>= fun x -> match x with 
-	| None -> return ()
-	| Some s -> ( 
 
-	  Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
 
-	  let _, header = M.decodeHeader s 0 in
-	  (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
-
-	  Misc.read_bytes fd header.length 
-	  >>= fun u -> match u with 
+let loop_blocks fd f =
+	let rec loop_blocks' count =
+	  Misc.read_bytes fd 24
+	  >>= fun x -> match x with 
 		| None -> return ()
-		| Some payload -> 
-		  f payload pos count 
-		  >> 
-		  loop_blocks fd f (count + 1)
-	  )
- 
+		| Some s -> ( 
 
-let run () = 
+		  Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
 
+		  let _, header = M.decodeHeader s 0 in
+		  (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+
+		  Misc.read_bytes fd header.length 
+		  >>= fun u -> match u with 
+			| None -> return ()
+			| Some payload -> 
+			  f payload pos count 
+			  >> 
+			  loop_blocks' (succ count)
+		  )
+  in loop_blocks' 0 
+
+in
+	 
+
+let () = 
   Lwt_main.run (
 
 
@@ -128,13 +133,13 @@ let run () =
       match Lwt_unix.state fd with 
         Opened -> 
           Misc.write_stdout "scanning blocks..." 
-          >> loop_blocks fd (process_block ) 0 
+          >> loop_blocks fd process_block 
           >> Lwt_unix.close fd
         | _ -> 
           Misc.write_stdout "couldn't open file"
 )
+in ()
 
-let () = run ()
 
 
 
