@@ -99,7 +99,7 @@ let process_block payload pos count =
 (* we don't really need the count *) 
 
 
-let loop_blocks fd f =
+let loop_blocks fd process_block =
 	let rec loop_blocks' count =
 	  Misc.read_bytes fd 24
 	  >>= function 
@@ -113,7 +113,7 @@ let loop_blocks fd f =
         >>= function
           | None -> return ()
           | Some payload -> 
-            f payload pos count 
+            process_block payload pos count 
             >> 
             loop_blocks' (succ count)
 		  )
@@ -127,15 +127,12 @@ let () =
 
 
 
-    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 >>= fun fd -> 
-      match Lwt_unix.state fd with 
-        Opened -> 
-          Misc.write_stdout "scanning blocks..." 
-          >> loop_blocks fd process_block 
-          >> Lwt_unix.close fd
-        | _ -> 
-          Misc.write_stdout "couldn't open file"
-)
+    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 
+    >>= fun fd -> 
+      Misc.write_stdout "scanning blocks..." 
+    >> loop_blocks fd process_block 
+    >> Lwt_unix.close fd
+   )
 in ()
 
 
