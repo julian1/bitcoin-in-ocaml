@@ -31,17 +31,14 @@ let addr_from_string s =
       in
       ( addr_from_pubkey pubkey )
     | None -> "none"
-in
 
 let log = Lwt_io.write_line Lwt_io.stdout
-in
 
 let process_line db line =
   let line = String.trim line in
   let addr = addr_from_string line in
 (*  log @@ (U.pad line 10) ^ " " ^ (addr_from_string line)  *)
   Db.put db addr line
-in
 
 let process_lines process_line ic =
   let rec process_lines' count =
@@ -57,9 +54,8 @@ let process_lines process_line ic =
       | _ -> return ()
   in
   process_lines' 0
-in
 
-Lwt_main.run
+let () = Lwt_main.run
 (
   Lwt.catch
   (
