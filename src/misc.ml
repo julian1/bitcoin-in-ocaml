@@ -18,7 +18,7 @@ let string_of_bytes s =
 
 
 let read_bytes fd len =
-  let block = Bytes .create len in
+  let block = Bytes.create len in
   Lwt_unix.read fd block 0 len >>=
   fun ret ->
     (* Lwt_io.write_line Lwt_io.stdout @@ "read bytes - "  ^ string_of_int ret >>  *)
