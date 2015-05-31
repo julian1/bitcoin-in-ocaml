@@ -11,6 +11,9 @@
   to do this we need to change code to use io
 *)
 
+
+open Message;;
+
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 let (>|=) = Lwt.(>|=)
@@ -71,14 +74,13 @@ let log = Lwt_io.write_line Lwt_io.stdout
     ok, i don't think we wanted to keep a data structure
 *)
 
-let process_output index (output : M.tx_out) =
-  return ()
+let process_output index output =
+  log @@ string_of_int index ^ " " ^ string_of_int (Int64.to_int output.value ) 
 
 
-
-
-let process_tx hash ( tx : M.tx ) =
+let process_tx hash tx =
   log @@ M.hex_of_string hash
+  (* we should probably sequence, not parallelise this *)
   >>  Lwt.join ( L.mapi process_output tx.outputs )
 
 
@@ -89,7 +91,7 @@ let process_block process_tx payload =
     let pos = 80 in
     let pos, tx_count = M.decodeVarInt payload pos in
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    let txs = L.map (fun (tx : M.tx) ->
+    let txs = L.map (fun tx ->
       let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
       in hash, tx
     ) txs
