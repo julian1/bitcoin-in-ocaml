@@ -10,7 +10,6 @@ module U = Misc
 
 
 let log = Lwt_io.write_line Lwt_io.stdout
-in
 
 (*
   ok, so we can look stuff up. 
@@ -31,9 +30,9 @@ let rec loop i =
       >> loop i
     )
     | _ -> return ()
-in
 
-Lwt_main.run
+
+let () = Lwt_main.run
 (
   Lwt.catch
   (
@@ -48,4 +47,3 @@ Lwt_main.run
     log @@ "got exception " ^ s
   )
 )
-

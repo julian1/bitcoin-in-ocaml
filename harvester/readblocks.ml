@@ -86,7 +86,7 @@ let process_block process_tx payload =
     ) txs 
     in
     L.fold_left 
-      (fun a (hash,payload) -> a 
+      (fun acc (hash,payload) -> acc 
         >> process_tx hash payload)
       (return ())  
       txs  
@@ -117,15 +117,13 @@ let process_blocks process_block fd =
   in process_blocks' 0 
 
 	 
-
-let () = 
-  Lwt_main.run (
+let () = Lwt_main.run
+  (
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0 
     >>= fun fd -> Misc.write_stdout "scanning blocks..." 
     >> 
-      let  process_block = process_block process_tx in
+      let process_block = process_block process_tx in
       process_blocks process_block fd 
     >> Lwt_unix.close fd
    )
-in ()
 
