@@ -1,7 +1,13 @@
 (*
   corebuild -I src -package leveldb,microecc,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  harvester/createdb.byte
 
-  the raw 160 hash would be a lot more efficient storage wise
+  - the raw 160 hash would be a lot more efficient storage wise - than storing the string  - 20 bytes only:
+
+  - ok, so we want to open the db ro and do stuff...
+
+  - note 
+    - using partial application to bind db into process_line, to make process_lines more general
+    - using inner rec function, to avoid passing unchanging params through recursion
 *)
 
 let (>>=) = Lwt.(>>=)
