@@ -74,17 +74,18 @@ let log = Lwt_io.write_line Lwt_io.stdout
     ok, i don't think we wanted to keep a data structure
 *)
 
-let process_output (*index*) output =
-  log @@ (* string_of_int index ^ " " ^ *) string_of_int (Int64.to_int output.value ) 
+let process_output index output =
+  log @@  string_of_int index ^ " " ^  string_of_int (Int64.to_int output.value ) 
   >> log @@ "\n  script: " ^ (output.script |> decode_script |> M.format_script ) 
 
 
 
 let sequence f initial lst  =
-    L.fold_left
-      (fun acc x -> acc >> f x)
-      initial
-      lst
+  L.fold_left (fun acc x -> acc >> f x) initial lst
+
+let sequencei f initial lst  =
+  let ret,_ = L.fold_left (fun (acc,i) x -> (acc >> f i x, succ i)) (initial,0) lst in
+  ret
 
 
 
@@ -93,7 +94,7 @@ let process_tx hash tx =
   (* we should probably sequence, not parallelise this *)
   (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
   (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
-  >> sequence process_output (return ()) tx.outputs
+  >> sequencei process_output (return ()) tx.outputs
    
 
 
