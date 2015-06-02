@@ -71,7 +71,18 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
 let log = Lwt_io.write_line Lwt_io.stdout
 
 (*
-    ok, i don't think we wanted to keep a data structure
+    - ok, i don't think we wanted to keep a data structure
+
+    - we need leveldb / io to check for entries. 
+    - add / remove entries.  
+    easy.
+    - no just track unspent, and keys separately. 
+    - then we output those with keys only, and mark whether unspent. 
+
+    - ok, but it means we need to carry io return type...  3o
+    - hang on maybe we write each one twice...
+
+    - or if we pass a structure, it could contain
 *)
 
 let process_output index output =
@@ -97,7 +108,10 @@ let process_tx hash tx =
   >> sequencei process_output (return ()) tx.outputs
    
 
-
+(* issue passing a structure through a series of functions i
+  use a module?
+  everything is a fold 
+*)
 
 let process_block process_tx payload =
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
@@ -110,35 +124,31 @@ let process_block process_tx payload =
       in hash, tx
     ) txs
     in
-    L.fold_left
-      (fun acc (hash,tx) -> acc
-        >> process_tx hash tx)
-      (return ())
-      txs
+    sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
 
 
-let process_blocks process_block fd =
-	let rec process_blocks' count =
+let process_blocks process_block fd x =
+	let rec process_blocks' count x =
     (match count mod 1000 = 0 with
-      | true -> Misc.write_stdout @@ string_of_int count
+      | true -> log @@ string_of_int count
       | _ -> return ()
     )
     >> Misc.read_bytes fd 24
 	  >>= function
-      | None -> return ()
+      | None -> return x 
       | Some s -> 
         (* Lwt_unix.lseek fd 0 SEEK_CUR
         >>= fun pos -> *)
           let _, header = M.decodeHeader s 0 in
-          (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *)
+          (* log @@ header.command ^ " " ^ string_of_int header.length >> *)
           Misc.read_bytes fd header.length
         >>= function
-          | None -> return ()
+          | None -> return x 
           | Some payload ->
             process_block payload
             >>
-            process_blocks' (succ count)
-  in process_blocks' 0
+            process_blocks' (succ count) (succ x)
+  in process_blocks' 0 x
 
 
 let process_file () =
@@ -146,7 +156,9 @@ let process_file () =
     >>= fun fd -> 
       log "scanning blocks..."
     >> let process_block = process_block process_tx in
-      process_blocks process_block fd
+      process_blocks process_block fd 0 
+    >>= fun x -> return ()
+      
     >> Lwt_unix.close fd
 
 
