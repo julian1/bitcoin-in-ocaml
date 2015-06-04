@@ -109,7 +109,7 @@ module SS = Map.Make(struct type t = int * string let compare = compare end)
 
 
 let process_output x (i,output,hash)
-    = x
+    = SS.add (i,hash) "u" x 
 
 let process_tx x (hash,tx) =
     let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
