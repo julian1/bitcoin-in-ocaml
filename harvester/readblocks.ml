@@ -106,7 +106,7 @@ let sequencei f initial lst  =
 module SS = Map.Make(struct type t = string * int let compare = compare end) 
 
 
-
+(* note we could even store block hash if we wanted *)
 
 let process_output x (i,output,hash)
     = SS.add (hash,i) "u" x 
@@ -182,9 +182,15 @@ let process_file () =
         let j = SS.empty in
       process_blocks process_block fd j 
     >>= fun x -> 
-        log @@ "final " ^ (string_of_int (SS.cardinal x) )
-         >> 
-        Lwt_unix.close fd
+      Lwt_unix.close fd
+      >> log @@ "final " ^ (string_of_int (SS.cardinal x) )
+       >> 
+
+      let f  (hash,i) e acc = 
+        acc >> 
+        log @@ "whoot " ^ (M.hex_of_string hash) 
+      in
+      SS.fold f  x (return ()) 
 
 
 let () = Lwt_main.run (process_file ())
