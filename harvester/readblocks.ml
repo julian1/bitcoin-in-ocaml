@@ -108,19 +108,48 @@ module SS = Map.Make(struct type t = string * int let compare = compare end)
 
 (* note we could even store block hash if we wanted *)
 
+let coinbase = M.zeros 32 
+ 
+
 let process_output x (i,output,hash)
     = SS.add (hash,i) "u" x 
+(*
+let process_input x input =
+    match input.previous with 
+      coinbase -> print_endline (M.hex_of_string input.previous) ; x
+      | _ -> (
+        let key = (input.previous,input.index) in
+        match SS.mem key x with
+          | true -> raise (Failure "here" )  (*SS.remove key x  *)
+          | false -> raise ( Failure "ughh" )
+      )
+*)
 
-let process_input x input
-    = x 
+let process_input x input =
+  if input.previous = coinbase then 
+         x
+    else
+     (
+      let key = (input.previous,input.index) in
+      match SS.mem key x with
+        | true -> SS.remove key x  
+        | false -> raise ( Failure "ughh here" )
+    )
 
 
+
+
+
+(* it's not finding any because the hashes are wrong? 
+  
+  fuck what is going on...
+*)
 
 let process_tx x (hash,tx) =
+  (* these are reversed, - should do inputs then outputs *)
+    let x = L.fold_left process_input x tx.inputs in
     let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-    let x = L.fold_left process_output x m  in
-    L.fold_left process_input x tx.inputs 
-
+    L.fold_left process_output x m  
 
 (*
   log @@ M.hex_of_string hash
@@ -181,7 +210,7 @@ let process_blocks f fd (x : string SS.t ) =
 *)
 
 let process_file () =
-    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0
+    Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd -> 
       log "scanning blocks..."
     >> let process_block = process_block process_tx in
@@ -190,14 +219,13 @@ let process_file () =
     >>= fun x -> 
       Lwt_unix.close fd
       >> log @@ "final " ^ (string_of_int (SS.cardinal x) )
+    (*
       >> 
-
-      let f  (hash,i) e acc = 
-        acc >> 
-        log @@ "whoot " ^ (M.hex_of_string hash) ^ " " ^ (string_of_int i) 
-      in
-      SS.fold f  x (return ()) 
-
+        let f  (hash,i) e acc = 
+          acc >> log @@ "whoot " ^ (M.hex_of_string hash) ^ " " ^ (string_of_int i) 
+        in
+        SS.fold f  x (return ()) 
+    *)
 
 let () = Lwt_main.run (process_file ())
 
