@@ -111,9 +111,15 @@ module SS = Map.Make(struct type t = string * int let compare = compare end)
 let process_output x (i,output,hash)
     = SS.add (hash,i) "u" x 
 
+let process_input x input
+    = x 
+
+
+
 let process_tx x (hash,tx) =
     let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-    L.fold_left process_output x m 
+    let x = L.fold_left process_output x m  in
+    L.fold_left process_input x tx.inputs 
 
 
 (*
@@ -184,11 +190,11 @@ let process_file () =
     >>= fun x -> 
       Lwt_unix.close fd
       >> log @@ "final " ^ (string_of_int (SS.cardinal x) )
-       >> 
+      >> 
 
       let f  (hash,i) e acc = 
         acc >> 
-        log @@ "whoot " ^ (M.hex_of_string hash) 
+        log @@ "whoot " ^ (M.hex_of_string hash) ^ " " ^ (string_of_int i) 
       in
       SS.fold f  x (return ()) 
 
