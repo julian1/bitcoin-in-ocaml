@@ -101,7 +101,12 @@ let sequencei f initial lst  =
 
 (*
     fold_lefti can be done with mapi and then feeding into fold...
+    OK. we want to make a key val store
 *)
+module SS = Map.Make(struct type t = string * int  let compare = compare end) 
+
+
+
 
 let process_output x (i,output,hash)
     = succ x
