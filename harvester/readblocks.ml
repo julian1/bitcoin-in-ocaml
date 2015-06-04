@@ -113,7 +113,7 @@ let process_tx hash tx =
   everything is a fold 
 *)
 
-let process_block process_tx payload =
+let process_block process_tx payload x =
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -124,6 +124,9 @@ let process_block process_tx payload =
       in hash, tx
     ) txs
     in
+    (* ok, it's not quite a fold because we're not passing the thing in 
+
+    *)
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
 
 
@@ -145,7 +148,7 @@ let process_blocks f fd x =
         >>= function
           | None -> return x 
           | Some payload ->
-            f payload
+            f payload x
             >> process_blocks' (succ count) (succ x)
   in process_blocks' 0 x
 
