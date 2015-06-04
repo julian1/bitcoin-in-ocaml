@@ -179,7 +179,7 @@ let process_file () =
         let j = SS.empty in
       process_blocks process_block fd j 
     >>= fun x -> 
-        (* log @@ "final " ^ string_of_int x  *)
+        log @@ "final " ^ string_of_int (SS.ordinal x) 
       
     Lwt_unix.close fd
 
