@@ -116,7 +116,7 @@ let process_tx acc tx =
   everything is a fold 
 *)
 
-let process_block process_tx payload initial =
+let process_block process_tx payload x =
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -130,7 +130,7 @@ let process_block process_tx payload initial =
     (* ok, it's not quite a fold because we're not passing the thing in 
 
     *)
-    L.fold_left (fun acc tx -> process_tx acc tx ) initial txs 
+    L.fold_left (fun x tx -> process_tx x tx ) x txs 
 
 (*
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
@@ -154,8 +154,9 @@ let process_blocks f fd x =
         >>= function
           | None -> return x 
           | Some payload ->
-            let x = f payload 0 in
-            process_blocks' (succ count) (0)
+            let x = f payload x in
+            log @@ "x is " ^ string_of_int x
+            >> process_blocks' (succ count) (x)
 
   in process_blocks' 0 x
 
@@ -166,7 +167,8 @@ let process_file () =
       log "scanning blocks..."
     >> let process_block = process_block process_tx in
       process_blocks process_block fd 0 
-    >>= fun x -> return ()
+    >>= fun x -> 
+        log @@ "final " ^ string_of_int x 
       
     >> Lwt_unix.close fd
 
