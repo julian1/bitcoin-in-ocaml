@@ -103,11 +103,11 @@ let sequencei f initial lst  =
     fold_lefti can be done with mapi and then feeding into fold...
 *)
 
-let process_output x (i,output)
+let process_output x (i,output,hash)
     = succ x
 
 let process_tx x (hash,tx) =
-    let m = L.mapi (fun i output -> (i,output)) tx.outputs in     
+    let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
     L.fold_left process_output x m 
 
 
