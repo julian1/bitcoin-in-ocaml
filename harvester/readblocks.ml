@@ -103,13 +103,13 @@ let sequencei f initial lst  =
     fold_lefti can be done with mapi and then feeding into fold...
     OK. we want to make a key val store
 *)
-module SS = Map.Make(struct type t = string * int  let compare = compare end) 
+module SS = Map.Make(struct type t = int * string let compare = compare end) 
 
 
 
 
 let process_output x (i,output,hash)
-    = succ x
+    = x
 
 let process_tx x (hash,tx) =
     let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
@@ -147,7 +147,7 @@ let process_block f payload x =
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
 *)
 
-let process_blocks f fd x =
+let process_blocks f fd (x : string SS.t ) =
 	let rec process_blocks' count x =
     (match count mod 1000 = 0 with
       | true -> log @@ string_of_int count
@@ -166,8 +166,7 @@ let process_blocks f fd x =
           | None -> return x 
           | Some payload ->
             let x = f payload x in
-            log @@ "x is " ^ string_of_int x
-            >> process_blocks' (succ count) (x)
+            process_blocks' (succ count) (x)
 
   in process_blocks' 0 x
 
@@ -177,11 +176,12 @@ let process_file () =
     >>= fun fd -> 
       log "scanning blocks..."
     >> let process_block = process_block process_tx in
-      process_blocks process_block fd 0 
+        let j = SS.empty in
+      process_blocks process_block fd j 
     >>= fun x -> 
-        log @@ "final " ^ string_of_int x 
+        (* log @@ "final " ^ string_of_int x  *)
       
-    >> Lwt_unix.close fd
+    Lwt_unix.close fd
 
 
 let () = Lwt_main.run (process_file ())
