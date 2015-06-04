@@ -99,6 +99,9 @@ let sequencei f initial lst  =
   ret
 
 
+(*
+    fold_lefti can be done with mapi and then feeding into fold...
+*)
 
 let process_tx acc tx =
     acc + 1
@@ -116,7 +119,7 @@ let process_tx acc tx =
   everything is a fold 
 *)
 
-let process_block process_tx payload x =
+let process_block f payload x =
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -127,10 +130,7 @@ let process_block process_tx payload x =
       in hash, tx
     ) txs
     in
-    (* ok, it's not quite a fold because we're not passing the thing in 
-
-    *)
-    L.fold_left (fun x tx -> process_tx x tx ) x txs 
+    L.fold_left f x txs 
 
 (*
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
