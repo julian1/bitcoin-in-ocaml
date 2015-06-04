@@ -103,13 +103,13 @@ let sequencei f initial lst  =
     fold_lefti can be done with mapi and then feeding into fold...
     OK. we want to make a key val store
 *)
-module SS = Map.Make(struct type t = int * string let compare = compare end) 
+module SS = Map.Make(struct type t = string * int let compare = compare end) 
 
 
 
 
 let process_output x (i,output,hash)
-    = SS.add (i,hash) "u" x 
+    = SS.add (hash,i) "u" x 
 
 let process_tx x (hash,tx) =
     let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
@@ -170,6 +170,9 @@ let process_blocks f fd (x : string SS.t ) =
 
   in process_blocks' 0 x
 
+(*
+    ok, we want to be able to look up the value 
+*)
 
 let process_file () =
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0
@@ -179,9 +182,9 @@ let process_file () =
         let j = SS.empty in
       process_blocks process_block fd j 
     >>= fun x -> 
-        log @@ "final " ^ string_of_int (SS.ordinal x) 
-      
-    Lwt_unix.close fd
+        log @@ "final " ^ (string_of_int (SS.cardinal x) )
+         >> 
+        Lwt_unix.close fd
 
 
 let () = Lwt_main.run (process_file ())
