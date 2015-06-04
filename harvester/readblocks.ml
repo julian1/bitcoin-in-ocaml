@@ -103,16 +103,14 @@ let sequencei f initial lst  =
     fold_lefti can be done with mapi and then feeding into fold...
 *)
 
-let process_output x output
-    = x + 1
+let process_output x (i,output)
+    = succ x
 
 let process_tx x (hash,tx) =
-(*    x + 1 *)
+    let m = L.mapi (fun i output -> (i,output)) tx.outputs in     
+    L.fold_left process_output x m 
 
-    L.fold_left process_output x tx.outputs 
 
-
-(*    acc + 1 *)
 (*
   log @@ M.hex_of_string hash
   (* we should probably sequence, not parallelise this *)
