@@ -100,12 +100,15 @@ let sequencei f initial lst  =
 
 
 
-let process_tx hash tx =
+let process_tx acc tx =
+    acc + 1
+(*
   log @@ M.hex_of_string hash
   (* we should probably sequence, not parallelise this *)
   (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
   (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
   >> sequencei process_output (return ()) tx.outputs
+*)
    
 
 (* issue passing a structure through a series of functions i
@@ -113,7 +116,7 @@ let process_tx hash tx =
   everything is a fold 
 *)
 
-let process_block process_tx payload x =
+let process_block process_tx payload initial =
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -127,8 +130,11 @@ let process_block process_tx payload x =
     (* ok, it's not quite a fold because we're not passing the thing in 
 
     *)
-    sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
+    L.fold_left (fun acc tx -> process_tx acc tx ) initial txs 
 
+(*
+    sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
+*)
 
 let process_blocks f fd x =
 	let rec process_blocks' count x =
@@ -148,8 +154,9 @@ let process_blocks f fd x =
         >>= function
           | None -> return x 
           | Some payload ->
-            f payload x
-            >> process_blocks' (succ count) (succ x)
+            let x = f payload 0 in
+            process_blocks' (succ count) (0)
+
   in process_blocks' 0 x
 
 
