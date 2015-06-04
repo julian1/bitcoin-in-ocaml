@@ -127,7 +127,7 @@ let process_block process_tx payload =
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
 
 
-let process_blocks process_block fd x =
+let process_blocks f fd x =
 	let rec process_blocks' count x =
     (match count mod 1000 = 0 with
       | true -> log @@ string_of_int count
@@ -145,9 +145,8 @@ let process_blocks process_block fd x =
         >>= function
           | None -> return x 
           | Some payload ->
-            process_block payload
-            >>
-            process_blocks' (succ count) (succ x)
+            f payload
+            >> process_blocks' (succ count) (succ x)
   in process_blocks' 0 x
 
 
