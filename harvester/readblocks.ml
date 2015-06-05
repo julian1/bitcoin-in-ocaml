@@ -27,47 +27,6 @@ module CL = Core.Core_list
 
 
 
-(*
-let process_tx db block_pos ((hash, tx) : string * M.tx )  =
-  let coinbase = M.zeros 32
-  in
-  let process_input (input : M.tx_in) =
-    if input.previous = coinbase then
-      return ()
-    else
-      let key = I.encodeKey { hash = input.previous; index = input.index  } in
-      Db.get db key
-      >>= (fun result ->
-        match result with
-          Some s ->
-            (* we should write functions to do this *)
-            let value = I.decodeValue s in
-            if value.status <> "u" then
-              let msg = "ooops tx is spent" in
-              raise (Failure msg)
-            else
-              Db.put db key (I.encodeValue { value with status = "s";  } )
-          | None ->
-            let msg = "txo not found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
-            raise (Failure msg)
-      )
-  in
-  let process_output tx_hash index (output : M.tx_out) =
-    let key = I.encodeKey { hash = tx_hash; index = index } in
-    let value = I.encodeValue {
-        status = "u"; block_pos = block_pos; tx_pos = tx.pos; tx_length = tx.length;
-        output_pos = output.pos; output_length = output.length;
-      } in
-    Db.put db key value
-  in
-  (* process in parallel inputs, then outputs in sequence *)
-  Lwt.join ( L.map process_input tx.inputs )
-  >> Lwt.join ( L.mapi (process_output hash) tx.outputs )
-*)
-
-(* this thing doesn't use the db, so it should be configured ...  all this stuff is still mucky *)
-
-
 let log = Lwt_io.write_line Lwt_io.stdout
 
 (*
@@ -118,23 +77,24 @@ let process_tx x (hash,tx) =
   x >>= fun x -> 
       L.fold_left process_input (return x) tx.inputs 
   >>= fun x -> 
-      let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-      (L.fold_left process_output (return x) m ) 
+      let outputs = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
+      (L.fold_left process_output (return x) outputs) 
 
 
 let process_block f payload x =
-  (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
-  (* decode tx's and get tx hash *)
-  let pos = 80 in
-  let pos, tx_count = M.decodeVarInt payload pos in
-  let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-  let txs = L.map (fun tx ->
-    let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
-    in hash, tx
-  ) txs
-  in
-  (* ok, we're folding each tx... *)
-  (L.fold_left f (return x) txs)
+  x >>= fun x ->
+    (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
+    (* decode tx's and get tx hash *)
+    let pos = 80 in
+    let pos, tx_count = M.decodeVarInt payload pos in
+    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+    let txs = L.map (fun tx ->
+      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
+      in hash, tx
+    ) txs
+    in
+    (* ok, we're folding each tx... *)
+    (L.fold_left f (return x) txs)
 
 (*
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
@@ -158,7 +118,7 @@ let process_blocks f fd (x : string SS.t ) =
         >>= function
           | None -> return x 
           | Some payload ->
-            f payload x 
+            f payload (return x) 
             >>= fun x -> process_blocks' (succ count) (x)
 
   in process_blocks' 0 x
@@ -248,3 +208,44 @@ let sequencei f initial lst  =
   everything is a fold 
 *)
  
+(*
+let process_tx db block_pos ((hash, tx) : string * M.tx )  =
+  let coinbase = M.zeros 32
+  in
+  let process_input (input : M.tx_in) =
+    if input.previous = coinbase then
+      return ()
+    else
+      let key = I.encodeKey { hash = input.previous; index = input.index  } in
+      Db.get db key
+      >>= (fun result ->
+        match result with
+          Some s ->
+            (* we should write functions to do this *)
+            let value = I.decodeValue s in
+            if value.status <> "u" then
+              let msg = "ooops tx is spent" in
+              raise (Failure msg)
+            else
+              Db.put db key (I.encodeValue { value with status = "s";  } )
+          | None ->
+            let msg = "txo not found " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index in
+            raise (Failure msg)
+      )
+  in
+  let process_output tx_hash index (output : M.tx_out) =
+    let key = I.encodeKey { hash = tx_hash; index = index } in
+    let value = I.encodeValue {
+        status = "u"; block_pos = block_pos; tx_pos = tx.pos; tx_length = tx.length;
+        output_pos = output.pos; output_length = output.length;
+      } in
+    Db.put db key value
+  in
+  (* process in parallel inputs, then outputs in sequence *)
+  Lwt.join ( L.map process_input tx.inputs )
+  >> Lwt.join ( L.mapi (process_output hash) tx.outputs )
+*)
+
+(* this thing doesn't use the db, so it should be configured ...  all this stuff is still mucky *)
+
+
