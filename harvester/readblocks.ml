@@ -55,8 +55,9 @@ module SS = Map.Make(struct type t = int * string let compare = compare end)
 (* note we could even store block hash if we wanted 
 
   - basically nested folds
-  - the argument should be in monadic form, which allows us using folds without destructuring. 
-  - x can be any structure that we want to record stuff in or even () if nothing.
+  - it's better to pass x as monadic argument since allows folds without complication. 
+  - x can be any structure that we want to record stuff - a record, or () if nothing.
+      or a db, or combination. 
 *)
 
 let coinbase = M.zeros 32 
@@ -95,8 +96,7 @@ let process_tx x (hash,tx) =
 
 
 let process_block f x payload =
-  x >>= fun x ->
-    log "block"
+  log "block"
   >>
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
@@ -108,48 +108,42 @@ let process_block f x payload =
       in hash, tx
     ) txs
     in
-    L.fold_left f (return x) txs
+    L.fold_left f (x) txs
 
 
-let process_blocks f fd (x : string SS.t ) =
+let process_blocks f fd x =
 	let rec process_blocks' x =
-    Misc.read_bytes fd 24
-	  >>= function
-      | None -> return x 
-      | Some s -> 
-        (* Lwt_unix.lseek fd 0 SEEK_CUR
-        >>= fun pos -> *)
-          let _, header = M.decodeHeader s 0 in
-          (* log @@ header.command ^ " " ^ string_of_int header.length >> *)
-          Misc.read_bytes fd header.length
-        >>= function
-          | None -> return x 
-          | Some payload ->
-            f (return x) payload 
-            >>= fun x -> process_blocks' x
+    x >>= fun x ->
+      Misc.read_bytes fd 24
+      >>= function
+        | None -> return x 
+        | Some s -> 
+          (* Lwt_unix.lseek fd 0 SEEK_CUR
+          >>= fun pos -> *)
+            let _, header = M.decodeHeader s 0 in
+            (* log @@ header.command ^ " " ^ string_of_int header.length >> *)
+            Misc.read_bytes fd header.length
+          >>= function
+            | None -> return x 
+            | Some payload ->
+              f (return x) payload 
+              >>= fun x -> process_blocks' (return x)
   in process_blocks' x
 
-(*
-    ok, we want to be able to look up the value 
-*)
 
 let process_file () =
     Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0
     >>= fun fd -> 
       log "scanning blocks..."
-    >> let process_block = process_block process_tx in
-        let j = SS.empty in
-      process_blocks process_block fd j 
+    >> 
+      let process_block = process_block process_tx in
+      let x = SS.empty in
+      process_blocks process_block fd (return x)
     >>= fun x -> 
       Lwt_unix.close fd
       >> log @@ "final " ^ (string_of_int (SS.cardinal x) )
-    (*
-      >> 
-        let f  (hash,i) e acc = 
-          acc >> log @@ "whoot " ^ (M.hex_of_string hash) ^ " " ^ (string_of_int i) 
-        in
-        SS.fold f  x (return ()) 
-    *)
+
+
 
 let () = Lwt_main.run (process_file ())
 
