@@ -152,10 +152,18 @@ let process_input x input =
 
 
 let process_tx x (hash,tx) =
+(*
   (* these are reversed, - should do inputs then outputs *)
     let x = L.fold_left process_input x tx.inputs in
     let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
     L.fold_left process_output x m  
+*)  
+    x >>= fun x -> 
+        let x = L.fold_left process_input x tx.inputs in
+        let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
+        return (L.fold_left process_output x m ) 
+
+
 
 (*
   log @@ M.hex_of_string hash
@@ -182,7 +190,8 @@ let process_block f payload x =
       in hash, tx
     ) txs
     in
-    return (L.fold_left f x txs)
+    (* ok, we're folding each tx... *)
+    (L.fold_left f (return x) txs)
 
 (*
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
