@@ -52,43 +52,50 @@ let log = Lwt_io.write_line Lwt_io.stdout
 module SS = Map.Make(struct type t = int * string let compare = compare end) 
 
 
-(* note we could even store block hash if we wanted *)
+(* note we could even store block hash if we wanted 
+
+  - basically nested folds
+  - the argument should be in monadic form, which allows us using folds without destructuring. 
+*)
 
 let coinbase = M.zeros 32 
  
 
 let process_output x (i,output,hash) =
   x >>= fun x -> 
-    log @@ "output hash " ^ M.hex_of_string hash 
+    log @@ "output " ^ M.hex_of_string hash 
     >>
     return ( SS.add (i,hash) "u" x )
 
 
 let process_input x input =
   x >>= fun x ->
+    log @@ "input  " ^ M.hex_of_string input.previous
+      ^ " index " ^ (string_of_int input.index )
+  >>
     if input.previous = coinbase then 
       return x
     else
-      log @@ 
-        "input index " ^ (string_of_int input.index ) 
-        ^ " hash " ^ M.hex_of_string input.previous
-      >>
-        let key = (input.index,input.previous) in
-        match SS.mem key x with
-          | true -> return (SS.remove key x ) 
-          | false -> raise ( Failure "ughh here" )
+      let key = (input.index,input.previous) in
+      match SS.mem key x with
+        | true -> return x (* (SS.remove key x ) *)
+        | false -> raise ( Failure "ughh here" )
 
 
 let process_tx x (hash,tx) =
   x >>= fun x -> 
-      L.fold_left process_input (return x) tx.inputs 
+    log "tx"
+  >>
+    L.fold_left process_input (return x) tx.inputs 
   >>= fun x -> 
-      let outputs = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-      (L.fold_left process_output (return x) outputs) 
+    let outputs = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
+    (L.fold_left process_output (return x) outputs) 
 
 
 let process_block f x payload =
   x >>= fun x ->
+    log "block"
+  >>
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
     let pos = 80 in
@@ -134,7 +141,7 @@ let process_blocks f fd (x : string SS.t ) =
 *)
 
 let process_file () =
-    Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
+    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0
     >>= fun fd -> 
       log "scanning blocks..."
     >> let process_block = process_block process_tx in
