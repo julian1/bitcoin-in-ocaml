@@ -59,6 +59,8 @@ let coinbase = M.zeros 32
 
 let process_output x (i,output,hash) =
   x >>= fun x -> 
+    log @@ "output hash " ^ M.hex_of_string hash 
+    >>
     return ( SS.add (i,hash) "u" x )
 
 
@@ -67,10 +69,14 @@ let process_input x input =
     if input.previous = coinbase then 
       return x
     else
-      let key = (input.index,input.previous) in
-      match SS.mem key x with
-        | true -> return (SS.remove key x ) 
-        | false -> raise ( Failure "ughh here" )
+      log @@ 
+        "input index " ^ (string_of_int input.index ) 
+        ^ " hash " ^ M.hex_of_string input.previous
+      >>
+        let key = (input.index,input.previous) in
+        match SS.mem key x with
+          | true -> return (SS.remove key x ) 
+          | false -> raise ( Failure "ughh here" )
 
 
 let process_tx x (hash,tx) =
@@ -81,7 +87,7 @@ let process_tx x (hash,tx) =
       (L.fold_left process_output (return x) outputs) 
 
 
-let process_block f payload x =
+let process_block f x payload =
   x >>= fun x ->
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
@@ -118,7 +124,7 @@ let process_blocks f fd (x : string SS.t ) =
         >>= function
           | None -> return x 
           | Some payload ->
-            f payload (return x) 
+            f (return x) payload 
             >>= fun x -> process_blocks' (succ count) (x)
 
   in process_blocks' 0 x
