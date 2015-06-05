@@ -103,7 +103,7 @@ let sequencei f initial lst  =
     fold_lefti can be done with mapi and then feeding into fold...
     OK. we want to make a key val store
 *)
-module SS = Map.Make(struct type t = string * int let compare = compare end) 
+module SS = Map.Make(struct type t = int * string let compare = compare end) 
 
 
 (* note we could even store block hash if we wanted *)
@@ -112,38 +112,44 @@ let coinbase = M.zeros 32
  
 
 let process_output x (i,output,hash)
-    = SS.add (hash,i) "u" x 
-(*
-let process_input x input =
-    match input.previous with 
-      coinbase -> print_endline (M.hex_of_string input.previous) ; x
-      | _ -> (
-        let key = (input.previous,input.index) in
-        match SS.mem key x with
-          | true -> raise (Failure "here" )  (*SS.remove key x  *)
-          | false -> raise ( Failure "ughh" )
-      )
-*)
+    = SS.add (i,hash) "u" x 
 
 let process_input x input =
   if input.previous = coinbase then 
-         x
-    else
-     (
-      let key = (input.previous,input.index) in
-      match SS.mem key x with
-        | true -> SS.remove key x  
-        | false -> raise ( Failure "ughh here" )
-    )
+    x
+  else
+    let key = (input.index,input.previous) in
+    match SS.mem key x with
+      | true -> SS.remove key x  
+      | false -> raise ( Failure "ughh here" )
 
+(* 
 
+  - ok, we've got the utxo set being calculated. but what about 
+  1. extract the addresses 
+  2. look them up.
 
+  can return the list of address -> tx 
+    use
+        tx -> address - and use the existing struccture
+            then only remove if not also found..
 
+  - it doesn seem to slow more than would expect 
+  - think the int should be first
 
-(* it's not finding any because the hashes are wrong? 
+    PROBLEM 
+        tx's that are spent in same block - are ones we are 
+        really interested in. because they're auto harvested
+
+  -------
   
-  fuck what is going on...
+    - ok there's an issue, that a fork block spends txs, then another
+    block tries to do the same.
+    - we have to pick a path through the blocks.
+  
+
 *)
+
 
 let process_tx x (hash,tx) =
   (* these are reversed, - should do inputs then outputs *)
@@ -176,7 +182,7 @@ let process_block f payload x =
       in hash, tx
     ) txs
     in
-    L.fold_left f x txs 
+    return (L.fold_left f x txs)
 
 (*
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
@@ -200,8 +206,8 @@ let process_blocks f fd (x : string SS.t ) =
         >>= function
           | None -> return x 
           | Some payload ->
-            let x = f payload x in
-            process_blocks' (succ count) (x)
+            f payload x 
+            >>= fun x -> process_blocks' (succ count) (x)
 
   in process_blocks' 0 x
 
