@@ -112,12 +112,13 @@ let coinbase = M.zeros 32
  
 
 let process_output x (i,output,hash) =
-    x
-(*
-    = SS.add (i,hash) "u" x 
-*)
+    x >>= fun x -> 
+        return ( SS.add (i,hash) "u" x )
+
 
 let process_input x input =
+    x
+(*
   if input.previous = coinbase then 
     x
   else
@@ -125,7 +126,7 @@ let process_input x input =
     match SS.mem key x with
       | true -> (SS.remove key x ) 
       | false -> raise ( Failure "ughh here" )
-
+*)
 (* 
 
   - ok, we've got the utxo set being calculated. but what about 
@@ -162,7 +163,8 @@ let process_tx x (hash,tx) =
     L.fold_left process_output x m  
 *)  
     x >>= fun x -> 
-        let x = L.fold_left process_input x tx.inputs in
+        L.fold_left process_input (return x) tx.inputs 
+    >>= fun x -> 
         let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
         (L.fold_left process_output (return x) m ) 
 
