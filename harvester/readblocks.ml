@@ -56,6 +56,7 @@ module SS = Map.Make(struct type t = int * string let compare = compare end)
 
   - basically nested folds
   - the argument should be in monadic form, which allows us using folds without destructuring. 
+  - x can be any structure that we want to record stuff in or even () if nothing.
 *)
 
 let coinbase = M.zeros 32 
@@ -88,8 +89,9 @@ let process_tx x (hash,tx) =
   >>
     L.fold_left process_input (return x) tx.inputs 
   >>= fun x -> 
-    let outputs = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-    (L.fold_left process_output (return x) outputs) 
+    let group i output = (i,output,hash) in
+    let outputs = L.mapi group tx.outputs in     
+    L.fold_left process_output (return x) outputs
 
 
 let process_block f x payload =
@@ -106,20 +108,12 @@ let process_block f x payload =
       in hash, tx
     ) txs
     in
-    (* ok, we're folding each tx... *)
-    (L.fold_left f (return x) txs)
+    L.fold_left f (return x) txs
 
-(*
-    sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
-*)
 
 let process_blocks f fd (x : string SS.t ) =
-	let rec process_blocks' count x =
-    (match count mod 1000 = 0 with
-      | true -> log @@ string_of_int count
-      | _ -> return ()
-    )
-    >> Misc.read_bytes fd 24
+	let rec process_blocks' x =
+    Misc.read_bytes fd 24
 	  >>= function
       | None -> return x 
       | Some s -> 
@@ -132,9 +126,8 @@ let process_blocks f fd (x : string SS.t ) =
           | None -> return x 
           | Some payload ->
             f (return x) payload 
-            >>= fun x -> process_blocks' (succ count) (x)
-
-  in process_blocks' 0 x
+            >>= fun x -> process_blocks' x
+  in process_blocks' x
 
 (*
     ok, we want to be able to look up the value 
