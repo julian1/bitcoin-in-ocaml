@@ -85,19 +85,6 @@ let log = Lwt_io.write_line Lwt_io.stdout
     - or if we pass a structure, it could contain
 *)
 
-let process_output index output =
-  log @@  string_of_int index ^ " " ^  string_of_int (Int64.to_int output.value ) 
-  >> log @@ "\n  script: " ^ (output.script |> decode_script |> M.format_script ) 
-
-
-
-let sequence f initial lst  =
-  L.fold_left (fun acc x -> acc >> f x) initial lst
-
-let sequencei f initial lst  =
-  let ret,_ = L.fold_left (fun (acc,i) x -> (acc >> f i x, succ i)) (initial,0) lst in
-  ret
-
 
 (*
     fold_lefti can be done with mapi and then feeding into fold...
@@ -112,91 +99,42 @@ let coinbase = M.zeros 32
  
 
 let process_output x (i,output,hash) =
-    x >>= fun x -> 
-        return ( SS.add (i,hash) "u" x )
+  x >>= fun x -> 
+    return ( SS.add (i,hash) "u" x )
 
 
 let process_input x input =
-    x
-(*
-  if input.previous = coinbase then 
-    x
-  else
-    let key = (input.index,input.previous) in
-    match SS.mem key x with
-      | true -> (SS.remove key x ) 
-      | false -> raise ( Failure "ughh here" )
-*)
-(* 
-
-  - ok, we've got the utxo set being calculated. but what about 
-  1. extract the addresses 
-  2. look them up.
-
-  can return the list of address -> tx 
-    use
-        tx -> address - and use the existing struccture
-            then only remove if not also found..
-
-  - it doesn seem to slow more than would expect 
-  - think the int should be first
-
-    PROBLEM 
-        tx's that are spent in same block - are ones we are 
-        really interested in. because they're auto harvested
-
-  -------
-  
-    - ok there's an issue, that a fork block spends txs, then another
-    block tries to do the same.
-    - we have to pick a path through the blocks.
-  
-
-*)
+  x >>= fun x ->
+    if input.previous = coinbase then 
+      return x
+    else
+      let key = (input.index,input.previous) in
+      match SS.mem key x with
+        | true -> return (SS.remove key x ) 
+        | false -> raise ( Failure "ughh here" )
 
 
 let process_tx x (hash,tx) =
-(*
-  (* these are reversed, - should do inputs then outputs *)
-    let x = L.fold_left process_input x tx.inputs in
-    let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-    L.fold_left process_output x m  
-*)  
-    x >>= fun x -> 
-        L.fold_left process_input (return x) tx.inputs 
-    >>= fun x -> 
-        let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-        (L.fold_left process_output (return x) m ) 
+  x >>= fun x -> 
+      L.fold_left process_input (return x) tx.inputs 
+  >>= fun x -> 
+      let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
+      (L.fold_left process_output (return x) m ) 
 
-
-
-(*
-  log @@ M.hex_of_string hash
-  (* we should probably sequence, not parallelise this *)
-  (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
-  (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
-  >> sequencei process_output (return ()) tx.outputs
-*)
-   
-
-(* issue passing a structure through a series of functions i
-  use a module?
-  everything is a fold 
-*)
 
 let process_block f payload x =
-    (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
-    (* decode tx's and get tx hash *)
-    let pos = 80 in
-    let pos, tx_count = M.decodeVarInt payload pos in
-    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    let txs = L.map (fun tx ->
-      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
-      in hash, tx
-    ) txs
-    in
-    (* ok, we're folding each tx... *)
-    (L.fold_left f (return x) txs)
+  (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
+  (* decode tx's and get tx hash *)
+  let pos = 80 in
+  let pos, tx_count = M.decodeVarInt payload pos in
+  let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+  let txs = L.map (fun tx ->
+    let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
+    in hash, tx
+  ) txs
+  in
+  (* ok, we're folding each tx... *)
+  (L.fold_left f (return x) txs)
 
 (*
     sequence (fun (hash,tx) -> process_tx hash tx) (return ()) txs
@@ -249,3 +187,64 @@ let process_file () =
 
 let () = Lwt_main.run (process_file ())
 
+
+(* 
+
+  - ok, we've got the utxo set being calculated. but what about 
+  1. extract the addresses 
+  2. look them up.
+
+  can return the list of address -> tx 
+    use
+        tx -> address - and use the existing struccture
+            then only remove if not also found..
+
+  - it doesn seem to slow more than would expect 
+  - think the int should be first
+
+    PROBLEM 
+        tx's that are spent in same block - are ones we are 
+        really interested in. because they're auto harvested
+
+  -------
+  
+    - ok there's an issue, that a fork block spends txs, then another
+    block tries to do the same.
+    - we have to pick a path through the blocks.
+  
+
+*)
+(*
+let process_output index output =
+  log @@  string_of_int index ^ " " ^  string_of_int (Int64.to_int output.value ) 
+  >> log @@ "\n  script: " ^ (output.script |> decode_script |> M.format_script ) 
+
+
+
+let sequence f initial lst  =
+  L.fold_left (fun acc x -> acc >> f x) initial lst
+
+let sequencei f initial lst  =
+  let ret,_ = L.fold_left (fun (acc,i) x -> (acc >> f i x, succ i)) (initial,0) lst in
+  ret
+*)
+(*
+  (* these are reversed, - should do inputs then outputs *)
+    let x = L.fold_left process_input x tx.inputs in
+    let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
+    L.fold_left process_output x m  
+*)
+(*
+  log @@ M.hex_of_string hash
+  (* we should probably sequence, not parallelise this *)
+  (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
+  (* >>  Lwt.join ( L.mapi process_output tx.outputs ) *)
+  >> sequencei process_output (return ()) tx.outputs
+*)
+   
+
+(* issue passing a structure through a series of functions i
+  use a module?
+  everything is a fold 
+*)
+ 
