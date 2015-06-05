@@ -111,8 +111,11 @@ module SS = Map.Make(struct type t = int * string let compare = compare end)
 let coinbase = M.zeros 32 
  
 
-let process_output x (i,output,hash)
+let process_output x (i,output,hash) =
+    x
+(*
     = SS.add (i,hash) "u" x 
+*)
 
 let process_input x input =
   if input.previous = coinbase then 
@@ -120,7 +123,7 @@ let process_input x input =
   else
     let key = (input.index,input.previous) in
     match SS.mem key x with
-      | true -> SS.remove key x  
+      | true -> (SS.remove key x ) 
       | false -> raise ( Failure "ughh here" )
 
 (* 
@@ -161,7 +164,7 @@ let process_tx x (hash,tx) =
     x >>= fun x -> 
         let x = L.fold_left process_input x tx.inputs in
         let m = L.mapi (fun i output -> (i,output,hash)) tx.outputs in     
-        return (L.fold_left process_output x m ) 
+        (L.fold_left process_output (return x) m ) 
 
 
 
