@@ -89,7 +89,7 @@ let process_output x (i,output,hash) =
         log @@ "error " ^ msg 
     )
     >>
-      return ( TXOMap.add (i,hash) "u" x ) 
+      return { unspent = TXOMap.add (i,hash) "u" x.unspent }
 
 
   
@@ -105,7 +105,7 @@ let process_input x input =
       return x
     else
       let key = (input.index,input.previous) in
-      match TXOMap.mem key x with
+      match TXOMap.mem key x.unspent with
         | true -> return x (* (TXOMap.remove key x ) *)
         | false -> raise ( Failure "ughh here" )
 
@@ -163,11 +163,11 @@ let process_file () =
       log "scanning blocks..."
     >>
       let process_block = process_block process_tx in
-      let x = TXOMap.empty in
+      let x = { unspent = TXOMap.empty } in
       process_blocks process_block fd (return x)
     >>= fun x ->
       Lwt_unix.close fd
-      >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x) )
+      >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x.unspent) )
 
 
 
