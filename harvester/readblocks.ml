@@ -10,7 +10,7 @@ module L = List
 module S = String
 open M
 
-let log = Lwt_io.write_line Lwt_io.stdout
+
 
 (*
     - we need leveldb / io to check for entries.
@@ -30,6 +30,13 @@ let log = Lwt_io.write_line Lwt_io.stdout
 *)
 module TXOMap = Map.Make(struct type t = int * string let compare = compare end)
 
+type mytype =
+{
+  unspent : string TXOMap.t ;
+} 
+
+
+let log = Lwt_io.write_line Lwt_io.stdout
 
 (* note we could even store block hash if we wanted
 
@@ -48,8 +55,10 @@ module TXOMap = Map.Make(struct type t = int * string let compare = compare end)
     txhash / index -> s or u
 
   what about amounts?
-
     block <- output <- address
+  
+  - ok, we want to return 0w
+  - hmmmmm we don't actually need to pass the mydb through the fold...
 *)
 
 let coinbase = M.zeros 32
