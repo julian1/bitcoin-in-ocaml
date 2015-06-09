@@ -59,6 +59,10 @@ let log = Lwt_io.write_line Lwt_io.stdout
   
   - ok, we want to return 0w
   - hmmmmm we don't actually need to pass the mydb through the fold...
+---------
+    
+  - OK, all we have to do is change the db, from address to hash160. 
+  - and open, and look values up
 *)
 
 let coinbase = M.zeros 32

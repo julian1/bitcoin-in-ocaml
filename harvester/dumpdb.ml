@@ -21,21 +21,18 @@ let log = Lwt_io.write_line Lwt_io.stdout
 
 
 let rec loop i = 
-	Db.valid i 
-	>>= function
-    | true -> (
+  Db.valid i >>= function
+    | true -> ( 
       Db.get_key i 
-      >>= fun key -> log key
+      >>= fun key -> Db.get_value i 
+      >>= fun value -> log @@ key ^ " " ^ value
       >> Db.next i
       >> loop i
     )
     | _ -> return ()
 
-
-let () = Lwt_main.run
-(
-  Lwt.catch
-  (
+let () = Lwt_main.run (
+  Lwt.catch (
   fun () ->
     Db.open_db "myhashes"
     >>= fun db -> Db.make db  
@@ -45,5 +42,4 @@ let () = Lwt_main.run
   (fun exn ->
     let s = Printexc.to_string exn ^ "\n" ^ (Printexc.get_backtrace ()) in
     log @@ "got exception " ^ s
-  )
-)
+  ))
