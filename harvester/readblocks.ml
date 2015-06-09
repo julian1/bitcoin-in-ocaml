@@ -57,31 +57,33 @@ let coinbase = M.zeros 32
 
 let process_output x (i,output,hash) =
   x >>= fun x ->
-    let script = decode_script output.script
-    in log @@ "output " ^ (M.format_script script)
+    let script = decode_script output.script in
+    let u = match script with 
+      (* pay to pubkey *)
+      | Bytes s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160) 
+      (* pay to pubkey hash*)
+      | OP_DUP :: OP_HASH160 :: Bytes s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> Some s 
+      (* pay to script - 3 *)
+      | OP_HASH160 :: Bytes s :: OP_EQUAL :: [] -> Some s 
+      (* null data *)
+      (* | OP_RETURN :: Bytes s :: [] -> None *)
+      | _ -> None 
+    in (
+    match u with 
+      | Some hash160 -> return ()
+      | None -> 
+        let msg = 
+          "tx " ^ M.hex_of_string hash 
+          ^ " i " ^ string_of_int i 
+          ^ " value " ^ string_of_float ((Int64.to_float output.value ) /. 100000000.)
+          ^ " " ^ M.format_script script in
+        log @@ "error " ^ msg 
+    )
     >>
-    (* we don't have to decode the script type just the length - another fold 
-      ok, we want hash 160,,,
-        how do we output the value....
-    *)
-(*
-    let u = L.fold_left (fun acc e ->
-      match e with
-        Bytes s when S.length s = 40 -> acc 
-        (* Bytes s -> s :: acc *)
-        | _ -> acc
-      ) [] script
-    in
-*)
-    let hash160 = match script with 
-      | Bytes s :: OP_CHECKSIG :: [] -> s |> M.sha256 |> M.ripemd160 
-      | OP_DUP :: OP_HASH160 :: Bytes s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> s
-      | _  -> raise ( Failure (M.format_script script )  )
-    in
+      return ( TXOMap.add (i,hash) "u" x ) 
 
-    log @@ "hash160 is " ^ M.hex_of_string hash160
-    >>
-    return ( TXOMap.add (i,hash) "u" x )
+
+  
 
 
 let process_input x input =
@@ -147,7 +149,7 @@ let process_blocks f fd x =
 
 
 let process_file () =
-    Lwt_unix.openfile "blocks.dat" [O_RDONLY] 0
+    Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
       log "scanning blocks..."
     >>
