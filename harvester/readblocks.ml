@@ -174,7 +174,12 @@ let scan_blocks fd =
       | Some s -> ( 
         Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
         let _, header = M.decodeHeader s 0 in
-        (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+        log @@ header.command ^ " " ^ string_of_int header.length >>  
+
+
+        Lwt_unix.lseek fd header.length SEEK_CUR 
+        >>
+(*
         Misc.read_bytes fd header.length 
         >>= fun u -> match u with 
           | None -> return ()
@@ -182,15 +187,24 @@ let scan_blocks fd =
             (*
             f payload pos count 
             >> 
-            *)
+            *) *)
             loop_blocks () 
         )
-  in loop_blocks 
+  in loop_blocks () 
+
+
+let process_file2 () =
+    Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
+    >>= fun fd -> 
+      log "scanning blocks..."
+    >> scan_blocks fd
+    >> log "finished " 
 
 
 
 
-let () = Lwt_main.run (process_file ())
+
+let () = Lwt_main.run (process_file2 ())
 
 
 (* note we could even store block hash if we wanted
