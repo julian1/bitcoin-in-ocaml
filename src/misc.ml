@@ -104,6 +104,7 @@ type my_app_state =
   connections : connection list ;
 
   (* tree structure  - change name tree *)
+  (* change name my_headers *)
   heads : my_head SS.t ;
 
   (* set when inv request made to peer *)
