@@ -187,7 +187,7 @@ type my_header =
 *)
 
 let scan_blocks fd =
-  let rec loop_blocks heads =
+  let rec loop_blocks heads count =
     Lwt_unix.lseek fd 0 SEEK_CUR 
     >>= fun pos -> Misc.read_bytes fd (24 + 80) 
     >>= function
@@ -195,8 +195,8 @@ let scan_blocks fd =
         let _, header = M.decodeHeader s 0 in
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
 
-        let heads = SS.add block_hash { previous = "blah"; height = 0; } heads in
-        let count = SS.cardinal heads in
+(*        let heads = SS.add block_hash { previous = "blah"; height = 0; } heads in 
+        let count = SS.cardinal heads in*)
         (
         match count mod 1000 with
           0 -> 
@@ -205,13 +205,13 @@ let scan_blocks fd =
           | _ -> return ()
         ) 
         >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
-        >> loop_blocks heads 
+        >> loop_blocks heads (succ count) 
       )
       | _ -> return ()
 
   in
   let heads : my_header SS.t = SS.empty  
-  in loop_blocks heads
+  in loop_blocks heads 0
 
 
 let process_file2 () =
