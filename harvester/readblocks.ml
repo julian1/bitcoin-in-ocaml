@@ -83,7 +83,7 @@ let process_output x (i,output,hash) =
     >>
       return { x with unspent = TXOMap.add (i,hash) "u" x.unspent }
 
-
+(* ok, if we scan and index the blocks, then we can select a block for testing *) 
   
 
 
@@ -164,6 +164,29 @@ let process_file () =
     >>= fun x ->
       Lwt_unix.close fd
       >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x.unspent) )
+
+
+let scan_blocks fd =
+  let rec loop_blocks () =
+    Misc.read_bytes fd 24
+    >>= fun x -> match x with 
+      | None -> return ()
+      | Some s -> ( 
+        Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->  
+        let _, header = M.decodeHeader s 0 in
+        (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
+        Misc.read_bytes fd header.length 
+        >>= fun u -> match u with 
+          | None -> return ()
+          | Some payload -> 
+            (*
+            f payload pos count 
+            >> 
+            *)
+            loop_blocks () 
+        )
+  in loop_blocks 
+
 
 
 
