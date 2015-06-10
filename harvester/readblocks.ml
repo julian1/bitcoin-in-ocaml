@@ -180,6 +180,7 @@ type my_header =
 {
     previous : string;
     height : int;
+    pos : int; 
 }
 
 (* so it's not fast 
@@ -207,8 +208,8 @@ let scan_blocks fd =
           else
             1     (* we have a bug, where we never download the first block *)
         in
-        let heads = SS.add block_hash { previous = block_header.previous; height = height; } heads in 
-        (* let count = SS.cardinal heads in*)
+        let heads = SS.add block_hash { previous = block_header.previous; 
+          height = height; pos = pos + 24} heads in 
         (
         match count mod 1000 with
           0 -> 
