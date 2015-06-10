@@ -165,24 +165,26 @@ let process_file () =
       Lwt_unix.close fd
       >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x.unspent) )
 
+(*
+  If we're going to build up a datastructure , then can test that for count
+*)
 
 let scan_blocks fd =
   let rec loop_blocks () =
-    Misc.read_bytes fd (80 + 24) 
-    >>= fun x -> match x with 
-      | None -> return ()
-      | Some s -> ( 
-        (* Lwt_unix.lseek fd 0 SEEK_CUR >>= fun pos ->   *)
+    Lwt_unix.lseek fd 0 SEEK_CUR 
+    >>= fun pos -> Misc.read_bytes fd (24 + 80) 
+    >>= function
+      | Some s when S.length s = 24 + 80 -> ( 
         let _, header = M.decodeHeader s 0 in
+        let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
 
-        let block_hash = M.strsub s 24 (80 ) |> M.sha256d |> M.strrev in
- 
         log @@ header.command ^ " " ^ string_of_int header.length ^ " " ^ M.hex_of_string block_hash 
-          ^ " " ^ (s |> S.length |> string_of_int) 
-
-        >> Lwt_unix.lseek fd (header.length - 80 ) SEEK_CUR 
+          ^ " " ^ (string_of_int pos) 
+        >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
         >> loop_blocks () 
       )
+      | _ -> return ()
+
   in loop_blocks () 
 
 
