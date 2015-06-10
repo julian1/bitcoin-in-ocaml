@@ -181,7 +181,10 @@ type my_header =
     height : int;
 }
 
-
+(* so it's not fast 
+  when we used to be able to scan over it very quickly...
+  - is it the datastructure or is it the io? 
+*)
 
 let scan_blocks fd =
   let rec loop_blocks heads =
@@ -193,11 +196,12 @@ let scan_blocks fd =
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
 
         let heads = SS.add block_hash { previous = "blah"; height = 0; } heads in
+        let count = SS.cardinal heads in
         (
-        match SS.cardinal heads mod 1000 with
+        match count mod 1000 with
           0 -> 
           log @@ header.command ^ " " ^ string_of_int header.length ^ " " ^ M.hex_of_string block_hash 
-            ^ " " ^ (string_of_int pos) ^ " " ^ (string_of_int (SS.cardinal heads)) 
+            ^ " " ^ (string_of_int pos) ^ " " ^ (string_of_int count) 
           | _ -> return ()
         ) 
         >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
