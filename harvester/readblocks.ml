@@ -172,8 +172,9 @@ let process_file () =
 
 (* module SS = Map.Make(struct type t = string let compare = compare end) *)
 module SS = Map.Make( String ) 
-
+(*
 module SSS = Set.Make(String);;
+*)
 
 type my_header =
 {
@@ -197,14 +198,22 @@ let scan_blocks fd =
       | Some s -> ( 
         let _, header = M.decodeHeader s 0 in
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
-
-        let heads = SS.add block_hash { previous = "blah"; height = 0; } heads in 
-(*        let count = SS.cardinal heads in*)
+        let _, block_header = decodeBlock s 24 in 
+	
+        (* can we factor this - out of the io? *)
+        let height = 
+          if (SS.mem block_header.previous heads) then 
+            (SS.find block_header.previous heads ).height + 1 
+          else
+            1     (* we have a bug, where we never download the first block *)
+        in
+        let heads = SS.add block_hash { previous = block_header.previous; height = height; } heads in 
+        (* let count = SS.cardinal heads in*)
         (
         match count mod 1000 with
           0 -> 
           log @@ header.command ^ " " ^ string_of_int header.length ^ " " ^ M.hex_of_string block_hash 
-            ^ " " ^ (string_of_int pos) ^ " " ^ (string_of_int count) 
+            ^ " " ^ (string_of_int pos) ^ " " ^ (string_of_int count) ^ " height " ^ string_of_int height 
           | _ -> return ()
         ) 
         >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
