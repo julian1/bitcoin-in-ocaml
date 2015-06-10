@@ -169,23 +169,39 @@ let process_file () =
   If we're going to build up a datastructure , then can test that for count
 *)
 
+
+(* module SS = Map.Make(struct type t = string let compare = compare end) *)
+module SS = Map.Make( String ) 
+
+module SSS = Set.Make(String);;
+
+type my_header =
+{
+    previous : string;
+    height : int;
+}
+
+
+
 let scan_blocks fd =
-  let rec loop_blocks () =
+  let rec loop_blocks heads =
     Lwt_unix.lseek fd 0 SEEK_CUR 
     >>= fun pos -> Misc.read_bytes fd (24 + 80) 
     >>= function
-      | Some s when S.length s = 24 + 80 -> ( 
+      | Some s -> ( 
         let _, header = M.decodeHeader s 0 in
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
 
         log @@ header.command ^ " " ^ string_of_int header.length ^ " " ^ M.hex_of_string block_hash 
           ^ " " ^ (string_of_int pos) 
         >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
-        >> loop_blocks () 
+        >> loop_blocks heads 
       )
       | _ -> return ()
 
-  in loop_blocks () 
+  in
+  let heads : my_header SS.t = SS.empty  
+  in loop_blocks heads
 
 
 let process_file2 () =
