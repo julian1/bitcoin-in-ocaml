@@ -198,7 +198,10 @@ type my_header =
 *)
 
 (* can we factor this - out of the io? - rather than calculate values, we
-should have functions*)
+should have functions
+  really not sure that we need height information. in can be calculated at any time,
+  which makes it dynamic...
+*)
 let lookup_height hash heads =
   match SS.mem hash heads with
     | true -> (SS.find hash heads).height
