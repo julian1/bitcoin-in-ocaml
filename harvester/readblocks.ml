@@ -21,7 +21,7 @@ open M
 *)
 
 (*
-  - change db to do hash160 
+  - change db to do hash160
   - then lookup
 *)
 
@@ -36,7 +36,7 @@ type mytype =
   unspent : string TXOMap.t ;
   db :  Db.t ;  (* db of hashes, maybe change name *)
 
-} 
+}
 
 
 let log = Lwt_io.write_line Lwt_io.stdout
@@ -49,42 +49,42 @@ let coinbase = M.zeros 32
 let process_output x (i,output,hash) =
   x >>= fun x ->
     let script = decode_script output.script in
-    let u = match script with 
+    let u = match script with
       (* do we need to reverse the 160 or something? *)
       (* pay to pubkey *)
-      | Bytes s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160) 
+      | Bytes s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
       (* pay to pubkey hash*)
-      | OP_DUP :: OP_HASH160 :: Bytes s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> Some s 
+      | OP_DUP :: OP_HASH160 :: Bytes s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> Some s
       (* pay to script - 3 *)
-      | OP_HASH160 :: Bytes s :: OP_EQUAL :: [] -> Some s 
+      | OP_HASH160 :: Bytes s :: OP_EQUAL :: [] -> Some s
       (* null data *)
       (* | OP_RETURN :: Bytes s :: [] -> None *)
-      | _ -> None 
+      | _ -> None
     in (
-    match u with 
-      | Some hash160 -> 
+    match u with
+      | Some hash160 ->
         begin
           Db.get x.db hash160
-          >>= function 
-            | Some found -> 
-              log @@ "found hash160 " ^ M.hex_of_string hash160 ^ " " ^ found 
-            | _ -> 
+          >>= function
+            | Some found ->
+              log @@ "found hash160 " ^ M.hex_of_string hash160 ^ " " ^ found
+            | _ ->
               (*log @@ "not found "
               >>*) return ()
         end
-      | None -> 
-        let msg = 
-          "tx " ^ M.hex_of_string hash 
-          ^ " i " ^ string_of_int i 
+      | None ->
+        let msg =
+          "tx " ^ M.hex_of_string hash
+          ^ " i " ^ string_of_int i
           ^ " value " ^ string_of_float ((Int64.to_float output.value ) /. 100000000.)
           ^ " " ^ M.format_script script in
-        log @@ "error " ^ msg 
+        log @@ "error " ^ msg
     )
     >>
       return { x with unspent = TXOMap.add (i,hash) "u" x.unspent }
 
-(* ok, if we scan and index the blocks, then we can select a block for testing *) 
-  
+(* ok, if we scan and index the blocks, then we can select a block for testing *)
+
 
 
 let process_input x input =
@@ -171,7 +171,7 @@ let process_file () =
 
 
 (* module SS = Map.Make(struct type t = string let compare = compare end) *)
-module SS = Map.Make( String ) 
+module SS = Map.Make( String )
 (*
 module SSS = Set.Make(String);;
 *)
@@ -180,26 +180,26 @@ type my_header =
 {
     previous : string;
     height : int;
-    pos : int; 
+    pos : int;
 }
 
-(* so it's not fast 
+(* so it's not fast
   when we used to be able to scan over it very quickly...
-  - it is the datastructure not the io... 
+  - it is the datastructure not the io...
   - takes 1minute to loop the blocks...
-  
+
   - no it's just the fricken cardinal/ordinal which is not efficient
   - change name to index blocks?
 
   - IMPORTANT - it's arguable height should be computed dynamically ...
               and only when required. that would enable out-of-order blocks
               to be calculated.
-  - 
+  -
 *)
 
 (* can we factor this - out of the io? - rather than calculate values, we
 should have functions*)
-let lookup_height hash heads =  
+let lookup_height hash heads =
   match SS.mem hash heads with
     | true -> (SS.find hash heads).height
     | false -> 0
@@ -207,41 +207,41 @@ let lookup_height hash heads =
 
 let scan_blocks fd =
   let rec loop_blocks heads count =
-    Lwt_unix.lseek fd 0 SEEK_CUR 
-    >>= fun pos -> Misc.read_bytes fd (24 + 80) 
+    Lwt_unix.lseek fd 0 SEEK_CUR
+    >>= fun pos -> Misc.read_bytes fd (24 + 80)
     >>= function
-      | Some s -> ( 
-        let _, header = M.decodeHeader s 0 in
+      | Some s -> (
+        let _, msg_header = M.decodeHeader s 0 in
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
-        let _, block_header = decodeBlock s 24 in 
+        let _, block_header = decodeBlock s 24 in
         let previous = block_header.previous in
-        let height = lookup_height previous heads + 1 in 
-        let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in 
+        let height = lookup_height previous heads + 1 in
+        let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in
         (
         match count mod 1000 with
-          0 -> log @@ S.concat "" [ 
-            header.command; " "; string_of_int header.length; " "; 
-            M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count; 
-            " height ";  string_of_int height 
+          0 -> log @@ S.concat "" [
+            msg_header.command; " "; string_of_int msg_header.length; " ";
+            M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count;
+            " height ";  string_of_int height
           ]
           | _ -> return ()
-        ) 
-        >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
-        >> loop_blocks heads (succ count) 
+        )
+        >> Lwt_unix.lseek fd (msg_header.length - 80) SEEK_CUR
+        >> loop_blocks heads (succ count)
       )
       | _ -> return ()
 
   in
-  let heads = SS.empty  
+  let heads = SS.empty
   in loop_blocks heads 0
 
 
 let process_file2 () =
     Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
-    >>= fun fd -> 
+    >>= fun fd ->
       log "scanning blocks..."
     >> scan_blocks fd
-    >> log "finished " 
+    >> log "finished "
 
 
 
@@ -268,12 +268,12 @@ let () = Lwt_main.run (process_file2 ())
 
   what about amounts?
     block <- output <- address
-  
+
   - ok, we want to return 0w
   - hmmmmm we don't actually need to pass the mydb through the fold...
 ---------
-    
-  - OK, all we have to do is change the db, from address to hash160. 
+
+  - OK, all we have to do is change the db, from address to hash160.
   - and open, and look values up
 *)
 
@@ -383,17 +383,17 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
 
 (*    log @@ "output " ^ (M.format_script script)
     >> *)
-    (* we don't have to decode the script type just the length - another fold 
+    (* we don't have to decode the script type just the length - another fold
       ok, we want hash 160,,, how do we output the value....  *)
 (*
     let u = L.fold_left (fun acc e ->
       match e with
-        Bytes s when S.length s = 40 -> acc 
+        Bytes s when S.length s = 40 -> acc
         (* Bytes s -> s :: acc *)
         | _ -> acc
       ) [] script
     in
-    Either Good 
+    Either Good
     No just return Some or None
 *)
 
