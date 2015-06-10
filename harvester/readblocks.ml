@@ -189,7 +189,21 @@ type my_header =
   - takes 1minute to loop the blocks...
   
   - no it's just the fricken cardinal/ordinal which is not efficient
+  - change name to index blocks?
+
+  - IMPORTANT - it's arguable height should be computed dynamically ...
+              and only when required. that would enable out-of-order blocks
+              to be calculated.
+  - 
 *)
+
+(* can we factor this - out of the io? - rather than calculate values, we
+should have functions*)
+let lookup_height hash heads =  
+  match SS.mem hash heads with
+    | true -> (SS.find hash heads).height
+    | false -> 0
+
 
 let scan_blocks fd =
   let rec loop_blocks heads count =
@@ -200,21 +214,16 @@ let scan_blocks fd =
         let _, header = M.decodeHeader s 0 in
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
         let _, block_header = decodeBlock s 24 in 
-	
-        (* can we factor this - out of the io? *)
-        let height = 
-          if (SS.mem block_header.previous heads) then 
-            (SS.find block_header.previous heads ).height + 1 
-          else
-            1     (* we have a bug, where we never download the first block *)
-        in
-        let heads = SS.add block_hash { previous = block_header.previous; 
-          height = height; pos = pos + 24} heads in 
+        let previous = block_header.previous in
+        let height = lookup_height previous heads + 1 in 
+        let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in 
         (
         match count mod 1000 with
-          0 -> 
-          log @@ header.command ^ " " ^ string_of_int header.length ^ " " ^ M.hex_of_string block_hash 
-            ^ " " ^ (string_of_int pos) ^ " " ^ (string_of_int count) ^ " height " ^ string_of_int height 
+          0 -> log @@ S.concat "" [ 
+            header.command; " "; string_of_int header.length; " "; 
+            M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count; 
+            " height ";  string_of_int height 
+          ]
           | _ -> return ()
         ) 
         >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
@@ -223,7 +232,7 @@ let scan_blocks fd =
       | _ -> return ()
 
   in
-  let heads : my_header SS.t = SS.empty  
+  let heads = SS.empty  
   in loop_blocks heads 0
 
 
