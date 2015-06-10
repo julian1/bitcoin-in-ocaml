@@ -27,8 +27,9 @@ let addr_from_string s =
           pubkey
           |> M.sha256
           |> M.ripemd160
-          |> Address.btc_address_of_hash160
+          (* |> Address.btc_address_of_hash160 *)
       in
+      (* must do compressed as well!!!! *)
       ( addr_from_pubkey pubkey )
     | None -> "none"
 

@@ -25,7 +25,7 @@ let rec loop i =
     | true -> ( 
       Db.get_key i 
       >>= fun key -> Db.get_value i 
-      >>= fun value -> log @@ key ^ " " ^ value
+      >>= fun value -> log @@ M.hex_of_string key ^ " " ^ value
       >> Db.next i
       >> loop i
     )

@@ -13,9 +13,6 @@ open M
 
 
 (*
-    - we need leveldb / io to check for entries.
-    - add / remove entries.
-    easy.
     - no just track unspent, and keys separately.
     - then we output those with keys only, and mark whether unspent.
     - ok, but it means we need to carry io return type...  3o
@@ -23,6 +20,10 @@ open M
     - or if we pass a structure, it could contain
 *)
 
+(*
+  - change db to do hash160 
+  - then lookup
+*)
 
 (*
     fold_lefti can be done with mapi and then feeding into fold...
@@ -33,37 +34,14 @@ module TXOMap = Map.Make(struct type t = int * string let compare = compare end)
 type mytype =
 {
   unspent : string TXOMap.t ;
+  db :  Db.t ;  (* db of hashes, maybe change name *)
+
 } 
 
 
 let log = Lwt_io.write_line Lwt_io.stdout
 
-(* note we could even store block hash if we wanted
 
-  - basically nested folds
-  - it's better to pass x as monadic argument since allows folds without complication.
-  - x can be any structure that we want to record stuff - a record, or () if nothing.
-      or a db, or combination.
-  - eg. if we want to keep a block count it should be on that structure
-
-  - this could be made more generalizable, but not sure it would make it code simpler and easier.
-    just repeat for different context.
-    - may even want to remove the partial application functions - and call things directly.
-  --------
-
-  so how do we do this?
-    txhash / index -> s or u
-
-  what about amounts?
-    block <- output <- address
-  
-  - ok, we want to return 0w
-  - hmmmmm we don't actually need to pass the mydb through the fold...
----------
-    
-  - OK, all we have to do is change the db, from address to hash160. 
-  - and open, and look values up
-*)
 
 let coinbase = M.zeros 32
 
@@ -72,6 +50,7 @@ let process_output x (i,output,hash) =
   x >>= fun x ->
     let script = decode_script output.script in
     let u = match script with 
+      (* do we need to reverse the 160 or something? *)
       (* pay to pubkey *)
       | Bytes s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160) 
       (* pay to pubkey hash*)
@@ -83,7 +62,16 @@ let process_output x (i,output,hash) =
       | _ -> None 
     in (
     match u with 
-      | Some hash160 -> return ()
+      | Some hash160 -> 
+        begin
+          Db.get x.db hash160
+          >>= function 
+            | Some found -> 
+              log @@ "found hash160 " ^ M.hex_of_string hash160 ^ " " ^ found 
+            | _ -> 
+              (*log @@ "not found "
+              >>*) return ()
+        end
       | None -> 
         let msg = 
           "tx " ^ M.hex_of_string hash 
@@ -93,7 +81,7 @@ let process_output x (i,output,hash) =
         log @@ "error " ^ msg 
     )
     >>
-      return { unspent = TXOMap.add (i,hash) "u" x.unspent }
+      return { x with unspent = TXOMap.add (i,hash) "u" x.unspent }
 
 
   
@@ -164,10 +152,14 @@ let process_blocks f fd x =
 let process_file () =
     Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
-      log "scanning blocks..."
+      log "opened blocks..."
+    >>
+      Db.open_db "myhashes"
+    >>= fun db ->
+      log "opened myhashes db"
     >>
       let process_block = process_block process_tx in
-      let x = { unspent = TXOMap.empty } in
+      let x = { unspent = TXOMap.empty; db = db; } in
       process_blocks process_block fd (return x)
     >>= fun x ->
       Lwt_unix.close fd
@@ -178,7 +170,32 @@ let process_file () =
 let () = Lwt_main.run (process_file ())
 
 
+(* note we could even store block hash if we wanted
 
+  - basically nested folds
+  - it's better to pass x as monadic argument since allows folds without complication.
+  - x can be any structure that we want to record stuff - a record, or () if nothing.
+      or a db, or combination.
+  - eg. if we want to keep a block count it should be on that structure
+
+  - this could be made more generalizable, but not sure it would make it code simpler and easier.
+    just repeat for different context.
+    - may even want to remove the partial application functions - and call things directly.
+  --------
+
+  so how do we do this?
+    txhash / index -> s or u
+
+  what about amounts?
+    block <- output <- address
+  
+  - ok, we want to return 0w
+  - hmmmmm we don't actually need to pass the mydb through the fold...
+---------
+    
+  - OK, all we have to do is change the db, from address to hash160. 
+  - and open, and look values up
+*)
 
 
 
@@ -284,4 +301,19 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
 
 (* this thing doesn't use the db, so it should be configured ...  all this stuff is still mucky *)
 
+(*    log @@ "output " ^ (M.format_script script)
+    >> *)
+    (* we don't have to decode the script type just the length - another fold 
+      ok, we want hash 160,,, how do we output the value....  *)
+(*
+    let u = L.fold_left (fun acc e ->
+      match e with
+        Bytes s when S.length s = 40 -> acc 
+        (* Bytes s -> s :: acc *)
+        | _ -> acc
+      ) [] script
+    in
+    Either Good 
+    No just return Some or None
+*)
 
