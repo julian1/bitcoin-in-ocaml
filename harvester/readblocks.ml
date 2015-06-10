@@ -192,8 +192,14 @@ let scan_blocks fd =
         let _, header = M.decodeHeader s 0 in
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
 
-        log @@ header.command ^ " " ^ string_of_int header.length ^ " " ^ M.hex_of_string block_hash 
-          ^ " " ^ (string_of_int pos) 
+        let heads = SS.add block_hash { previous = "blah"; height = 0; } heads in
+        (
+        match SS.cardinal heads mod 1000 with
+          0 -> 
+          log @@ header.command ^ " " ^ string_of_int header.length ^ " " ^ M.hex_of_string block_hash 
+            ^ " " ^ (string_of_int pos) ^ " " ^ (string_of_int (SS.cardinal heads)) 
+          | _ -> return ()
+        ) 
         >> Lwt_unix.lseek fd (header.length - 80) SEEK_CUR 
         >> loop_blocks heads 
       )
