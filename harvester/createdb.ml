@@ -24,10 +24,9 @@ let hash160_from_privkey privkey =
     | Some pubkey ->
       let uncompressed_pubkey = "\x04" ^ pubkey in
       let compressed_pubkey =   Microecc.compress pubkey in
-      let addr_from_pubkey key = key |> M.sha256 |> M.ripemd160 |> Address.btc_address_of_hash160 
+      let addr_from_pubkey key = key |> M.sha256 |> M.ripemd160 (*|> Address.btc_address_of_hash160*)
       in
       (* *)
-      (* must do compressed as well!!!! *)
       [ addr_from_pubkey uncompressed_pubkey ; addr_from_pubkey compressed_pubkey ] 
     | None -> []
 
@@ -35,11 +34,12 @@ let hash160_from_privkey privkey =
 let process_line db line =
   let line = String.trim line in
   let addrs = hash160_from_privkey line in
+  List.fold_left (fun acc e -> Db.put db e line) (return ()) addrs  
 
-  (* List.fold_left (fun acc e -> acc >> Db.put db e line) (return ()) addrs  *)
-  log @@ "line " ^ line 
+(*  log @@ "line " ^ line 
   >> 
-  List.fold_left (fun acc e -> log  e ) (return ()) addrs 
+  List.fold_left (fun acc e -> log @@ M.hex_of_string e ) (return ()) addrs 
+*)
   (* Db.put db addr line *)
 
 (*  log @@ (U.pad line 10) ^ " " ^ (hash160_from_privkey line)  *)
