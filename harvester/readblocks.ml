@@ -183,7 +183,10 @@ type my_header =
 
 (* so it's not fast 
   when we used to be able to scan over it very quickly...
-  - is it the datastructure or is it the io? 
+  - it is the datastructure not the io... 
+  - takes 1minute to loop the blocks...
+  
+  - no it's just the fricken cardinal/ordinal which is not efficient
 *)
 
 let scan_blocks fd =
@@ -195,8 +198,8 @@ let scan_blocks fd =
         let _, header = M.decodeHeader s 0 in
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
 
-(*        let heads = SS.add block_hash { previous = "blah"; height = 0; } heads in 
-        let count = SS.cardinal heads in*)
+        let heads = SS.add block_hash { previous = "blah"; height = 0; } heads in 
+(*        let count = SS.cardinal heads in*)
         (
         match count mod 1000 with
           0 -> 
