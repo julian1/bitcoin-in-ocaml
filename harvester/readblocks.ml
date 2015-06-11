@@ -129,6 +129,19 @@ let process_block f x payload =
     L.fold_left f (x) txs
 
 
+let read_block fd =
+  Misc.read_bytes fd 24
+  >>= function
+    | None -> raise (Failure "here0")
+    | Some s ->
+      let _, header = M.decodeHeader s 0 in
+      (* should check command is 'block' *)
+      Misc.read_bytes fd header.length
+      >>= function
+        | None -> raise (Failure "here2")
+        | Some payload -> return payload
+
+(*
 let process_blocks f fd x =
 	let rec process_blocks' x =
     x >>= fun x ->
@@ -164,7 +177,7 @@ let process_file () =
     >>= fun x ->
       Lwt_unix.close fd
       >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x.unspent) )
-
+*)
 (*
   If we're going to build up a datastructure , then can test that for count
 *)
@@ -245,7 +258,7 @@ let scan_blocks fd =
         let _, block_header = decodeBlock s 24 in
         let previous = block_header.previous in
         let height = (get_height previous headers)  + 1 in
-        let headers = HM.add block_hash { previous = previous; height = height; pos = pos + 24} headers in
+        let headers = HM.add block_hash { previous = previous; height = height; pos = pos } headers in
         ( match count mod 10000 with
           0 -> log @@ S.concat "" [
             M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count;
@@ -264,15 +277,34 @@ let scan_blocks fd =
 
 (* scan through blocks in the given sequence *)
 let replay_blocks fd seq headers =
-  let rec replay_blocks' seq =
+
+  (* let process_block f x payload = *)
+
+ 
+  let process_block = process_block process_tx in
+
+  let rec replay_blocks' seq x =
     match seq with 
-      | hd :: tl ->  
-        log hd
-        >> replay_blocks' tl
+      | hash :: tl ->  
+          let pos = (HM.find hash headers).pos in
+          (* log @@ M.hex_of_string hash ^ " " ^ string_of_int pos *)
+          Lwt_unix.lseek fd pos SEEK_SET
+          >> read_block fd 
+          >>= fun payload ->
+             process_block (x) payload  
+          >>= fun x ->  
+            replay_blocks' tl (return x)
       | [] ->
-        return ()
+        x 
   in
-  replay_blocks' seq
+
+  Db.open_db "myhashes"
+    >>= fun db ->
+      log "opened myhashes db"
+    >>
+      let x = { unspent = TXOMap.empty; db = db; } in
+ (*     process_blocks process_block fd (return x) *)
+  replay_blocks' seq (return x)
     
  
 
@@ -308,6 +340,7 @@ let process_file2 () =
       log "computed tips work "
     >>
       let seq = get_sequence longest headers in 
+      let seq = L.tl seq in  (* we haven't got the first block *)
 
     replay_blocks fd seq headers 
     >> 
