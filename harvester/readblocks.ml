@@ -102,6 +102,7 @@ let process_input x input =
         | false -> raise ( Failure "ughh here" )
 
 
+(* process tx by processing inputs then outputs *)
 let process_tx x (hash,tx) =
   x >>= fun x ->
     (*log "tx"
@@ -141,46 +142,6 @@ let read_block fd =
         | None -> raise (Failure "here2")
         | Some payload -> return payload
 
-(*
-let process_blocks f fd x =
-	let rec process_blocks' x =
-    x >>= fun x ->
-      Misc.read_bytes fd 24
-      >>= function
-        | None -> return x
-        | Some s ->
-          (* Lwt_unix.lseek fd 0 SEEK_CUR
-          >>= fun pos -> *)
-            let _, header = M.decodeHeader s 0 in
-            (* log @@ header.command ^ " " ^ string_of_int header.length >> *)
-            Misc.read_bytes fd header.length
-          >>= function
-            | None -> return x
-            | Some payload ->
-              f (return x) payload
-              >>= fun x -> process_blocks' (return x)
-  in process_blocks' x
-
-
-let process_file () =
-    Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
-    >>= fun fd ->
-      log "opened blocks..."
-    >>
-      Db.open_db "myhashes"
-    >>= fun db ->
-      log "opened myhashes db"
-    >>
-      let process_block = process_block process_tx in
-      let x = { unspent = TXOMap.empty; db = db; } in
-      process_blocks process_block fd (return x)
-    >>= fun x ->
-      Lwt_unix.close fd
-      >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x.unspent) )
-*)
-(*
-  If we're going to build up a datastructure , then can test that for count
-*)
 
 
 (* module HM = Map.Make(struct type t = string let compare = compare end) *)
@@ -277,10 +238,7 @@ let scan_blocks fd =
 
 (* scan through blocks in the given sequence *)
 let replay_blocks fd seq headers =
-
-  (* let process_block f x payload = *)
-
- 
+  (* should not be here *) 
   let process_block = process_block process_tx in
 
   let rec replay_blocks' seq x =
@@ -294,20 +252,16 @@ let replay_blocks fd seq headers =
              process_block (x) payload  
           >>= fun x ->  
             replay_blocks' tl (return x)
-      | [] ->
-        x 
+      | [] -> x 
   in
-
+  (* should not be here *) 
   Db.open_db "myhashes"
-    >>= fun db ->
-      log "opened myhashes db"
-    >>
-      let x = { unspent = TXOMap.empty; db = db; } in
- (*     process_blocks process_block fd (return x) *)
+  >>= fun db ->
+    log "opened myhashes db"
+  >>
+    let x = { unspent = TXOMap.empty; db = db; } in
   replay_blocks' seq (return x)
     
- 
-
 
 
 let process_file2 () =
@@ -348,9 +302,9 @@ let process_file2 () =
 
 
 
-
-
 let () = Lwt_main.run (process_file2 ())
+
+
 
 
 (* note we could even store block hash if we wanted
@@ -504,6 +458,7 @@ should have functions
   really not sure that we need height information. in can be calculated at any time,
   which makes it dynamic...
 *)
+
 (*
 let get_height hash headers =
   match HM.mem hash headers with
@@ -518,10 +473,7 @@ let get_pow hash headers =
         1 + (get_pow' previous) 
       | false -> 0
   in get_pow' hash
-
-
 *)
-
 
 (*
   ughhh - this is complicated - we basically have to go through the 
@@ -540,11 +492,48 @@ let get_height hash headers =
       | false -> lst
   in 
   get_list hash [] 
-        max height 354567 longest 0000000000000000106904f8bb02831df9c16689f2208a38e1bbdf08811b0fd9
-
+    max height 354567 longest 0000000000000000106904f8bb02831df9c16689f2208a38e1bbdf08811b0fd9
     max height 354323 longest 00000000000000000f054cbca49e12841e73d8c6709b9b5bdfe1883a9255e98f
-
-
 *)
 
+(*
+let process_blocks f fd x =
+	let rec process_blocks' x =
+    x >>= fun x ->
+      Misc.read_bytes fd 24
+      >>= function
+        | None -> return x
+        | Some s ->
+          (* Lwt_unix.lseek fd 0 SEEK_CUR
+          >>= fun pos -> *)
+            let _, header = M.decodeHeader s 0 in
+            (* log @@ header.command ^ " " ^ string_of_int header.length >> *)
+            Misc.read_bytes fd header.length
+          >>= function
+            | None -> return x
+            | Some payload ->
+              f (return x) payload
+              >>= fun x -> process_blocks' (return x)
+  in process_blocks' x
+
+
+let process_file () =
+    Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
+    >>= fun fd ->
+      log "opened blocks..."
+    >>
+      Db.open_db "myhashes"
+    >>= fun db ->
+      log "opened myhashes db"
+    >>
+      let process_block = process_block process_tx in
+      let x = { unspent = TXOMap.empty; db = db; } in
+      process_blocks process_block fd (return x)
+    >>= fun x ->
+      Lwt_unix.close fd
+      >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x.unspent) )
+*)
+(*
+  If we're going to build up a datastructure , then can test that for count
+*)
 
