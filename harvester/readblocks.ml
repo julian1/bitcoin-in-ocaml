@@ -179,7 +179,6 @@ module SSS = Set.Make(String);;
 type my_header =
 {
     previous : string;
-    height : int;
     pos : int;
 }
 
@@ -197,18 +196,8 @@ type my_header =
   -
 *)
 
-(* can we factor this - out of the io? - rather than calculate values, we
-should have functions
-  really not sure that we need height information. in can be calculated at any time,
-  which makes it dynamic...
-*)
-let get_height hash headers =
-  match SS.mem hash headers with
-    | true -> (SS.find hash headers).height
-    | false -> 0
 
-
-let get_tips2 headers = 
+let get_tips headers = 
     (* create set of all previous hashes *)
     let f key header acc = SSS.add header.previous acc in
     let previous = SS.fold f headers SSS.empty in 
@@ -217,15 +206,6 @@ let get_tips2 headers =
     |> SS.bindings
     |> L.rev_map (fun (tip,_) -> tip)
 
-
-let get_pow hash headers =
-  let rec get_pow' hash =
-    match SS.mem hash headers with
-      | true -> 
-        let previous = (SS.find hash headers).previous in
-        1 + (get_pow' previous) 
-      | false -> 0
-  in get_pow' hash
 
 
 (* - ok, we kind of want to return the list 
@@ -260,14 +240,10 @@ let scan_blocks fd =
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
         let _, block_header = decodeBlock s 24 in
         let previous = block_header.previous in
-        let height = get_height previous heads + 1 in
-        let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in
+        let heads = SS.add block_hash { previous = previous; pos = pos + 24} heads in
         ( match count mod 10000 with
-          0 -> 
-            log @@ S.concat "" [
-            msg_header.command; " "; string_of_int msg_header.length; " ";
+          0 -> log @@ S.concat "" [
             M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count;
-            " height ";  string_of_int height
           ]
           | _ -> return ()
         )
@@ -289,7 +265,7 @@ let process_file2 () =
     >>= fun headers -> 
       log "computing tips"
     >> 
-      let tips = get_tips2 headers in 
+      let tips = get_tips headers in 
       log @@ "tips " ^ (tips |> L.length |> string_of_int) 
     >> 
       let tips_work = L.map (fun hash -> (hash, get_pow2 hash headers )) tips in
@@ -453,5 +429,26 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
     in
     Either Good
     No just return Some or None
+*)
+(* can we factor this - out of the io? - rather than calculate values, we
+should have functions
+  really not sure that we need height information. in can be calculated at any time,
+  which makes it dynamic...
+*)
+(*
+let get_height hash headers =
+  match SS.mem hash headers with
+    | true -> (SS.find hash headers).height
+    | false -> 0
+let get_pow hash headers =
+  let rec get_pow' hash =
+    match SS.mem hash headers with
+      | true -> 
+        let previous = (SS.find hash headers).previous in
+        1 + (get_pow' previous) 
+      | false -> 0
+  in get_pow' hash
+
+
 *)
 
