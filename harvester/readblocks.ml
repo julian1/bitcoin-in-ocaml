@@ -170,10 +170,10 @@ let process_file () =
 *)
 
 
-(* module SS = Map.Make(struct type t = string let compare = compare end) *)
-module SS = Map.Make( String )
+(* module HM = Map.Make(struct type t = string let compare = compare end) *)
+module HM = Map.Make( String )
 
-module SSS = Set.Make(String);;
+module HS = Set.Make(String);;
 
 
 type my_header =
@@ -201,11 +201,11 @@ type my_header =
 (* get the tree tip hashes as a list *)
 let get_tips headers = 
     (* create set of all previous hashes *)
-    let f key header acc = SSS.add header.previous acc in
-    let previous = SS.fold f headers SSS.empty in 
+    let f key header acc = HS.add header.previous acc in
+    let previous = HM.fold f headers HS.empty in 
     (* tips are headers that are not pointed at by any other header *)
-    SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) headers
-    |> SS.bindings
+    HM.filter (fun hash _ -> not @@ HS.mem hash previous ) headers
+    |> HM.bindings
     |> L.rev_map (fun (tip,_) -> tip)
 
 
@@ -214,9 +214,9 @@ let get_tips headers =
 let get_sequence hash headers =
   let rec get_list hash lst =
     let lst = hash :: lst in
-    match SS.mem hash headers with
+    match HM.mem hash headers with
       | true -> 
-        let previous = (SS.find hash headers).previous in
+        let previous = (HM.find hash headers).previous in
         get_list previous lst
       | false -> lst
   in 
@@ -226,15 +226,15 @@ let get_sequence hash headers =
 (* assuming calculate as we go 
   - probably should be able to calulate difficulty dynamically  *)
 let get_height hash headers =
-  match SS.mem hash headers with
-    | true -> (SS.find hash headers).height
+  match HM.mem hash headers with
+    | true -> (HM.find hash headers).height
     | false -> 0
 
 
 
-(* scan blocks for headers and record *)
+(* scan blocks and return headers structure *)
 let scan_blocks fd =
-  let rec loop_blocks heads count =
+  let rec loop_blocks headers count =
     (
     Lwt_unix.lseek fd 0 SEEK_CUR
     >>= fun pos -> Misc.read_bytes fd (24 + 80)
@@ -244,8 +244,8 @@ let scan_blocks fd =
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
         let _, block_header = decodeBlock s 24 in
         let previous = block_header.previous in
-        let height = (get_height previous heads)  + 1 in
-        let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in
+        let height = (get_height previous headers)  + 1 in
+        let headers = HM.add block_hash { previous = previous; height = height; pos = pos + 24} headers in
         ( match count mod 10000 with
           0 -> log @@ S.concat "" [
             M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count;
@@ -253,13 +253,13 @@ let scan_blocks fd =
           | _ -> return ()
         )
         >> Lwt_unix.lseek fd (msg_header.length - 80) SEEK_CUR
-        >> loop_blocks heads (succ count)
+        >> loop_blocks headers (succ count)
       )
-      | _ -> return heads
+      | _ -> return headers
     )
   in
-  let heads = SS.empty
-  in loop_blocks heads 0
+  let headers = HM.empty
+  in loop_blocks headers 0
 
 
 let process_file2 () =
@@ -273,26 +273,26 @@ let process_file2 () =
       let tips = get_tips headers in 
       log @@ "tips " ^ (tips |> L.length |> string_of_int) 
     >> 
-      
+      (*(* associate hash with height *)
+      let x = L.map (fun hash -> hash, (HM.find hash headers).height) tips in
+      (* select hash with max height - must be a more elegant way*)
+      let longest, _ = L.fold_left (fun (ha1,ht1) (ha2,ht2) 
+        -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in 
 
+      *)
+      let heights = L.map (fun hash -> (HM.find hash headers).height) tips in
+      let max_height = L.fold_left max (-1) heights in
+      let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) tips in  
+
+      log @@ "max height " ^ string_of_int max_height  
+      >>
+      log @@ "longest " ^ M.hex_of_string longest
+    >>
       (* let tips_work = L.map (fun hash -> (hash, get_pow2 hash headers )) tips in *)
       log "computed tips work "
     >>
-      let seq = L.map (fun hash -> get_sequence hash headers ) tips in 
-
-
-(*
-    - rather than create a complete new lists for heads it might make 
-    sense to compute a set of work mappings. hash -> work 
-    - this would effectively be height  
-*)
-
-(*
-      L.fold_left (fun  acc (hash,work)-> 
-        log @@ "whoot " ^ M.hex_of_string hash ^ " " ^ string_of_int work) 
-      (return ()) tips_work  
-    >> 
- *)     log "finished "
+      let seq = get_sequence longest headers in 
+    log "finished "
 
 
 
@@ -454,15 +454,15 @@ should have functions
 *)
 (*
 let get_height hash headers =
-  match SS.mem hash headers with
-    | true -> (SS.find hash headers).height
+  match HM.mem hash headers with
+    | true -> (HM.find hash headers).height
     | false -> 0
 
 let get_pow hash headers =
   let rec get_pow' hash =
-    match SS.mem hash headers with
+    match HM.mem hash headers with
       | true -> 
-        let previous = (SS.find hash headers).previous in
+        let previous = (HM.find hash headers).previous in
         1 + (get_pow' previous) 
       | false -> 0
   in get_pow' hash
@@ -480,14 +480,18 @@ let get_pow hash headers =
 
 let get_height hash headers =
   let rec get_list hash lst =
-    match SS.mem hash headers with
+    match HM.mem hash headers with
       | true -> 
-        let previous = (SS.find hash headers).previous in
+        let previous = (HM.find hash headers).previous in
         let lst = get_list previous lst in
         lst
       | false -> lst
   in 
   get_list hash [] 
+        max height 354567 longest 0000000000000000106904f8bb02831df9c16689f2208a38e1bbdf08811b0fd9
+
+    max height 354323 longest 00000000000000000f054cbca49e12841e73d8c6709b9b5bdfe1883a9255e98f
+
 
 *)
 
