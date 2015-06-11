@@ -180,6 +180,7 @@ type my_header =
 {
     previous : string;
     pos : int;
+    height : int;
 }
 
 (* so it's not fast
@@ -197,6 +198,7 @@ type my_header =
 *)
 
 
+(* get the tree tip hashes as a list *)
 let get_tips headers = 
     (* create set of all previous hashes *)
     let f key header acc = SSS.add header.previous acc in
@@ -208,11 +210,8 @@ let get_tips headers =
 
 
 
-(* - ok, we kind of want to return the list 
-   and we'll select the longest 
-*)
-
-let get_pow2 hash headers =
+(* trace sequence back to genesis and return hashes as a list *)
+let get_sequence hash headers =
   let rec get_list hash lst =
     let lst = hash :: lst in
     match SS.mem hash headers with
@@ -221,14 +220,19 @@ let get_pow2 hash headers =
         get_list previous lst
       | false -> lst
   in 
-  let lst = get_list hash [] in
-  L.length lst
+  get_list hash [] 
+
+
+(* assuming calculate as we go 
+  - probably should be able to calulate difficulty dynamically  *)
+let get_height hash headers =
+  match SS.mem hash headers with
+    | true -> (SS.find hash headers).height
+    | false -> 0
 
 
 
-
-
-
+(* scan blocks for headers and record *)
 let scan_blocks fd =
   let rec loop_blocks heads count =
     (
@@ -240,7 +244,8 @@ let scan_blocks fd =
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
         let _, block_header = decodeBlock s 24 in
         let previous = block_header.previous in
-        let heads = SS.add block_hash { previous = previous; pos = pos + 24} heads in
+        let height = (get_height previous heads)  + 1 in
+        let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in
         ( match count mod 10000 with
           0 -> log @@ S.concat "" [
             M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count;
@@ -268,14 +273,24 @@ let process_file2 () =
       let tips = get_tips headers in 
       log @@ "tips " ^ (tips |> L.length |> string_of_int) 
     >> 
-      let tips_work = L.map (fun hash -> (hash, get_pow2 hash headers )) tips in
+      (* let tips_work = L.map (fun hash -> (hash, get_pow2 hash headers )) tips in *)
       log "computed tips work "
     >>
+      let seq = L.map (fun hash -> get_sequence hash headers ) tips in 
+
+
+(*
+    - rather than create a complete new lists for heads it might make 
+    sense to compute a set of work mappings. hash -> work 
+    - this would effectively be height  
+*)
+
+(*
       L.fold_left (fun  acc (hash,work)-> 
         log @@ "whoot " ^ M.hex_of_string hash ^ " " ^ string_of_int work) 
       (return ()) tips_work  
     >> 
-      log "finished "
+ *)     log "finished "
 
 
 
@@ -440,6 +455,7 @@ let get_height hash headers =
   match SS.mem hash headers with
     | true -> (SS.find hash headers).height
     | false -> 0
+
 let get_pow hash headers =
   let rec get_pow' hash =
     match SS.mem hash headers with
@@ -451,4 +467,26 @@ let get_pow hash headers =
 
 
 *)
+
+
+(*
+  ughhh - this is complicated - we basically have to go through the 
+  complete list 
+  we have to get to genesis/root before we can mark anything 
+  working with two sets....
+  compute heights...
+
+let get_height hash headers =
+  let rec get_list hash lst =
+    match SS.mem hash headers with
+      | true -> 
+        let previous = (SS.find hash headers).previous in
+        let lst = get_list previous lst in
+        lst
+      | false -> lst
+  in 
+  get_list hash [] 
+
+*)
+
 
