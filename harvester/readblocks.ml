@@ -98,7 +98,7 @@ let process_input x input =
     else
       let key = (input.index,input.previous) in
       match TXOMap.mem key x.unspent with
-        | true -> return x (* (TXOMap.remove key x ) *)
+        | true ->  return (*x*)  (TXOMap.remove key x ) 
         | false -> raise ( Failure "ughh here" )
 
 
@@ -171,8 +171,22 @@ type my_header =
   -
 *)
 
+(*
+  OK, it seems slower than it should be. and using 40% mem.
 
-(* get the tree tip hashes as a list *)
+  Need, 
+    - to log how many tx's are being processed - just a count in x,
+      and do every 10k so we see if it slows down.
+    - log block count so we know where we are.
+    - funny there are not more op_return data ...
+
+  - memory issues could be leveldb. so maybe try without using leveldb. 
+*)
+
+(* get the tree tip hashes as a list 
+
+  TODO change name tips to leaves 
+*)
 let get_tips headers = 
     (* create set of all previous hashes *)
     let f key header acc = HS.add header.previous acc in
@@ -236,7 +250,11 @@ let scan_blocks fd =
   in loop_blocks headers 0
 
 
-(* scan through blocks in the given sequence *)
+(* scan through blocks in the given sequence 
+
+  perhaps insteda of passing in seq and headers should just pass 
+  in the mapped pos seq.
+*)
 let replay_blocks fd seq headers =
   (* should not be here *) 
   let process_block = process_block process_tx in
