@@ -273,6 +273,8 @@ let process_file2 () =
       let tips = get_tips headers in 
       log @@ "tips " ^ (tips |> L.length |> string_of_int) 
     >> 
+      
+
       (* let tips_work = L.map (fun hash -> (hash, get_pow2 hash headers )) tips in *)
       log "computed tips work "
     >>
