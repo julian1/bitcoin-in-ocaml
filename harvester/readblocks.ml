@@ -172,9 +172,9 @@ let process_file () =
 
 (* module SS = Map.Make(struct type t = string let compare = compare end) *)
 module SS = Map.Make( String )
-(*
+
 module SSS = Set.Make(String);;
-*)
+
 
 type my_header =
 {
@@ -202,14 +202,33 @@ should have functions
   really not sure that we need height information. in can be calculated at any time,
   which makes it dynamic...
 *)
-let lookup_height hash heads =
+let get_height hash heads =
   match SS.mem hash heads with
     | true -> (SS.find hash heads).height
     | false -> 0
 
 
+let get_tips state_heads = 
+    (* this is a really expensive action *)
+    (* create a set of all pointed-to block hashes *)
+    (* watch out for non-tail call optimised functions here which might blow stack  *)
+    let previous =
+      SS.bindings state_heads
+      |> List.rev_map (fun (_, head) -> head.previous)
+      |> SSS.of_list
+    in
+    (* get the tips of the blockchain tree by filtering all block hashes against the set *)
+    let heads =
+      SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state_heads
+      |> SS.bindings
+      |> List.rev_map (fun (tip,_ ) -> tip)
+    in
+    heads
+
+
 let scan_blocks fd =
   let rec loop_blocks heads count =
+    (
     Lwt_unix.lseek fd 0 SEEK_CUR
     >>= fun pos -> Misc.read_bytes fd (24 + 80)
     >>= function
@@ -218,11 +237,15 @@ let scan_blocks fd =
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
         let _, block_header = decodeBlock s 24 in
         let previous = block_header.previous in
-        let height = lookup_height previous heads + 1 in
+        let height = get_height previous heads + 1 in
         let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in
-        (
-        match count mod 1000 with
-          0 -> log @@ S.concat "" [
+        ( match count mod 1000 with
+          0 -> 
+            (*let tips = get_tips heads in 
+            log @@ "tips " ^ (tips |> L.length |> string_of_int) 
+            >>
+            *)
+            log @@ S.concat "" [
             msg_header.command; " "; string_of_int msg_header.length; " ";
             M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count;
             " height ";  string_of_int height
@@ -232,8 +255,8 @@ let scan_blocks fd =
         >> Lwt_unix.lseek fd (msg_header.length - 80) SEEK_CUR
         >> loop_blocks heads (succ count)
       )
-      | _ -> return ()
-
+      | _ -> return heads
+    )
   in
   let heads = SS.empty
   in loop_blocks heads 0
@@ -244,7 +267,12 @@ let process_file2 () =
     >>= fun fd ->
       log "scanning blocks..."
     >> scan_blocks fd
-    >> log "finished "
+    >>= fun heads -> 
+      let tips = get_tips heads in 
+      log @@ "tips " ^ (tips |> L.length |> string_of_int) 
+
+
+      >> log "finished "
 
 
 
