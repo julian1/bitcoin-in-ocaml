@@ -262,6 +262,22 @@ let scan_blocks fd =
   in loop_blocks headers 0
 
 
+(* scan through blocks in the given sequence *)
+let replay_blocks fd seq headers =
+  let rec replay_blocks' seq =
+    match seq with 
+      | hd :: tl ->  
+        log hd
+        >> replay_blocks' tl
+      | [] ->
+        return ()
+  in
+  replay_blocks' seq
+    
+ 
+
+
+
 let process_file2 () =
     Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
@@ -292,6 +308,9 @@ let process_file2 () =
       log "computed tips work "
     >>
       let seq = get_sequence longest headers in 
+
+    replay_blocks fd seq headers 
+    >> 
     log "finished "
 
 
