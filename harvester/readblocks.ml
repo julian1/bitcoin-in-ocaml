@@ -228,6 +228,23 @@ let get_pow hash headers =
   in get_pow' hash
 
 
+(* - ok, we kind of want to return the list 
+   and we'll select the longest 
+*)
+
+let get_pow2 hash headers =
+  let rec get_list hash lst =
+    let lst = hash :: lst in
+    match SS.mem hash headers with
+      | true -> 
+        let previous = (SS.find hash headers).previous in
+        get_list previous lst
+      | false -> lst
+  in 
+  let lst = get_list hash [] in
+  L.length lst
+
+
 
 
 
@@ -275,7 +292,7 @@ let process_file2 () =
       let tips = get_tips2 headers in 
       log @@ "tips " ^ (tips |> L.length |> string_of_int) 
     >> 
-      let tips_work = L.map (fun hash -> (hash, (*get_pow hash headers*) 123 )) tips in
+      let tips_work = L.map (fun hash -> (hash, get_pow2 hash headers )) tips in
       log "computed tips work "
     >>
       L.fold_left (fun  acc (hash,work)-> 
