@@ -202,25 +202,21 @@ should have functions
   really not sure that we need height information. in can be calculated at any time,
   which makes it dynamic...
 *)
-let get_height hash heads =
-  match SS.mem hash heads with
-    | true -> (SS.find hash heads).height
+let get_height hash headers =
+  match SS.mem hash headers with
+    | true -> (SS.find hash headers).height
     | false -> 0
 
+let get_tips2 headers = 
+    (* create set of all previous hashes *)
+    let f key header acc = SSS.add header.previous acc in
+    let previous = SS.fold f headers SSS.empty in 
+    (* tips are headers that are not pointed at by any other header *)
+    SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) headers
+    |> SS.bindings
+    |> L.rev_map (fun (tip,_ ) -> tip)
 
-let get_tips state_heads = 
-    (* this is a really expensive action - takes a second or two *)
-    (* create a set of all pointed-to block hashes *)
-    (* watch out for non-tail call optimised functions here which might blow stack  *)
-    let previous =
-      SS.bindings state_heads
-      |> L.rev_map (fun (_, head) -> head.previous)
-      |> SSS.of_list
-    in
-    (* get the tips of the blockchain tree by filtering all block hashes against the set *)
-      SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) state_heads
-      |> SS.bindings
-      |> L.rev_map (fun (tip,_ ) -> tip)
+
 
 
 let scan_blocks fd =
@@ -263,7 +259,7 @@ let process_file2 () =
     >>= fun heads -> 
       log "computing tips"
     >> 
-      let tips = get_tips heads in 
+      let tips = get_tips2 heads in 
       log @@ "tips " ^ (tips |> L.length |> string_of_int) 
 
 
