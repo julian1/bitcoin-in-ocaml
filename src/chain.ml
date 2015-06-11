@@ -281,6 +281,7 @@ let readBlocks fd =
             let _, block_header = M.decodeBlock ss 0 in
 
             (* Core.Core_map.find *)
+			(* should be refactored to function - get_height and called with args *)
             let height = 
               if (U.SS.mem block_header.previous heads) then 
                 (U.SS.find block_header.previous heads ).height + 1 
