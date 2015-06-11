@@ -207,6 +207,7 @@ let get_height hash headers =
     | true -> (SS.find hash headers).height
     | false -> 0
 
+
 let get_tips2 headers = 
     (* create set of all previous hashes *)
     let f key header acc = SSS.add header.previous acc in
@@ -214,7 +215,19 @@ let get_tips2 headers =
     (* tips are headers that are not pointed at by any other header *)
     SS.filter (fun hash _ -> not @@ SSS.mem hash previous ) headers
     |> SS.bindings
-    |> L.rev_map (fun (tip,_ ) -> tip)
+    |> L.rev_map (fun (tip,_) -> tip)
+
+
+let get_pow hash headers =
+  let rec get_pow' hash =
+    match SS.mem hash headers with
+      | true -> 
+        let previous = (SS.find hash headers).previous in
+        1 + (get_pow' previous) 
+      | false -> 0
+  in get_pow' hash
+
+
 
 
 
@@ -232,7 +245,7 @@ let scan_blocks fd =
         let previous = block_header.previous in
         let height = get_height previous heads + 1 in
         let heads = SS.add block_hash { previous = previous; height = height; pos = pos + 24} heads in
-        ( match count mod 1000 with
+        ( match count mod 10000 with
           0 -> 
             log @@ S.concat "" [
             msg_header.command; " "; string_of_int msg_header.length; " ";
@@ -256,14 +269,20 @@ let process_file2 () =
     >>= fun fd ->
       log "scanning blocks..."
     >> scan_blocks fd
-    >>= fun heads -> 
+    >>= fun headers -> 
       log "computing tips"
     >> 
-      let tips = get_tips2 heads in 
+      let tips = get_tips2 headers in 
       log @@ "tips " ^ (tips |> L.length |> string_of_int) 
-
-
-      >> log "finished "
+    >> 
+      let tips_work = L.map (fun hash -> (hash, (*get_pow hash headers*) 123 )) tips in
+      log "computed tips work "
+    >>
+      L.fold_left (fun  acc (hash,work)-> 
+        log @@ "whoot " ^ M.hex_of_string hash ^ " " ^ string_of_int work) 
+      (return ()) tips_work  
+    >> 
+      log "finished "
 
 
 
