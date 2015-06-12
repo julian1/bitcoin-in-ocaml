@@ -10,7 +10,9 @@ module L = List
 module S = String
 open M
 
-
+(*
+  doing nothing it goes through in 23 minutes.
+*)
 
 (*
     - no just track unspent, and keys separately.
@@ -29,13 +31,15 @@ open M
     fold_lefti can be done with mapi and then feeding into fold...
     OK. we want to make a key val store
 *)
-module TXOMap = Map.Make(struct type t = int * string let compare = compare end)
+module UtxoMap = Map.Make(struct type t = int * string let compare = compare end)
 
 type mytype =
 {
-  unspent : string TXOMap.t ;
-  db :  Db.t ;  (* db of hashes, maybe change name *)
+  unspent : string UtxoMap.t;
 
+  tx_count : int;
+
+  db :  Db.t ;  (* db of hashes, maybe change name *)
 }
 
 
@@ -47,7 +51,8 @@ let coinbase = M.zeros 32
 
 
 let process_output x (i,output,hash) =
-  x >>= fun x ->
+  x  >>= fun x ->
+(*
     let script = decode_script output.script in
     let u = match script with
       (* do we need to reverse the 160 or something? *)
@@ -81,7 +86,9 @@ let process_output x (i,output,hash) =
         log @@ "error " ^ msg
     )
     >>
-      return { x with unspent = TXOMap.add (i,hash) "u" x.unspent }
+  *)
+    return { x with unspent = UtxoMap.add (i,hash) "u" x.unspent }
+
 
 (* ok, if we scan and index the blocks, then we can select a block for testing *)
 
@@ -90,23 +97,22 @@ let process_output x (i,output,hash) =
 let process_input x input =
   x >>= fun x ->
  (*   log @@ "input  " ^ M.hex_of_string input.previous
-      ^ " index " ^ (string_of_int input.index )
-  >>
-*)
+      ^ " index " ^ (string_of_int input.index ) 
+  >> *)
     if input.previous = coinbase then
       return x
     else
       let key = (input.index,input.previous) in
-      match TXOMap.mem key x.unspent with
-        | true ->  return { x with unspent = TXOMap.remove key x.unspent }  
+      match UtxoMap.mem key x.unspent with
+        | true ->  return { x with unspent = UtxoMap.remove key x.unspent }  
         | false -> raise ( Failure "ughh here" )
 
 
 (* process tx by processing inputs then outputs *)
 let process_tx x (hash,tx) =
-  x >>= fun x ->
-    (*log "tx"
-  >> *)
+  x >>= fun x -> 
+    let x = { x with tx_count = succ x.tx_count } in
+  (*log "tx" >> *)
     L.fold_left process_input (return x) tx.inputs
   >>= fun x ->
     let group i output = (i,output,hash) in
@@ -114,6 +120,7 @@ let process_tx x (hash,tx) =
     L.fold_left process_output (return x) outputs
 
 
+(* process block by scanning txs *)
 let process_block f x payload =
   (*log "block"
   >> *)
@@ -128,19 +135,6 @@ let process_block f x payload =
     ) txs
     in
     L.fold_left f (x) txs
-
-
-let read_block fd =
-  Misc.read_bytes fd 24
-  >>= function
-    | None -> raise (Failure "here0")
-    | Some s ->
-      let _, header = M.decodeHeader s 0 in
-      (* should check command is 'block' *)
-      Misc.read_bytes fd header.length
-      >>= function
-        | None -> raise (Failure "here2")
-        | Some payload -> return payload
 
 
 
@@ -220,7 +214,7 @@ let get_height hash headers =
 
 
 
-(* scan blocks and return headers structure *)
+(* scan blocks and return a headers structure *)
 let scan_blocks fd =
   let rec loop_blocks headers count =
     (
@@ -250,28 +244,45 @@ let scan_blocks fd =
   in loop_blocks headers 0
 
 
-(* scan through blocks in the given sequence 
-  perhaps insteda of passing in seq and headers should just pass 
-  in the mapped pos seq.
+(* read a block at current pos and return it *)
+let read_block fd =
+  Misc.read_bytes fd 24
+  >>= function
+    | None -> raise (Failure "here0")
+    | Some s ->
+      let _, header = M.decodeHeader s 0 in
+      (* should check command is 'block' *)
+      Misc.read_bytes fd header.length
+      >>= function
+        | None -> raise (Failure "here2")
+        | Some payload -> return payload
 
-  it would be nice to include the number of txs...
+
+(* scan through blocks in the given sequence 
+  - perhaps insteda of passing in seq and headers should just pass 
+  in the mapped pos seq.
+  - it would be nice to include the number of txs... just put in x
 *)
 let replay_blocks fd seq headers f x =
   let rec replay_blocks' seq x =
+    x >>= fun x ->
     match seq with 
       | hash :: tl ->  
         let header = HM.find hash headers in begin
-          match header.height mod 1000 with 
-            | 0 -> log @@ (* M.hex_of_string hash ^ " " ^*) "height " ^ string_of_int header.height 
+          match header.height mod 10000 with 
+            | 0 -> log @@ 
+              "height " ^ string_of_int header.height
+              ^ " tx_count " ^ string_of_int x.tx_count
+              ^ " unspent " ^ (x.unspent |> UtxoMap.cardinal |> string_of_int ) 
             | _ -> return ()
         end
         >> Lwt_unix.lseek fd header.pos SEEK_SET
         >> read_block fd 
         >>= fun payload ->
-           f (x) payload  
+           f (return x) payload  
         >>= fun x ->  
           replay_blocks' tl (return x)
-      | [] -> x 
+      | [] -> return x 
   in
   replay_blocks' seq (return x)
     
@@ -311,18 +322,14 @@ let process_file2 () =
 
       (* should not be here *) 
       Db.open_db "myhashes"
-      >>= fun db ->
-        log "opened myhashes db"
-      >>
-        let x = { unspent = TXOMap.empty; db = db; } in
-
+    >>= fun db ->
+      log "opened myhashes db"
+    >>
+      let x = { unspent = UtxoMap.empty; db = db; tx_count = 0; } in
       let process_block = process_block process_tx in
-      
-
       replay_blocks fd seq headers process_block x 
-    (* replay_blocks fd seq headers  *)
     >> 
-    log "finished "
+      log "finished "
 
 
 
@@ -551,11 +558,11 @@ let process_file () =
       log "opened myhashes db"
     >>
       let process_block = process_block process_tx in
-      let x = { unspent = TXOMap.empty; db = db; } in
+      let x = { unspent = UtxoMap.empty; db = db; } in
       process_blocks process_block fd (return x)
     >>= fun x ->
       Lwt_unix.close fd
-      >> log @@ "final " ^ (string_of_int (TXOMap.cardinal x.unspent) )
+      >> log @@ "final " ^ (string_of_int (UtxoMap.cardinal x.unspent) )
 *)
 (*
   If we're going to build up a datastructure , then can test that for count
