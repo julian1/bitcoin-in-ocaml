@@ -251,24 +251,26 @@ let scan_blocks fd =
 
 
 (* scan through blocks in the given sequence 
-
   perhaps insteda of passing in seq and headers should just pass 
   in the mapped pos seq.
+
+  it would be nice to include the number of txs...
 *)
 let replay_blocks fd seq headers f x =
   let rec replay_blocks' seq x =
     match seq with 
       | hash :: tl ->  
-          let header = HM.find hash headers in
-
-
-          (* log @@ M.hex_of_string hash ^ " " ^ string_of_int pos *)
-          Lwt_unix.lseek fd header.pos SEEK_SET
-          >> read_block fd 
-          >>= fun payload ->
-             f (x) payload  
-          >>= fun x ->  
-            replay_blocks' tl (return x)
+        let header = HM.find hash headers in begin
+          match header.height mod 1000 with 
+            | 0 -> log @@ (* M.hex_of_string hash ^ " " ^*) "height " ^ string_of_int header.height 
+            | _ -> return ()
+        end
+        >> Lwt_unix.lseek fd header.pos SEEK_SET
+        >> read_block fd 
+        >>= fun payload ->
+           f (x) payload  
+        >>= fun x ->  
+          replay_blocks' tl (return x)
       | [] -> x 
   in
   replay_blocks' seq (return x)
