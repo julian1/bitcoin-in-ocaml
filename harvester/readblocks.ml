@@ -98,7 +98,7 @@ let process_input x input =
     else
       let key = (input.index,input.previous) in
       match TXOMap.mem key x.unspent with
-        | true ->  return (*x*)  (TXOMap.remove key x ) 
+        | true ->  return { x with unspent = TXOMap.remove key x.unspent }  
         | false -> raise ( Failure "ughh here" )
 
 
@@ -255,29 +255,22 @@ let scan_blocks fd =
   perhaps insteda of passing in seq and headers should just pass 
   in the mapped pos seq.
 *)
-let replay_blocks fd seq headers =
-  (* should not be here *) 
-  let process_block = process_block process_tx in
-
+let replay_blocks fd seq headers f x =
   let rec replay_blocks' seq x =
     match seq with 
       | hash :: tl ->  
-          let pos = (HM.find hash headers).pos in
+          let header = HM.find hash headers in
+
+
           (* log @@ M.hex_of_string hash ^ " " ^ string_of_int pos *)
-          Lwt_unix.lseek fd pos SEEK_SET
+          Lwt_unix.lseek fd header.pos SEEK_SET
           >> read_block fd 
           >>= fun payload ->
-             process_block (x) payload  
+             f (x) payload  
           >>= fun x ->  
             replay_blocks' tl (return x)
       | [] -> x 
   in
-  (* should not be here *) 
-  Db.open_db "myhashes"
-  >>= fun db ->
-    log "opened myhashes db"
-  >>
-    let x = { unspent = TXOMap.empty; db = db; } in
   replay_blocks' seq (return x)
     
 
@@ -314,7 +307,18 @@ let process_file2 () =
       let seq = get_sequence longest headers in 
       let seq = L.tl seq in  (* we haven't got the first block *)
 
-    replay_blocks fd seq headers 
+      (* should not be here *) 
+      Db.open_db "myhashes"
+      >>= fun db ->
+        log "opened myhashes db"
+      >>
+        let x = { unspent = TXOMap.empty; db = db; } in
+
+      let process_block = process_block process_tx in
+      
+
+      replay_blocks fd seq headers process_block x 
+    (* replay_blocks fd seq headers  *)
     >> 
     log "finished "
 
