@@ -55,6 +55,12 @@ let log = Lwt_io.write_line Lwt_io.stdout
 
 let coinbase = M.zeros 32
 
+let format_tx hash i value script = 
+          " i " ^ string_of_int i
+          ^ " value " ^ string_of_float ((Int64.to_float value ) /. 100000000.)
+          ^ " tx " ^ M.hex_of_string hash
+          ^ " script " ^ M.format_script script 
+
 
 let process_output x (i,output,hash) =
   x  >>= fun x ->
@@ -79,17 +85,13 @@ let process_output x (i,output,hash) =
           >>= function
             | Some found ->
               log @@ "found hash160 " ^ M.hex_of_string hash160 ^ " " ^ found
+                ^ " " ^ format_tx hash i output.value script 
             | _ ->
               (*log @@ "not found "
               >>*) return ()
         end
       | None ->
-        let msg =
-          "tx " ^ M.hex_of_string hash
-          ^ " i " ^ string_of_int i
-          ^ " value " ^ string_of_float ((Int64.to_float output.value ) /. 100000000.)
-          ^ " " ^ M.format_script script in
-        log @@ "error " ^ msg
+          log @@ "error " ^ format_tx hash i output.value script 
     )
     >>
   (**)
