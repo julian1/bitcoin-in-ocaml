@@ -1,5 +1,8 @@
 
-(* scan blocks and compute tx indexes *)
+(* scan blocks and compute tx indexes 
+  native.
+  corebuild -I src -package leveldb,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  harvester/readblocks.native
+*)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
