@@ -65,6 +65,14 @@ let format_tx hash i value script =
           ^ " script " ^ M.format_script script 
 
 
+type my_script =
+   | Some of string 
+   | None
+   | Invalid
+ 
+
+
+
 let process_output x (i,output,hash) =
   x  >>= fun x ->
 (**)
@@ -78,12 +86,18 @@ let process_output x (i,output,hash) =
       (* pay to script - 3 *)
       | OP_HASH160 :: Bytes s :: OP_EQUAL :: [] -> Some s
       (* null data *)
-      (* | OP_RETURN :: Bytes s :: [] -> None *)
-      | _ -> None
+      | OP_RETURN :: Bytes _ :: [] -> None 
+      (* common for embedding raw data, prior to op_return  *)
+      | Bytes _ :: [] -> None
+
+      | OP_1 :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None 
+
+      | _ -> Invalid 
     in (
     match u with
       | Some hash160 ->
         begin
+(*
           Db.get x.db hash160
           >>= function
             | Some found ->
@@ -92,13 +106,19 @@ let process_output x (i,output,hash) =
             | _ ->
               (*log @@ "not found "
               >>*) return ()
+*)
+          return ()
         end
+      | Invalid ->
+          log @@ "invalid " ^ format_tx hash i output.value script 
       | None ->
-          log @@ "error " ^ format_tx hash i output.value script 
+        return ()
     )
     >>
-  (**)
+  (*
     return { x with unspent = UtxoMap.add (i,hash) "u" x.unspent }
+  *)
+    return x
 
 
 (* ok, if we scan and index the blocks, then we can select a block for testing 
@@ -108,6 +128,7 @@ let process_output x (i,output,hash) =
 
 
 let process_input x input =
+(*
   x >>= fun x ->
  (*   log @@ "input  " ^ M.hex_of_string input.previous
       ^ " index " ^ (string_of_int input.index ) 
@@ -119,6 +140,8 @@ let process_input x input =
       match UtxoMap.mem key x.unspent with
         | true ->  return { x with unspent = UtxoMap.remove key x.unspent }  
         | false -> raise ( Failure "ughh here" )
+*)
+    x
 
 
 (* process tx by processing inputs then outputs *)
@@ -192,13 +215,13 @@ type my_header =
 
 (* get the tree tip hashes as a list 
 
-  TODO change name tips to leaves 
+  TODO change name leaves to leaves 
 *)
-let get_tips headers = 
+let get_leaves headers = 
     (* create set of all previous hashes *)
     let f key header acc = HS.add header.previous acc in
     let previous = HM.fold f headers HS.empty in 
-    (* tips are headers that are not pointed at by any other header *)
+    (* leaves are headers that are not pointed at by any other header *)
     HM.filter (fun hash _ -> not @@ HS.mem hash previous ) headers
     |> HM.bindings
     |> L.rev_map (fun (tip,_) -> tip)
@@ -307,29 +330,29 @@ let process_file2 () =
       log "scanning blocks..."
     >> scan_blocks fd
     >>= fun headers -> 
-      log "computing tips"
+      log "done scanning blocks - getting leaves"
     >> 
-      let tips = get_tips headers in 
-      log @@ "tips " ^ (tips |> L.length |> string_of_int) 
+      let leaves = get_leaves headers in 
+      log @@ "leaves " ^ (leaves |> L.length |> string_of_int) 
     >> 
       (*(* associate hash with height *)
-      let x = L.map (fun hash -> hash, (HM.find hash headers).height) tips in
+      let x = L.map (fun hash -> hash, (HM.find hash headers).height) leaves in
       (* select hash with max height - must be a more elegant way*)
       let longest, _ = L.fold_left (fun (ha1,ht1) (ha2,ht2) 
         -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in 
 
       *)
       (* factor this crap into a function *)
-      let heights = L.map (fun hash -> (HM.find hash headers).height) tips in
+      let heights = L.map (fun hash -> (HM.find hash headers).height) leaves in
       let max_height = L.fold_left max (-1) heights in
-      let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) tips in  
+      let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) leaves in  
 
       log @@ "max height " ^ string_of_int max_height  
       >>
       log @@ "longest " ^ M.hex_of_string longest
     >>
-      (* let tips_work = L.map (fun hash -> (hash, get_pow2 hash headers )) tips in *)
-      log "computed tips work "
+      (* let leaves_work = L.map (fun hash -> (hash, get_pow2 hash headers )) leaves in *)
+      log "computed leaves work "
     >>
       let seq = get_sequence longest headers in 
       let seq = L.tl seq in  (* we haven't got the first block *)
