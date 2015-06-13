@@ -50,10 +50,14 @@ type block =
 
 
 type script_token =
-  | Bytes of string
-  | Unknown of int
+  | BYTES of string   (* change to upper case *)
+  | UNKNOWN of int
+  | BAD
 
   | OP_1 (* OP_TRUE   81*)
+  | OP_2
+  | OP_3
+
   | OP_RETURN
   | OP_DUP
   | OP_EQUAL
@@ -342,7 +346,7 @@ let decodeInv s pos =
 
 
 
-let decode_script s =
+let decode_script' s =
   let rec f pos acc =
     if pos < strlen s then
       let pos, c = decodeInteger8 s pos in
@@ -357,23 +361,30 @@ let decode_script s =
             | _ -> pos, c
           in
         let pos, bytes = decs_ s pos len in
-        f pos (Bytes bytes::acc)
+        f pos (BYTES bytes::acc)
       else
         let op = match c with
-
-        | 81 -> OP_1
-        | 106 -> OP_RETURN
-        | 118 -> OP_DUP
-        | 135 -> OP_EQUAL
-        | 136 -> OP_EQUALVERIFY
-        | 169 -> OP_HASH160
-        | 172 -> OP_CHECKSIG
-        | 174 -> OP_CHECKMULTISIG
-        | _ -> Unknown c
+          | 81 -> OP_1
+          | 82 -> OP_2
+          | 83 -> OP_3
+          | 106 -> OP_RETURN
+          | 118 -> OP_DUP
+          | 135 -> OP_EQUAL
+          | 136 -> OP_EQUALVERIFY
+          | 169 -> OP_HASH160
+          | 172 -> OP_CHECKSIG
+          | 174 -> OP_CHECKMULTISIG
+          | _ -> UNKNOWN c
         in f pos (op::acc)
     else pos, acc
   in let _, result = f 0 []
   in List.rev result
+
+
+let decode_script s =
+  try  decode_script' s
+  with _ -> [BAD]
+
 
 
 
@@ -400,7 +411,7 @@ let decode_script s =
         | 136 -> OP_EQUALVERIFY
         | 169 -> OP_HASH160
         | 172 -> OP_CHECKSIG
-        | _ -> Unknown c
+        | _ -> UNKNOWN c
         in f pos (op::acc)
     else pos, acc
   in let _, result = f 0 []
@@ -414,6 +425,8 @@ let format_token x =
   match x with
 
   | OP_1 -> "OP_1"
+  | OP_2 -> "OP_2"
+  | OP_3 -> "OP_3"
   | OP_RETURN	 -> "OP_RETURN"
   | OP_DUP -> "OP_DUP"
   | OP_EQUAL -> "OP_EQUAL"
@@ -422,9 +435,9 @@ let format_token x =
   | OP_CHECKSIG -> "OP_CHECKSIG"
   | OP_CHECKMULTISIG -> "OP_CHECKMULTISIG"
 
-  | Bytes c -> "Bytes " ^ hex_of_string c
-  | Unknown c -> "Unknown " ^ string_of_int c
-
+  | BYTES c -> "BYTES " ^ hex_of_string c
+  | UNKNOWN c -> "UNKNOWN " ^ string_of_int c
+  | BAD -> "BAD"
 
 let format_script tokens =
   String.concat " " @@ List.map format_token tokens
@@ -572,6 +585,8 @@ type tx_in =
 let encode_script tokens =
   let f op = match op with
     | OP_1 -> encodeInteger8 81
+    | OP_2 -> encodeInteger8 82
+    | OP_3 -> encodeInteger8 83
     | OP_RETURN -> encodeInteger8 106
     | OP_DUP -> encodeInteger8 118
     | OP_EQUAL -> encodeInteger8 135
@@ -580,7 +595,7 @@ let encode_script tokens =
     | OP_CHECKSIG -> encodeInteger8 172
     | OP_CHECKMULTISIG -> encodeInteger8 174
                 (* FIXME length *)
-    | Bytes s -> (encodeInteger8 (strlen s)) ^ s
+    | BYTES s -> (encodeInteger8 (strlen s)) ^ s
 
   in List.map f tokens |> String.concat ""
 
