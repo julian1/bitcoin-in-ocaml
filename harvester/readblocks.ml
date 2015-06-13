@@ -11,7 +11,13 @@ module S = String
 open M
 
 (*
-  doing nothing it goes through in 23 minutes.
+  - doing nothing, except call process_tx goes through in 23 minutes.
+  - adding the unspent 120 minutes. 64 million tx, 18mil unspent, = 10k / s 
+      that seems too slow for in memory data structure...
+
+  - should count tx_outputs
+
+  - we need to factor into a module, analysis and the action scanning
 *)
 
 (*
@@ -52,7 +58,7 @@ let coinbase = M.zeros 32
 
 let process_output x (i,output,hash) =
   x  >>= fun x ->
-(*
+(**)
     let script = decode_script output.script in
     let u = match script with
       (* do we need to reverse the 160 or something? *)
@@ -86,7 +92,7 @@ let process_output x (i,output,hash) =
         log @@ "error " ^ msg
     )
     >>
-  *)
+  (**)
     return { x with unspent = UtxoMap.add (i,hash) "u" x.unspent }
 
 
@@ -95,6 +101,8 @@ let process_output x (i,output,hash) =
 
 
 let process_input x input =
+  x
+(*
   x >>= fun x ->
  (*   log @@ "input  " ^ M.hex_of_string input.previous
       ^ " index " ^ (string_of_int input.index ) 
@@ -106,7 +114,7 @@ let process_input x input =
       match UtxoMap.mem key x.unspent with
         | true ->  return { x with unspent = UtxoMap.remove key x.unspent }  
         | false -> raise ( Failure "ughh here" )
-
+*)
 
 (* process tx by processing inputs then outputs *)
 let process_tx x (hash,tx) =
@@ -306,6 +314,7 @@ let process_file2 () =
         -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in 
 
       *)
+      (* factor this crap into a function *)
       let heights = L.map (fun hash -> (HM.find hash headers).height) tips in
       let max_height = L.fold_left max (-1) heights in
       let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) tips in  
@@ -325,6 +334,8 @@ let process_file2 () =
     >>= fun db ->
       log "opened myhashes db"
     >>
+      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in
+
       let x = { unspent = UtxoMap.empty; db = db; tx_count = 0; } in
       let process_block = process_block process_tx in
       replay_blocks fd seq headers process_block x 
