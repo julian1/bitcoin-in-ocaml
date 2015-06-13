@@ -18,6 +18,9 @@ open M
   - should count tx_outputs
 
   - we need to factor into a module, analysis and the action scanning
+  - we need to know the value, so we can get a sense of how much value is
+    being sent, in what period of time, and if it's worthwhile trying to compete...
+
 *)
 
 (*
@@ -98,13 +101,13 @@ let process_output x (i,output,hash) =
     return { x with unspent = UtxoMap.add (i,hash) "u" x.unspent }
 
 
-(* ok, if we scan and index the blocks, then we can select a block for testing *)
+(* ok, if we scan and index the blocks, then we can select a block for testing 
+
+*)
 
 
 
 let process_input x input =
-  x
-(*
   x >>= fun x ->
  (*   log @@ "input  " ^ M.hex_of_string input.previous
       ^ " index " ^ (string_of_int input.index ) 
@@ -116,7 +119,7 @@ let process_input x input =
       match UtxoMap.mem key x.unspent with
         | true ->  return { x with unspent = UtxoMap.remove key x.unspent }  
         | false -> raise ( Failure "ughh here" )
-*)
+
 
 (* process tx by processing inputs then outputs *)
 let process_tx x (hash,tx) =
@@ -336,7 +339,8 @@ let process_file2 () =
     >>= fun db ->
       log "opened myhashes db"
     >>
-      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in
+(*      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in 
+*)
 
       let x = { unspent = UtxoMap.empty; db = db; tx_count = 0; } in
       let process_block = process_block process_tx in
