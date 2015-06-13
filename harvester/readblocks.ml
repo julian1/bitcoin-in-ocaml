@@ -14,6 +14,8 @@ module S = String
 open M
 
 (*
+  - native goes through in 12 minutes in native - including script decoding.
+
   - doing nothing, except call process_tx goes through in 23 minutes.
   - adding the unspent 120 minutes. 64 million tx, 18mil unspent, = 10k / s 
       that seems too slow for in memory data structure...
@@ -50,6 +52,8 @@ type mytype =
   unspent : string UtxoMap.t;
 
   tx_count : int;
+  
+  output_count : int;
 
   db :  Db.t ;  (* db of hashes, maybe change name *)
 }
@@ -71,7 +75,7 @@ let format_tx hash i value script =
 type my_script =
    | Some of string 
    | None
-   | Invalid
+   | Strange
  
 
 
@@ -81,21 +85,21 @@ let process_output x (i,output,hash) =
 (**)
     let script = decode_script output.script in
     let u = match script with
-      (* do we need to reverse the 160 or something? *)
       (* pay to pubkey *)
-      | Bytes s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
+      | BYTES s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
       (* pay to pubkey hash*)
-      | OP_DUP :: OP_HASH160 :: Bytes s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> Some s
+      | OP_DUP :: OP_HASH160 :: BYTES s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> Some s
       (* pay to script - 3 *)
-      | OP_HASH160 :: Bytes s :: OP_EQUAL :: [] -> Some s
+      | OP_HASH160 :: BYTES s :: OP_EQUAL :: [] -> Some s
       (* null data *)
-      | OP_RETURN :: Bytes _ :: [] -> None 
+      | OP_RETURN :: BYTES _ :: [] -> None 
       (* common for embedding raw data, prior to op_return  *)
-      | Bytes _ :: [] -> None
+      | BYTES _ :: [] -> None
 
-      | OP_1 :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None 
+      (* N K1 K2 K3 M CHECKMULTISIGVERIFY *)
+      | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None 
 
-      | _ -> Invalid 
+      | _ -> Strange 
     in (
     match u with
       | Some hash160 ->
@@ -112,7 +116,7 @@ let process_output x (i,output,hash) =
 *)
           return ()
         end
-      | Invalid ->
+      | Strange ->
           log @@ "invalid " ^ format_tx hash i output.value script 
       | None ->
         return ()
@@ -121,7 +125,7 @@ let process_output x (i,output,hash) =
   (*
     return { x with unspent = UtxoMap.add (i,hash) "u" x.unspent }
   *)
-    return x
+    return { x with output_count = succ x.output_count } 
 
 
 (* ok, if we scan and index the blocks, then we can select a block for testing 
@@ -309,10 +313,12 @@ let replay_blocks fd seq headers f x =
       | hash :: tl ->  
         let header = HM.find hash headers in begin
           match header.height mod 10000 with 
-            | 0 -> log @@ 
-              "height " ^ string_of_int header.height
-              ^ " tx_count " ^ string_of_int x.tx_count
-              ^ " unspent " ^ (x.unspent |> UtxoMap.cardinal |> string_of_int ) 
+            | 0 -> log @@ S.concat "" [
+              "height "; string_of_int header.height; 
+              " tx_count "; string_of_int x.tx_count; 
+              " output_count "; string_of_int x.output_count; 
+              " unspent "; x.unspent |> UtxoMap.cardinal |> string_of_int
+              ]
             | _ -> return ()
         end
         >> Lwt_unix.lseek fd header.pos SEEK_SET
@@ -368,7 +374,7 @@ let process_file2 () =
 (*      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in 
 *)
 
-      let x = { unspent = UtxoMap.empty; db = db; tx_count = 0; } in
+      let x = { unspent = UtxoMap.empty; db = db; tx_count = 0; output_count = 0; } in
       let process_block = process_block process_tx in
       replay_blocks fd seq headers process_block x 
     >> 
@@ -376,8 +382,18 @@ let process_file2 () =
 
 
 
-let () = Lwt_main.run (process_file2 ())
-
+let () = Lwt_main.run (
+    Lwt.catch (
+      process_file2 
+    )
+    (fun exn ->
+        (* must close *)
+        let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
+        Lwt_io.write_line Lwt_io.stdout ("finishing - exception " ^ s )
+        >> (* just exist cleanly *)
+          return ()
+    )
+)
 
 
 
@@ -519,8 +535,8 @@ let process_tx db block_pos ((hash, tx) : string * M.tx )  =
 (*
     let u = L.fold_left (fun acc e ->
       match e with
-        Bytes s when S.length s = 40 -> acc
-        (* Bytes s -> s :: acc *)
+        BYTES s when S.length s = 40 -> acc
+        (* BYTES s -> s :: acc *)
         | _ -> acc
       ) [] script
     in
