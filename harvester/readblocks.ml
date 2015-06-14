@@ -285,12 +285,15 @@ let get_longest_path leaves headers =
   let max_height = L.fold_left max (-1) heights in
   let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) leaves in
   longest
-  (*(* associate hash with height *)
+
+let get_longest_path2 leaves headers =
+ 
+  (* associate hash with height *)
       let x = L.map (fun hash -> hash, (HM.find hash headers).height) leaves in
       (* select hash with max height - must be a more elegant way*)
       let longest, _ = L.fold_left (fun (ha1,ht1) (ha2,ht2)
         -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in
-      *)
+      longest
 
 
 (* scan blocks and return a headers structure *)
@@ -389,15 +392,12 @@ let process_file2 () =
       let seq = get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
       let seq = CL.take seq 200000 in
+      (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
-      (* should not be here *)
       Db.open_db "myhashes"
     >>= fun db ->
       log "opened myhashes db"
     >>
-(*      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in
-*)
-
       let x = { unspent = Utxos.empty; db = db; tx_count = 0; output_count = 0; } in
       let process_block = process_block process_tx in
       replay_blocks fd seq headers process_block x
