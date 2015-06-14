@@ -6,7 +6,7 @@
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
-let (>|=) = Lwt.(>|=)  (* what does this do? *)
+let (>|=) = Lwt.(>|=)  (* what does this do? - second arg doesn't need return *)
 
 module M = Message
 module L = List
@@ -19,22 +19,24 @@ open M
 
 (*
   - 200,000
-    4min3sec for hash,i
-    4 41 for i,hash
+    4 10 for hash,i  set
+    4 41 for i,hash  set
+    4 13 for hash,i  map
 
+    1 12 without set or map!!
+
+  height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
+  height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
 
   - native goes through in 12 minutes - including output script decoding.
 
   - doing nothing, except call process_tx goes through in 23 minutes.
   - adding the unspent 120 minutes. 64 million tx, 18mil unspent, = 10k / s
       that seems too slow for in memory data structure...
-
   - should count tx_outputs
-
   - we need to factor into a module, analysis and the action scanning
   - we need to know the value, so we can get a sense of how much value is
     being sent, in what period of time, and if it's worthwhile trying to compete...
-
 *)
 
 (*
@@ -54,14 +56,16 @@ open M
     fold_lefti can be done with mapi and then feeding into fold...
     OK. we want to make a key val store
 *)
+
+module Utxos = Map.Make(struct type t = string * int let compare = compare end)
+
 (*
-module UtxoMap = Map.Make(struct type t = int * string let compare = compare end)
+module Utxos = Set.Make(struct type t = string * int let compare = compare end)
 *)
-module UtxoSet = Set.Make(struct type t = string * int let compare = compare end)
 
 type mytype =
 {
-  unspent : UtxoSet.t;
+  unspent : string Utxos.t;
 
   tx_count : int;
 
@@ -135,9 +139,9 @@ let process_output x (i,output,hash) =
     >>
     return { x with
         output_count = succ x.output_count ;
-        unspent =
+    (*    unspent =
           let key = (hash,i) in
-          UtxoSet.add key x.unspent
+          Utxos.add key "u" x.unspent *)
     }
 
 
@@ -153,19 +157,18 @@ let process_output x (i,output,hash) =
 
 
 let process_input x input =
+(*
   x >>= fun x ->
- (*   log @@ "input  " ^ M.hex_of_string input.previous
-      ^ " index " ^ (string_of_int input.index )
-  >> *)
     (* why can't we pattern match here ? eg. function *)
     if input.previous = coinbase then
       return x
     else
       let key = (input.previous,input.index) in
-      match UtxoSet.mem key x.unspent with
-        | true ->  return { x with unspent = UtxoSet.remove key x.unspent }
+      match Utxos.mem key x.unspent with
+        | true ->  return { x with unspent = Utxos.remove key x.unspent }
         | false -> raise ( Failure "ughh here" )
-    x
+ *)   
+  x
 
 
 (* process tx by processing inputs then outputs *)
@@ -334,7 +337,7 @@ let replay_blocks fd seq headers f x =
               "height "; string_of_int header.height;
               " tx_count "; string_of_int x.tx_count;
               " output_count "; string_of_int x.output_count;
-              " unspent "; x.unspent |> UtxoSet.cardinal |> string_of_int
+              " unspent "; x.unspent |> Utxos.cardinal |> string_of_int
               ]
             | _ -> return ()
         end
@@ -392,7 +395,7 @@ let process_file2 () =
 (*      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in
 *)
 
-      let x = { unspent = UtxoSet.empty; db = db; tx_count = 0; output_count = 0; } in
+      let x = { unspent = Utxos.empty; db = db; tx_count = 0; output_count = 0; } in
       let process_block = process_block process_tx in
       replay_blocks fd seq headers process_block x
     >>
