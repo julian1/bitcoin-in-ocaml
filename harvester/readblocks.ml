@@ -130,7 +130,16 @@ let process_output x (i,output,hash) =
 
 
 
-let process_input x input =
+let process_input x (i, (input : M.tx_in ), hash) =
+  x >>= fun x -> 
+
+    let script = M.decode_script input.script in
+    log @@ "tx " ^ M.hex_of_string hash ^ " script " ^ M.format_script script  
+    >> 
+
+(*
+  let u = match script with *)
+
 (*
   x >>= fun x ->
     (* why can't we pattern match here ? eg. function *)
@@ -142,7 +151,7 @@ let process_input x input =
         | true ->  return { x with unspent = Utxos.remove key x.unspent }
         | false -> raise ( Failure "ughh here" )
  *)
-  x
+  return x
 
 
 (* process tx by processing inputs then outputs *)
@@ -150,7 +159,10 @@ let process_tx x (hash,tx) =
   x >>= fun x ->
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
-    L.fold_left process_input (return x) tx.inputs
+
+    let group i input = (i,input,hash) in
+    let inputs = L.mapi group tx.inputs in
+    L.fold_left process_input (return x) inputs
   >>= fun x ->
     let group i output = (i,output,hash) in
     let outputs = L.mapi group tx.outputs in
