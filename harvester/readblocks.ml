@@ -42,11 +42,18 @@ type tx = M.tx
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
 (* module Utxos = Set.Make(struct type t = string * int let compare = compare end) *)
 
+ 
+module RValues = Map.Make(struct type t = string let compare = compare end)
+
+
 type mytype =
 {
   unspent : string Utxos.t;
   tx_count : int;
   output_count : int;
+
+  r_values : string RValues.t;
+
   db :  Db.t ;  (* db of hashes, maybe change name *)
 }
 
@@ -106,7 +113,7 @@ let process_output x (i,output,hash) =
           return ()
         end
       | Strange ->
-          log @@ "invalid " ^ format_tx hash i output.value script
+          log @@ "strange " ^ format_tx hash i output.value script
       | None ->
         return ()
     )
@@ -128,29 +135,43 @@ let process_output x (i,output,hash) =
     can record the actual output script etc, or hash160, etc.
 *)
 
-
+(*
+  so we record r values...
+*)
 
 let process_input x (i, (input : M.tx_in ), hash) =
   x >>= fun x -> 
 
     let script = M.decode_script input.script in
-
-
     let ders = L.fold_left (fun acc elt ->
         match elt with
-          | BYTES s -> 
+          | BYTES s -> ( 
             try  (M.decode_der_signature s ) :: acc 
             with _ -> acc 
+          )
           | _ -> acc
     ) [] script
-    in
 
+   in
+      let f x der = 
+        x >>= fun x -> 
+        let r,s = der in
+        match RValues.mem r x.r_values with 
+          true -> 
+            log @@ "found !!! " ^ M.hex_of_string r 
+            >> return x 
+          | false -> 
+            return { x with r_values = RValues.add r "mytx" x.r_values }
+    in
+    L.fold_left f (return x) ders
+(*
+    >>= fun x -> 
     log @@ "tx " ^ M.hex_of_string hash ^ 
       " previous " ^ M.hex_of_string input.previous ^ 
       " index " ^ string_of_int input.index ^ 
       " script " ^ M.format_script script ^ 
       " ders " ^ string_of_int (L.length ders) 
-    >> 
+*)
 
 (*
   let u = match script with *)
@@ -166,7 +187,6 @@ let process_input x (i, (input : M.tx_in ), hash) =
         | true ->  return { x with unspent = Utxos.remove key x.unspent }
         | false -> raise ( Failure "ughh here" )
  *)
-  return x
 
 
 (* process tx by processing inputs then outputs *)
@@ -318,7 +338,8 @@ let replay_blocks fd seq headers f x =
               "height "; string_of_int header.height;
               " tx_count "; string_of_int x.tx_count;
               " output_count "; string_of_int x.output_count;
-              " unspent "; x.unspent |> Utxos.cardinal |> string_of_int
+              " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
+              " rvalues "; x.r_values |> RValues.cardinal |> string_of_int
               ]
             | _ -> return ()
         end
@@ -359,7 +380,13 @@ let process_file () =
     >>= fun db ->
       log "opened myhashes db"
     >>
-      let x = { unspent = Utxos.empty; db = db; tx_count = 0; output_count = 0; } in
+      let x = { 
+        unspent = Utxos.empty; 
+        db = db; 
+        tx_count = 0; 
+        r_values = RValues.empty; 
+        output_count = 0; 
+      } in
       let process_block = process_block process_tx in
       replay_blocks fd seq headers process_block x
     >>
