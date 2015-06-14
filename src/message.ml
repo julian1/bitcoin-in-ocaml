@@ -388,56 +388,22 @@ let decode_script s =
 
 
 
-(*
-  let rec f pos acc =
-    if pos < strlen s then
-      let pos, c = decodeInteger8 s pos in
-      (* let () = Printf.printf "whoot pos %d\n" pos in *)
-
-      if ( c >= 1 && c <= 78) then
-        let pos, len =
-          match c with
-            | 76 -> decodeInteger8 s pos
-            | 77 -> decodeInteger16 s pos
-            | 78 -> decodeInteger32 s pos
-            | _ -> pos, c
-          in
-        let pos, bytes = decs_ s pos len in
-        f pos (Bytes bytes::acc)
-      else
-        let op = match c with
-        | 118 -> OP_DUP
-        | 135 -> OP_EQUAL
-        | 136 -> OP_EQUALVERIFY
-        | 169 -> OP_HASH160
-        | 172 -> OP_CHECKSIG
-        | _ -> UNKNOWN c
-        in f pos (op::acc)
-    else pos, acc
-  in let _, result = f 0 []
-  in List.rev result
-*)
-
-
-
-
 let format_token x =
   match x with
+    | OP_1 -> "OP_1"
+    | OP_2 -> "OP_2"
+    | OP_3 -> "OP_3"
+    | OP_RETURN	 -> "OP_RETURN"
+    | OP_DUP -> "OP_DUP"
+    | OP_EQUAL -> "OP_EQUAL"
+    | OP_HASH160 -> "OP_HASH160"
+    | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
+    | OP_CHECKSIG -> "OP_CHECKSIG"
+    | OP_CHECKMULTISIG -> "OP_CHECKMULTISIG"
 
-  | OP_1 -> "OP_1"
-  | OP_2 -> "OP_2"
-  | OP_3 -> "OP_3"
-  | OP_RETURN	 -> "OP_RETURN"
-  | OP_DUP -> "OP_DUP"
-  | OP_EQUAL -> "OP_EQUAL"
-  | OP_HASH160 -> "OP_HASH160"
-  | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
-  | OP_CHECKSIG -> "OP_CHECKSIG"
-  | OP_CHECKMULTISIG -> "OP_CHECKMULTISIG"
-
-  | BYTES c -> "BYTES " ^ hex_of_string c
-  | UNKNOWN c -> "UNKNOWN " ^ string_of_int c
-  | BAD -> "BAD"
+    | BYTES c -> "BYTES " ^ hex_of_string c
+    | UNKNOWN c -> "UNKNOWN " ^ string_of_int c
+    | BAD -> "BAD"
 
 let format_script tokens =
   String.concat " " @@ List.map format_token tokens

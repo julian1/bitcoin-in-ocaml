@@ -1,5 +1,5 @@
 
-(* scan blocks and compute tx indexes 
+(* scan blocks and compute tx indexes
   native.
   corebuild -I src -package leveldb,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  harvester/readblocks.native
 *)
@@ -10,14 +10,23 @@ let (>|=) = Lwt.(>|=)  (* what does this do? *)
 
 module M = Message
 module L = List
+
+module CL = Core.Core_list
+
+
 module S = String
 open M
 
 (*
-  - native goes through in 12 minutes in native - including script decoding.
+  - 200,000
+    4min3sec for hash,i
+    4 41 for i,hash
+
+
+  - native goes through in 12 minutes - including output script decoding.
 
   - doing nothing, except call process_tx goes through in 23 minutes.
-  - adding the unspent 120 minutes. 64 million tx, 18mil unspent, = 10k / s 
+  - adding the unspent 120 minutes. 64 million tx, 18mil unspent, = 10k / s
       that seems too slow for in memory data structure...
 
   - should count tx_outputs
@@ -45,14 +54,17 @@ open M
     fold_lefti can be done with mapi and then feeding into fold...
     OK. we want to make a key val store
 *)
+(*
 module UtxoMap = Map.Make(struct type t = int * string let compare = compare end)
+*)
+module UtxoSet = Set.Make(struct type t = string * int let compare = compare end)
 
 type mytype =
 {
-  unspent : string UtxoMap.t;
+  unspent : UtxoSet.t;
 
   tx_count : int;
-  
+
   output_count : int;
 
   db :  Db.t ;  (* db of hashes, maybe change name *)
@@ -65,18 +77,17 @@ let log = Lwt_io.write_line Lwt_io.stdout
 
 let coinbase = M.zeros 32
 
-let format_tx hash i value script = 
-          " i " ^ string_of_int i
-          ^ " value " ^ string_of_float ((Int64.to_float value ) /. 100000000.)
-          ^ " tx " ^ M.hex_of_string hash
-          ^ " script " ^ M.format_script script 
+let format_tx hash i value script =
+  " i " ^ string_of_int i
+  ^ " value " ^ string_of_float ((Int64.to_float value ) /. 100000000.)
+  ^ " tx " ^ M.hex_of_string hash
+  ^ " script " ^ M.format_script script
 
 
 type my_script =
-   | Some of string 
-   | None
-   | Strange
- 
+  | Some of string
+  | None
+  | Strange
 
 
 
@@ -92,14 +103,14 @@ let process_output x (i,output,hash) =
       (* pay to script - 3 *)
       | OP_HASH160 :: BYTES s :: OP_EQUAL :: [] -> Some s
       (* null data *)
-      | OP_RETURN :: BYTES _ :: [] -> None 
+      | OP_RETURN :: BYTES _ :: [] -> None
       (* common for embedding raw data, prior to op_return  *)
       | BYTES _ :: [] -> None
 
       (* N K1 K2 K3 M CHECKMULTISIGVERIFY *)
-      | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None 
+      | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
 
-      | _ -> Strange 
+      | _ -> Strange
     in (
     match u with
       | Some hash160 ->
@@ -109,7 +120,7 @@ let process_output x (i,output,hash) =
           >>= function
             | Some found ->
               log @@ "found hash160 " ^ M.hex_of_string hash160 ^ " " ^ found
-                ^ " " ^ format_tx hash i output.value script 
+                ^ " " ^ format_tx hash i output.value script
             | _ ->
               (*log @@ "not found "
               >>*) return ()
@@ -117,43 +128,49 @@ let process_output x (i,output,hash) =
           return ()
         end
       | Strange ->
-          log @@ "invalid " ^ format_tx hash i output.value script 
+          log @@ "invalid " ^ format_tx hash i output.value script
       | None ->
         return ()
     )
     >>
-  (*
-    return { x with unspent = UtxoMap.add (i,hash) "u" x.unspent }
-  *)
-    return { x with output_count = succ x.output_count } 
+    return { x with
+        output_count = succ x.output_count ;
+        unspent =
+          let key = (hash,i) in
+          UtxoSet.add key x.unspent
+    }
 
 
-(* ok, if we scan and index the blocks, then we can select a block for testing 
-
+(* ok, if we scan and index the blocks, then we can select a block for testing
+  rather than indexing txoutpus . might be interesting to index 160 addresses
+  address -> [ txs ] that reference it.
+  can then get the value very easily
+  -
+  i think we do want the map for utxos.
+    can record the actual output script etc, or hash160, etc.
 *)
 
 
 
 let process_input x input =
-(*
   x >>= fun x ->
  (*   log @@ "input  " ^ M.hex_of_string input.previous
-      ^ " index " ^ (string_of_int input.index ) 
+      ^ " index " ^ (string_of_int input.index )
   >> *)
+    (* why can't we pattern match here ? eg. function *)
     if input.previous = coinbase then
       return x
     else
-      let key = (input.index,input.previous) in
-      match UtxoMap.mem key x.unspent with
-        | true ->  return { x with unspent = UtxoMap.remove key x.unspent }  
+      let key = (input.previous,input.index) in
+      match UtxoSet.mem key x.unspent with
+        | true ->  return { x with unspent = UtxoSet.remove key x.unspent }
         | false -> raise ( Failure "ughh here" )
-*)
     x
 
 
 (* process tx by processing inputs then outputs *)
 let process_tx x (hash,tx) =
-  x >>= fun x -> 
+  x >>= fun x ->
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
     L.fold_left process_input (return x) tx.inputs
@@ -211,23 +228,23 @@ type my_header =
 (*
   OK, it seems slower than it should be. and using 40% mem.
 
-  Need, 
+  Need,
     - to log how many tx's are being processed - just a count in x,
       and do every 10k so we see if it slows down.
     - log block count so we know where we are.
     - funny there are not more op_return data ...
 
-  - memory issues could be leveldb. so maybe try without using leveldb. 
+  - memory issues could be leveldb. so maybe try without using leveldb.
 *)
 
-(* get the tree tip hashes as a list 
+(* get the tree tip hashes as a list
 
-  TODO change name leaves to leaves 
+  TODO change name leaves to leaves
 *)
-let get_leaves headers = 
+let get_leaves headers =
     (* create set of all previous hashes *)
     let f key header acc = HS.add header.previous acc in
-    let previous = HM.fold f headers HS.empty in 
+    let previous = HM.fold f headers HS.empty in
     (* leaves are headers that are not pointed at by any other header *)
     HM.filter (fun hash _ -> not @@ HS.mem hash previous ) headers
     |> HM.bindings
@@ -240,15 +257,15 @@ let get_sequence hash headers =
   let rec get_list hash lst =
     let lst = hash :: lst in
     match HM.mem hash headers with
-      | true -> 
+      | true ->
         let previous = (HM.find hash headers).previous in
         get_list previous lst
       | false -> lst
-  in 
-  get_list hash [] 
+  in
+  get_list hash []
 
 
-(* assuming calculate as we go 
+(* assuming calculate as we go
   - probably should be able to calulate difficulty dynamically  *)
 let get_height hash headers =
   match HM.mem hash headers with
@@ -269,7 +286,7 @@ let scan_blocks fd =
         let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
         let _, block_header = decodeBlock s 24 in
         let previous = block_header.previous in
-        let height = (get_height previous headers)  + 1 in
+        let height = (get_height previous headers) + 1 in
         let headers = HM.add block_hash { previous = previous; height = height; pos = pos } headers in
         ( match count mod 10000 with
           0 -> log @@ S.concat "" [
@@ -301,36 +318,36 @@ let read_block fd =
         | Some payload -> return payload
 
 
-(* scan through blocks in the given sequence 
-  - perhaps insteda of passing in seq and headers should just pass 
+(* scan through blocks in the given sequence
+  - perhaps insteda of passing in seq and headers should just pass
   in the mapped pos seq.
   - it would be nice to include the number of txs... just put in x
 *)
 let replay_blocks fd seq headers f x =
   let rec replay_blocks' seq x =
     x >>= fun x ->
-    match seq with 
-      | hash :: tl ->  
+    match seq with
+      | hash :: tl ->
         let header = HM.find hash headers in begin
-          match header.height mod 10000 with 
+          match header.height mod 10000 with
             | 0 -> log @@ S.concat "" [
-              "height "; string_of_int header.height; 
-              " tx_count "; string_of_int x.tx_count; 
-              " output_count "; string_of_int x.output_count; 
-              " unspent "; x.unspent |> UtxoMap.cardinal |> string_of_int
+              "height "; string_of_int header.height;
+              " tx_count "; string_of_int x.tx_count;
+              " output_count "; string_of_int x.output_count;
+              " unspent "; x.unspent |> UtxoSet.cardinal |> string_of_int
               ]
             | _ -> return ()
         end
         >> Lwt_unix.lseek fd header.pos SEEK_SET
-        >> read_block fd 
+        >> read_block fd
         >>= fun payload ->
-           f (return x) payload  
-        >>= fun x ->  
+           f (return x) payload
+        >>= fun x ->
           replay_blocks' tl (return x)
-      | [] -> return x 
+      | [] -> return x
   in
   replay_blocks' seq (return x)
-    
+
 
 
 let process_file2 () =
@@ -338,53 +355,54 @@ let process_file2 () =
     >>= fun fd ->
       log "scanning blocks..."
     >> scan_blocks fd
-    >>= fun headers -> 
+    >>= fun headers ->
       log "done scanning blocks - getting leaves"
-    >> 
-      let leaves = get_leaves headers in 
-      log @@ "leaves " ^ (leaves |> L.length |> string_of_int) 
-    >> 
+    >>
+      let leaves = get_leaves headers in
+      log @@ "leaves " ^ (leaves |> L.length |> string_of_int)
+    >>
       (*(* associate hash with height *)
       let x = L.map (fun hash -> hash, (HM.find hash headers).height) leaves in
       (* select hash with max height - must be a more elegant way*)
-      let longest, _ = L.fold_left (fun (ha1,ht1) (ha2,ht2) 
-        -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in 
+      let longest, _ = L.fold_left (fun (ha1,ht1) (ha2,ht2)
+        -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in
 
       *)
       (* factor this crap into a function *)
       let heights = L.map (fun hash -> (HM.find hash headers).height) leaves in
       let max_height = L.fold_left max (-1) heights in
-      let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) leaves in  
+      let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) leaves in
 
-      log @@ "max height " ^ string_of_int max_height  
+      log @@ "max height " ^ string_of_int max_height
       >>
       log @@ "longest " ^ M.hex_of_string longest
     >>
       (* let leaves_work = L.map (fun hash -> (hash, get_pow2 hash headers )) leaves in *)
       log "computed leaves work "
     >>
-      let seq = get_sequence longest headers in 
-      let seq = L.tl seq in  (* we haven't got the first block *)
+      let seq = get_sequence longest headers in
+      let seq = CL.drop seq 1 in (* we are missng the first block *)
+      let seq = CL.take seq 200000 in
 
-      (* should not be here *) 
+      (* should not be here *)
       Db.open_db "myhashes"
     >>= fun db ->
       log "opened myhashes db"
     >>
-(*      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in 
+(*      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in
 *)
 
-      let x = { unspent = UtxoMap.empty; db = db; tx_count = 0; output_count = 0; } in
+      let x = { unspent = UtxoSet.empty; db = db; tx_count = 0; output_count = 0; } in
       let process_block = process_block process_tx in
-      replay_blocks fd seq headers process_block x 
-    >> 
+      replay_blocks fd seq headers process_block x
+    >>
       log "finished "
 
 
 
 let () = Lwt_main.run (
     Lwt.catch (
-      process_file2 
+      process_file2
     )
     (fun exn ->
         (* must close *)
@@ -558,30 +576,30 @@ let get_height hash headers =
 let get_pow hash headers =
   let rec get_pow' hash =
     match HM.mem hash headers with
-      | true -> 
+      | true ->
         let previous = (HM.find hash headers).previous in
-        1 + (get_pow' previous) 
+        1 + (get_pow' previous)
       | false -> 0
   in get_pow' hash
 *)
 
 (*
-  ughhh - this is complicated - we basically have to go through the 
-  complete list 
-  we have to get to genesis/root before we can mark anything 
+  ughhh - this is complicated - we basically have to go through the
+  complete list
+  we have to get to genesis/root before we can mark anything
   working with two sets....
   compute heights...
 
 let get_height hash headers =
   let rec get_list hash lst =
     match HM.mem hash headers with
-      | true -> 
+      | true ->
         let previous = (HM.find hash headers).previous in
         let lst = get_list previous lst in
         lst
       | false -> lst
-  in 
-  get_list hash [] 
+  in
+  get_list hash []
     max height 354567 longest 0000000000000000106904f8bb02831df9c16689f2208a38e1bbdf08811b0fd9
     max height 354323 longest 00000000000000000f054cbca49e12841e73d8c6709b9b5bdfe1883a9255e98f
 *)
