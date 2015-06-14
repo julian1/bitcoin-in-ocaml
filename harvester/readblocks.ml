@@ -134,10 +134,22 @@ let process_input x (i, (input : M.tx_in ), hash) =
   x >>= fun x -> 
 
     let script = M.decode_script input.script in
+
+
+    let ders = L.fold_left (fun acc elt ->
+        match elt with
+          | BYTES s -> 
+            try  (M.decode_der_signature s ) :: acc 
+            with _ -> acc 
+          | _ -> acc
+    ) [] script
+    in
+
     log @@ "tx " ^ M.hex_of_string hash ^ 
       " previous " ^ M.hex_of_string input.previous ^ 
       " index " ^ string_of_int input.index ^ 
-      " script " ^ M.format_script script  
+      " script " ^ M.format_script script ^ 
+      " ders " ^ string_of_int (L.length ders) 
     >> 
 
 (*

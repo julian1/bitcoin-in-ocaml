@@ -650,15 +650,21 @@ let rec printRaw s a b =
   else printRaw s (a+1) b
 *)
 
+(*
+  how do we deal with parse errors here?? 
+  to verify a tx 
 
+  TODO We have to pad with zero, if not 32 bits... 
 
+  https://bitcointalk.org/index.php?topic=653313.0
+*)
 let decode_der_signature s =
 
   let decode_elt s pos =
     let pos, _0x02 = decodeInteger8 s pos in
     let () = Printf.printf "02 %d\n" _0x02 in
     let pos, r_length = decodeInteger8 s pos in
-    (* let () = Printf.printf "elt length %d\n" r_length in *)
+    let () = Printf.printf "elt length %d\n" r_length in 
     let pos, r = decs_ s pos r_length  in
     pos, r
   in
