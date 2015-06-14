@@ -276,24 +276,18 @@ let get_height hash headers =
     | false -> 0
 
 
-(* given list of leaves - return the longest one - 
-  this is horrible - should be recursive and use just the headers
-
+(* given list of leaves - return hash of the longest one - 
+    horrible - should be recursive and use just the headers
 *)
 let get_longest_path leaves headers =
-  let heights = L.map (fun hash -> (HM.find hash headers).height) leaves in
-  let max_height = L.fold_left max (-1) heights in
-  let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) leaves in
-  longest
-
-let get_longest_path2 leaves headers =
- 
   (* associate hash with height *)
-      let x = L.map (fun hash -> hash, (HM.find hash headers).height) leaves in
-      (* select hash with max height - must be a more elegant way*)
-      let longest, _ = L.fold_left (fun (ha1,ht1) (ha2,ht2)
-        -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in
-      longest
+  let x = L.map (fun hash -> hash, (HM.find hash headers).height) leaves in
+  (* select hash with max height *)
+  let longest, _ = L.fold_left (fun a b -> 
+    let _,ah = a in 
+    let _,bh = b in
+    if ah > bh then a else b) ("",-1) x in
+  longest
 
 
 (* scan blocks and return a headers structure *)
