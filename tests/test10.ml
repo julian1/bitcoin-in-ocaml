@@ -9,26 +9,45 @@ module M = Message
   do we need to tell it the curve? 
 
 	 corebuild -install-bin-dir   tests -no-links  -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax tests/test10.byte
+
+real length 71
+length 68
+02 2
+r_length 32
+r 552e5d7a1ba2d3717f99ceea8a8b4f0caa99cd22a78cd66742a4bb25ede3e9bf
+2
+s_length 32
+s_ 2bc116fb6d8169980b0a87b593f8b59b6430726f3ee85686ddf868c4a3c01a00
+sigType 1
+sig result true
+
  *) 
 
 let decode_der_signature s =
+
+    let decode_elt s pos = 
+        let pos, _0x02 = Message.decodeInteger8 s pos in 
+        let () = Printf.printf "02 %d\n" _0x02 in
+        let pos, r_length = Message.decodeInteger8 s pos in 
+        let () = Printf.printf "r_length %d\n" r_length in
+        let pos, r = Message.decs_ s pos r_length  in
+        (pos, r)
+    in
+
 	let () = Printf.printf "real length %d \n" (Message.strlen s) in
 	let pos = 0 in
 	let pos, structure = Message.decodeInteger8 s pos in 
-	let pos, length = Message.decodeInteger8 s pos in 
-	let () = Printf.printf "length %d\n" length  in
-	let pos, _0x02 = Message.decodeInteger8 s pos in 
-	let () = Printf.printf "%d\n" _0x02 in
-	let pos, r_length = Message.decodeInteger8 s pos in 
-	let () = Printf.printf "r_length %d\n" r_length in
-	let pos, r = Message.decs_ s pos r_length in 
+    let pos, length = Message.decodeInteger8 s pos in 
+    let () = Printf.printf "length %d\n" length  in
+
+
+    let pos, r = decode_elt s pos in  
 	let () = Printf.printf "r %s\n" (Message.hex_of_string r) in
-	let pos, _0x02 = Message.decodeInteger8 s pos in 
-	let () = Printf.printf "%d\n" _0x02 in
-	let pos, s_length = Message.decodeInteger8 s pos in 
-	let () = Printf.printf "s_length %d\n" s_length in
-	let pos, s_ = Message.decs_ s pos s_length in 
-	let () = Printf.printf "s_ %s\n" (Message.hex_of_string s_) in
+
+    let pos, s_ = decode_elt s pos in  
+	let () = Printf.printf "s %s\n" (Message.hex_of_string s_) in
+
+
 	let pos, sigType = Message.decodeInteger8 s pos in 
 	let () = Printf.printf "sigType %d\n" sigType in 
 	(* (Message.strrev r) ^ (Message.strrev s_ ) *)
