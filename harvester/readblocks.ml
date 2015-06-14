@@ -160,12 +160,11 @@ let process_tx x (hash,tx) =
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
 
-    let group i input = (i,input,hash) in
+    let group index a = (index,a,hash) in
     let inputs = L.mapi group tx.inputs in
     L.fold_left process_input (return x) inputs
   >>= fun x ->
-    let group i output = (i,output,hash) in
-    let outputs = L.mapi group tx.outputs in
+    let outputs = L.mapi group tx.outputs in 
     L.fold_left process_output (return x) outputs
 
 
