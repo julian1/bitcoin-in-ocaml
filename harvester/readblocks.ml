@@ -16,7 +16,7 @@ module S = String
 open M
 
 (*
-  - 200,000
+  - timings 200,000 blocks
     4 10 for hash,i  set
     4 41 for i,hash  set
     4 13 for hash,i  map
@@ -24,16 +24,11 @@ open M
     1 12 without set or map!!
 
   height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
-  height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
 
   - native goes through in 12 minutes - including output script decoding.
 
-  - doing nothing, except call process_tx goes through in 23 minutes.
-  - adding the unspent 120 minutes. 64 million tx, 18mil unspent, = 10k / s
-      that seems too slow for in memory data structure...
-  - should count tx_outputs
   - we need to factor into a module, analysis and the action scanning
-  - we need to know the value, so we can get a sense of how much value is
+  - outputting value, so we can get a sense of how much value is
     being sent, in what period of time, and if it's worthwhile trying to compete...
 *)
 
@@ -44,20 +39,16 @@ module Utxos = Map.Make(struct type t = string * int let compare = compare end)
 type mytype =
 {
   unspent : string Utxos.t;
-
   tx_count : int;
-
   output_count : int;
-
   db :  Db.t ;  (* db of hashes, maybe change name *)
 }
 
 
 let log = Lwt_io.write_line Lwt_io.stdout
 
-
-
 let coinbase = M.zeros 32
+
 
 let format_tx hash i value script =
   " i " ^ string_of_int i
@@ -70,7 +61,6 @@ type my_script =
   | Some of string
   | None
   | Strange
-
 
 
 let process_output x (i,output,hash) =
@@ -204,7 +194,6 @@ let get_leaves headers =
     |> L.rev_map (fun (tip,_) -> tip)
 
 
-
 (* trace sequence back to genesis and return hashes as a list *)
 let get_sequence hash headers =
   let rec get_list hash lst =
@@ -285,10 +274,7 @@ let read_block fd =
 
 
 (* scan through blocks in the given sequence
-  - perhaps insteda of passing in seq and headers should just pass
-  in the mapped pos seq.
-  - it would be nice to include the number of txs... just put in x
-*)
+  - perhaps insted of passing in seq and headers should pass just pos list *)
 let replay_blocks fd seq headers f x =
   let rec replay_blocks' seq x =
     x >>= fun x ->
@@ -315,8 +301,7 @@ let replay_blocks fd seq headers f x =
   replay_blocks' seq (return x)
 
 
-
-let process_file2 () =
+let process_file () =
     Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
       log "scanning blocks..."
@@ -352,7 +337,7 @@ let process_file2 () =
 
 let () = Lwt_main.run (
   Lwt.catch (
-    process_file2
+    process_file
   )
   (fun exn ->
     (* must close *)
