@@ -134,7 +134,10 @@ let process_input x (i, (input : M.tx_in ), hash) =
   x >>= fun x -> 
 
     let script = M.decode_script input.script in
-    log @@ "tx " ^ M.hex_of_string hash ^ " script " ^ M.format_script script  
+    log @@ "tx " ^ M.hex_of_string hash ^ 
+      " previous " ^ M.hex_of_string input.previous ^ 
+      " index " ^ string_of_int input.index ^ 
+      " script " ^ M.format_script script  
     >> 
 
 (*
@@ -159,8 +162,8 @@ let process_tx x (hash,tx) =
   x >>= fun x ->
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
-
     let group index a = (index,a,hash) in
+
     let inputs = L.mapi group tx.inputs in
     L.fold_left process_input (return x) inputs
   >>= fun x ->
