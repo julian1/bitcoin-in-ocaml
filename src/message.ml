@@ -651,6 +651,37 @@ let rec printRaw s a b =
 *)
 
 
+
+let decode_der_signature s =
+
+  let decode_elt s pos =
+    let pos, _0x02 = decodeInteger8 s pos in
+    let () = Printf.printf "02 %d\n" _0x02 in
+    let pos, r_length = decodeInteger8 s pos in
+    (* let () = Printf.printf "elt length %d\n" r_length in *)
+    let pos, r = decs_ s pos r_length  in
+    pos, r
+  in
+	let () = Printf.printf "string length %d \n" (strlen s) in
+	let pos = 0 in
+	let pos, structure = decodeInteger8 s pos in
+  let pos, length = decodeInteger8 s pos in
+  let () = Printf.printf "length %d\n" length  in
+
+  let pos, r = decode_elt s pos in
+	let () = Printf.printf "r %s\n" (hex_of_string r) in
+  let pos, s_ = decode_elt s pos in
+	let () = Printf.printf "s %s\n" (hex_of_string s_) in
+
+	let pos, sigType = decodeInteger8 s pos in
+	let () = Printf.printf "sigType %d\n" sigType in
+	r, s_
+
+
+
+
+
+
 let formatHeader (h : header) =
   String.concat "" [
     "magic:    "; hex_of_int h.magic;
