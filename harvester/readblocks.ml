@@ -5,16 +5,14 @@
 *)
 
 let (>>=) = Lwt.(>>=)
+let (>|=) = Lwt.(>|=)  (* like bind, but second arg return type is non-monadic *)
 let return = Lwt.return
-let (>|=) = Lwt.(>|=)  (* what does this do? - second arg doesn't need return *)
 
 module M = Message
 module L = List
-
 module CL = Core.Core_list
-
-
 module S = String
+
 open M
 
 (*
@@ -39,29 +37,9 @@ open M
     being sent, in what period of time, and if it's worthwhile trying to compete...
 *)
 
-(*
-    - no just track unspent, and keys separately.
-    - then we output those with keys only, and mark whether unspent.
-    - ok, but it means we need to carry io return type...  3o
-    - hang on maybe we write each one twice...
-    - or if we pass a structure, it could contain
-*)
-
-(*
-  - change db to do hash160
-  - then lookup
-*)
-
-(*
-    fold_lefti can be done with mapi and then feeding into fold...
-    OK. we want to make a key val store
-*)
 
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
-
-(*
-module Utxos = Set.Make(struct type t = string * int let compare = compare end)
-*)
+(* module Utxos = Set.Make(struct type t = string * int let compare = compare end) *)
 
 type mytype =
 {
@@ -167,7 +145,7 @@ let process_input x input =
       match Utxos.mem key x.unspent with
         | true ->  return { x with unspent = Utxos.remove key x.unspent }
         | false -> raise ( Failure "ughh here" )
- *)   
+ *)
   x
 
 
@@ -202,9 +180,9 @@ let process_block f x payload =
 
 
 (* module HM = Map.Make(struct type t = string let compare = compare end) *)
-module HM = Map.Make( String )
+module HM = Map.Make(String)
 
-module HS = Set.Make(String);;
+module HS = Set.Make(String)
 
 
 type my_header =
@@ -214,36 +192,8 @@ type my_header =
     height : int;
 }
 
-(* so it's not fast
-  when we used to be able to scan over it very quickly...
-  - it is the datastructure not the io...
-  - takes 1minute to loop the blocks...
 
-  - no it's just the fricken cardinal/ordinal which is not efficient
-  - change name to index blocks?
-
-  - IMPORTANT - it's arguable height should be computed dynamically ...
-              and only when required. that would enable out-of-order blocks
-              to be calculated.
-  -
-*)
-
-(*
-  OK, it seems slower than it should be. and using 40% mem.
-
-  Need,
-    - to log how many tx's are being processed - just a count in x,
-      and do every 10k so we see if it slows down.
-    - log block count so we know where we are.
-    - funny there are not more op_return data ...
-
-  - memory issues could be leveldb. so maybe try without using leveldb.
-*)
-
-(* get the tree tip hashes as a list
-
-  TODO change name leaves to leaves
-*)
+(* get the tree leaf hashes as a list *)
 let get_leaves headers =
     (* create set of all previous hashes *)
     let f key header acc = HS.add header.previous acc in
@@ -276,15 +226,15 @@ let get_height hash headers =
     | false -> 0
 
 
-(* given list of leaves - return hash of the longest one - 
+(* given list of leaves - return hash of the longest one -
     horrible - should be recursive and use just the headers
 *)
 let get_longest_path leaves headers =
   (* associate hash with height *)
   let x = L.map (fun hash -> hash, (HM.find hash headers).height) leaves in
   (* select hash with max height *)
-  let longest, _ = L.fold_left (fun a b -> 
-    let _,ah = a in 
+  let longest, _ = L.fold_left (fun a b ->
+    let _,ah = a in
     let _,bh = b in
     if ah > bh then a else b) ("",-1) x in
   longest
@@ -401,16 +351,15 @@ let process_file2 () =
 
 
 let () = Lwt_main.run (
-    Lwt.catch (
-      process_file2
-    )
-    (fun exn ->
-        (* must close *)
-        let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-        Lwt_io.write_line Lwt_io.stdout ("finishing - exception " ^ s )
-        >> (* just exist cleanly *)
-          return ()
-    )
+  Lwt.catch (
+    process_file2
+  )
+  (fun exn ->
+    (* must close *)
+    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
+    log ("finishing - exception " ^ s )
+    >> return ()
+  )
 )
 
 
