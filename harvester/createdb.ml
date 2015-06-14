@@ -16,29 +16,34 @@ let return = Lwt.return
 module M = Message
 module U = Misc
 
-
-let addr_from_string s =
-  let privkey = M.sha256 s in
-  match Microecc.compute_public_key privkey with
-    | Some pubkey ->
-      let pubkey = "\x04" ^ pubkey in
-      let compressed_pubkey = Microecc.compress pubkey in
-      let addr_from_pubkey pubkey =
-          pubkey
-          |> M.sha256
-          |> M.ripemd160
-          |> Address.btc_address_of_hash160
-      in
-      ( addr_from_pubkey pubkey )
-    | None -> "none"
-
 let log = Lwt_io.write_line Lwt_io.stdout
+
+let hash160_from_privkey privkey =
+  let sha = M.sha256 privkey in
+  match Microecc.compute_public_key sha with
+    | Some pubkey ->
+      let uncompressed_pubkey = "\x04" ^ pubkey in
+      let compressed_pubkey =   Microecc.compress pubkey in
+      let addr_from_pubkey key = key |> M.sha256 |> M.ripemd160 (*|> Address.btc_address_of_hash160*)
+      in
+      (* *)
+      [ addr_from_pubkey uncompressed_pubkey ; addr_from_pubkey compressed_pubkey ] 
+    | None -> []
+
 
 let process_line db line =
   let line = String.trim line in
-  let addr = addr_from_string line in
-(*  log @@ (U.pad line 10) ^ " " ^ (addr_from_string line)  *)
-  Db.put db addr line
+  let addrs = hash160_from_privkey line in
+  List.fold_left (fun acc e -> Db.put db e line) (return ()) addrs  
+
+(*  log @@ "line " ^ line 
+  >> 
+  List.fold_left (fun acc e -> log @@ M.hex_of_string e ) (return ()) addrs 
+*)
+  (* Db.put db addr line *)
+
+(*  log @@ (U.pad line 10) ^ " " ^ (hash160_from_privkey line)  *)
+
 
 let process_lines process_line ic =
   let rec process_lines' count =

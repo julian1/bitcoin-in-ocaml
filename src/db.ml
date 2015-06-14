@@ -10,7 +10,7 @@ let detach f =
   Lwt_preemptive.detach 
     (fun () -> f ) () 
 
-
+type t = LevelDB.db
 
 let open_db n = detach @@ LevelDB.open_db n 
 

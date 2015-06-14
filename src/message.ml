@@ -50,14 +50,21 @@ type block =
 
 
 type script_token =
-  | Bytes of string
-  | Unknown of int
+  | BYTES of string   (* change to upper case *)
+  | UNKNOWN of int
+  | BAD
+
+  | OP_1 (* OP_TRUE   81*)
+  | OP_2
+  | OP_3
+
+  | OP_RETURN
   | OP_DUP
   | OP_EQUAL
   | OP_EQUALVERIFY
   | OP_HASH160
   | OP_CHECKSIG
-;;
+  | OP_CHECKMULTISIG
 
 
 (* change name tx_input *)
@@ -67,7 +74,7 @@ type tx_in =
   index : int;
   (* should be a variant either a string ... or a decoded list of tokens? *)
   (* script: script_token list; *)
-  script : string;  
+  script : string;
   sequence : int;
 }
 
@@ -76,11 +83,11 @@ type tx_out =
 {
   value : Int64.t;
   (* script: script_token list; *)
-  script : string; 
+  script : string;
 
 
   (* calculated on parse *)
-  pos : int; 
+  pos : int;
   length : int ;
 }
 
@@ -104,9 +111,9 @@ let hex_of_char c =
   hexa.[x lsr 4], hexa.[x land 0xf]
 
 
-(*  
+(*
   move to Misc.ml ?
-  
+
 *)
 let hex_of_string s =
   (* functional *)
@@ -228,7 +235,7 @@ let checksum2 s = s |> sha256d |> (fun x -> String.sub x 0 4 )
 (* f is decode function, at pos, count items *)
 let decodeNItems s pos f count =
   let rec fff pos acc count =
-    if count == 0 then 
+    if count == 0 then
 	  pos, (List.rev acc)
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1)
@@ -288,10 +295,10 @@ let decodeVersionLtc s pos =
   let pos, nonce = decodeInteger64 s pos in
   let pos, agent = decodeString s pos in
   let pos, height = decodeInteger32 s pos in
-(*  let _, relay = decodeInteger8 s pos in *) 
+(*  let _, relay = decodeInteger8 s pos in *)
   pos, { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
-    from = from; to_ = to_; 
-	nonce  = nonce; agent = agent; height = height; relay = 0; 
+    from = from; to_ = to_;
+	nonce  = nonce; agent = agent; height = height; relay = 0;
   }
 
 
@@ -313,18 +320,18 @@ let decodeVarInt s pos =
 
 
 (* change name decodeBlockHeader *)
-let decodeBlock (s:string) pos = 
-	let pos, version = decodeInteger32 s pos in 
+let decodeBlock (s:string) pos =
+	let pos, version = decodeInteger32 s pos in
 	let pos, previous = decodeHash32 s pos in
 	let pos, merkle = decodeHash32 s pos in
 	let pos, nTime = decodeInteger32 s pos in
 	let pos, bits = decodeInteger32 s pos in
 	let pos, nonce = decodeInteger32 s pos in
 
-	(* TODO remove this - tx count is not part of block header, but the block description *)  
+	(* TODO remove this - tx count is not part of block header, but the block description *)
 	(* let pos, tx_count = decodeVarInt s pos in  *)
-	pos, ({ version = version; previous = previous; merkle = merkle; 
-		nTime = nTime; bits = bits; nonce = nonce; (* tx_count = tx_count *)  } : block) 
+	pos, ({ version = version; previous = previous; merkle = merkle;
+		nTime = nTime; bits = bits; nonce = nonce; (* tx_count = tx_count *)  } : block)
 
 
 
@@ -339,80 +346,64 @@ let decodeInv s pos =
 
 
 
+let decode_script' s =
+  let rec f pos acc =
+    if pos < strlen s then
+      let pos, c = decodeInteger8 s pos in
+      (* let () = Printf.printf "whoot pos %d\n" pos in *)
+
+      if ( c >= 1 && c <= 78) then
+        let pos, len =
+          match c with
+            | 76 -> decodeInteger8 s pos
+            | 77 -> decodeInteger16 s pos
+            | 78 -> decodeInteger32 s pos
+            | _ -> pos, c
+          in
+        let pos, bytes = decs_ s pos len in
+        f pos (BYTES bytes::acc)
+      else
+        let op = match c with
+          | 81 -> OP_1
+          | 82 -> OP_2
+          | 83 -> OP_3
+          | 106 -> OP_RETURN
+          | 118 -> OP_DUP
+          | 135 -> OP_EQUAL
+          | 136 -> OP_EQUALVERIFY
+          | 169 -> OP_HASH160
+          | 172 -> OP_CHECKSIG
+          | 174 -> OP_CHECKMULTISIG
+          | _ -> UNKNOWN c
+        in f pos (op::acc)
+    else pos, acc
+  in let _, result = f 0 []
+  in List.rev result
+
+
 let decode_script s =
-  let rec f pos acc =
-    if pos < strlen s then
-      let pos, c = decodeInteger8 s pos in
-      (* let () = Printf.printf "whoot pos %d\n" pos in *)
-
-      if ( c >= 1 && c <= 78) then
-        let pos, len =
-          match c with
-            | 76 -> decodeInteger8 s pos
-            | 77 -> decodeInteger16 s pos
-            | 78 -> decodeInteger32 s pos
-            | _ -> pos, c
-          in
-        let pos, bytes = decs_ s pos len in
-        f pos (Bytes bytes::acc)
-      else
-        let op = match c with
-        | 118 -> OP_DUP
-        | 135 -> OP_EQUAL
-        | 136 -> OP_EQUALVERIFY
-        | 169 -> OP_HASH160
-        | 172 -> OP_CHECKSIG
-        | _ -> Unknown c
-        in f pos (op::acc)
-    else pos, acc
-  in let _, result = f 0 []
-  in List.rev result
-
-
-
-(*
-  let rec f pos acc =
-    if pos < strlen s then
-      let pos, c = decodeInteger8 s pos in
-      (* let () = Printf.printf "whoot pos %d\n" pos in *)
-
-      if ( c >= 1 && c <= 78) then
-        let pos, len =
-          match c with
-            | 76 -> decodeInteger8 s pos
-            | 77 -> decodeInteger16 s pos
-            | 78 -> decodeInteger32 s pos
-            | _ -> pos, c
-          in
-        let pos, bytes = decs_ s pos len in
-        f pos (Bytes bytes::acc)
-      else
-        let op = match c with
-        | 118 -> OP_DUP
-        | 135 -> OP_EQUAL
-        | 136 -> OP_EQUALVERIFY
-        | 169 -> OP_HASH160
-        | 172 -> OP_CHECKSIG
-        | _ -> Unknown c
-        in f pos (op::acc)
-    else pos, acc
-  in let _, result = f 0 []
-  in List.rev result
-*)
+  try  decode_script' s
+  with _ -> [BAD]
 
 
 
 
 let format_token x =
   match x with
-  | OP_DUP -> "OP_DUP"
-  | OP_EQUAL -> "OP_EQUAL"
-  | OP_HASH160 -> "OP_HASH160"
-  | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
-  | OP_CHECKSIG -> "OP_CHECKSIG"
-  | Bytes c -> "Bytes " ^ hex_of_string c
-  | Unknown c -> "Unknown " ^ string_of_int c
+    | OP_1 -> "OP_1"
+    | OP_2 -> "OP_2"
+    | OP_3 -> "OP_3"
+    | OP_RETURN	 -> "OP_RETURN"
+    | OP_DUP -> "OP_DUP"
+    | OP_EQUAL -> "OP_EQUAL"
+    | OP_HASH160 -> "OP_HASH160"
+    | OP_EQUALVERIFY-> "OP_EQUALVERIFY"
+    | OP_CHECKSIG -> "OP_CHECKSIG"
+    | OP_CHECKMULTISIG -> "OP_CHECKMULTISIG"
 
+    | BYTES c -> "BYTES " ^ hex_of_string c
+    | UNKNOWN c -> "UNKNOWN " ^ string_of_int c
+    | BAD -> "BAD"
 
 let format_script tokens =
   String.concat " " @@ List.map format_token tokens
@@ -423,7 +414,7 @@ let decodeTxOutput s pos =
   let pos, value = decodeInteger64 s pos in
   let pos, scriptLen = decodeVarInt s pos in
   let pos, script = decs_ s pos scriptLen in
-  pos, { value = value; script = (* decode_script *) script; 
+  pos, { value = value; script = (* decode_script *) script;
     pos = first;
     length = pos - first;
   }
@@ -460,7 +451,7 @@ let decodeTx s pos =
     let pos, value = decodeInteger64 s pos in
     let pos, scriptLen = decodeVarInt s pos in
     let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = (* decode_script *) script; 
+    pos, { value = value; script = (* decode_script *) script;
       pos = first;
       length = pos - first;
     }
@@ -511,16 +502,16 @@ let encodeInteger64 value = enc64 8 value
 let encodeString (h : string) = enc 1 (strlen h) ^ h
 
 (* change name to encode hash32 and do a sanity check on the length ? *)
-let encodeHash32 (h : string) = 
+let encodeHash32 (h : string) =
   if String.length h <> 32 then
-    raise (Failure "hash length ") 
+    raise (Failure "hash length ")
   else
   strrev h
 
 
-(* TODO FIXME!! 
+(* TODO FIXME!!
 pos in
-293   match first with 
+293   match first with
 hash
     | 0xfd -> decodeInteger16 s pos
     | 0xfe -> decodeInteger32 s pos
@@ -529,15 +520,15 @@ hash
 
 
 *)
-let encodeVarInt x = 
-	if x < 0xfd then 
+let encodeVarInt x =
+	if x < 0xfd then
 		encodeInteger8 x
 	else if x < 0xffff then
-		encodeInteger8 0xfd ^ encodeInteger16 x 
-	else (*if x < 0xffffffff then *) 
-		encodeInteger8 0xfe ^ encodeInteger32 x 
-(*	else 
-		encodeInteger8 0xff ^ encodeInteger64 x 
+		encodeInteger8 0xfd ^ encodeInteger16 x
+	else (*if x < 0xffffffff then *)
+		encodeInteger8 0xfe ^ encodeInteger32 x
+(*	else
+		encodeInteger8 0xff ^ encodeInteger64 x
 *)
 
 (*
@@ -559,14 +550,18 @@ type tx_in =
 
 let encode_script tokens =
   let f op = match op with
+    | OP_1 -> encodeInteger8 81
+    | OP_2 -> encodeInteger8 82
+    | OP_3 -> encodeInteger8 83
+    | OP_RETURN -> encodeInteger8 106
     | OP_DUP -> encodeInteger8 118
     | OP_EQUAL -> encodeInteger8 135
     | OP_EQUALVERIFY -> encodeInteger8 136
     | OP_HASH160 -> encodeInteger8 169
     | OP_CHECKSIG -> encodeInteger8 172
-
+    | OP_CHECKMULTISIG -> encodeInteger8 174
                 (* FIXME length *)
-    | Bytes s -> (encodeInteger8 (strlen s)) ^ s
+    | BYTES s -> (encodeInteger8 (strlen s)) ^ s
 
   in List.map f tokens |> String.concat ""
 
@@ -582,7 +577,7 @@ let encodeInput (input : tx_in) =
 
 
 let encodeOutput (output : tx_out) =
-  [ 
+  [
 	encodeInteger64 output.value ;
 
     (let s = (* encode_script *) output.script in
@@ -593,7 +588,7 @@ let encodeOutput (output : tx_out) =
     encodeInteger32 output.index ;
     (let s = encode_script output.script in
     let len = strlen s in
-    (encodeInteger8 len) ^ s );  (* FIXME *) 
+    (encodeInteger8 len) ^ s );  (* FIXME *)
     encodeInteger32 output.sequence
 *)  ] |> String.concat ""
 
@@ -604,10 +599,10 @@ let encodeTx (tx : tx) =
   String.concat ""
   [ encodeInteger32 tx.version;
     encodeVarInt @@ List.length tx.inputs;
-    List.map encodeInput tx.inputs |> String.concat ""; 
+    List.map encodeInput tx.inputs |> String.concat "";
 	encodeVarInt @@ List.length tx.outputs;
-    List.map encodeOutput tx.outputs |> String.concat ""; 
-	encodeInteger32 tx.lockTime 
+    List.map encodeOutput tx.outputs |> String.concat "";
+	encodeInteger32 tx.lockTime
   ]
 
 
@@ -668,7 +663,7 @@ let formatAddress (h : ip_address ) =
   let soi = string_of_int in
   let a,b,c,d = h.address  in
   String.concat "." [
-    soi a; soi b; soi c; soi d 
+    soi a; soi b; soi c; soi d
   ] ^ ":" ^ soi h.port
 
 let formatVersion (h : version) =
@@ -699,9 +694,9 @@ let formatBlock (h : block) =
     "version:    "; string_of_int h.version;
     "\nprevious: "; hex_of_string h.previous;
     "\nmerkle:   "; hex_of_string h.merkle;
-    "\nnTime:    "; string_of_int h.nTime; 
-    "\nbits:    "; string_of_int h.bits; 
-    "\nnonce:    "; string_of_int h.nonce; 
+    "\nnTime:    "; string_of_int h.nTime;
+    "\nbits:    "; string_of_int h.bits;
+    "\nnonce:    "; string_of_int h.nonce;
     (*"\ntx_count:    "; string_of_int h.tx_count;  *)
   ]
 
