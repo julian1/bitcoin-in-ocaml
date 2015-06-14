@@ -13,7 +13,13 @@ module L = List
 module CL = Core.Core_list
 module S = String
 
-open M
+open M 
+(*
+type tx_out = M.tx_out
+type tx = M.tx
+*)
+
+
 
 (*
   - timings 200,000 blocks
@@ -66,7 +72,7 @@ type my_script =
 let process_output x (i,output,hash) =
   x  >>= fun x ->
 (**)
-    let script = decode_script output.script in
+    let script = M.decode_script output.script in
     let u = match script with
       (* pay to pubkey *)
       | BYTES s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
@@ -186,7 +192,7 @@ type my_header =
 (* get the tree leaf hashes as a list *)
 let get_leaves headers =
     (* create set of all previous hashes *)
-    let f key header acc = HS.add header.previous acc in
+    let f _ header acc = HS.add header.previous acc in
     let previous = HM.fold f headers HS.empty in
     (* leaves are headers that are not pointed at by any other header *)
     HM.filter (fun hash _ -> not @@ HS.mem hash previous ) headers
