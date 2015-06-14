@@ -688,25 +688,33 @@ let decode_der_signature s =
 
 
 *)
+(*
+  - it would be much better to use option type to parse this... 
+  and probably need padding.
+*)
+
 let decode_der_signature s =
+  try 
+    let decode_elt s pos =
+      let pos, _0x02 = decodeInteger8 s pos in
+      let pos, length = decodeInteger8 s pos in
+      let pos, value = decs_ s pos length  in
+      pos, value, _0x02 
+    in
+    let pos = 0 in
+    let pos, header = decodeInteger8 s pos in
+    let pos, length = decodeInteger8 s pos in
 
-  let decode_elt s pos =
-    let pos, _0x02 = decodeInteger8 s pos in
-    let pos, r_length = decodeInteger8 s pos in
-    let pos, r = decs_ s pos r_length  in
-    pos, r
-  in
-	let pos = 0 in
-	let pos, structure = decodeInteger8 s pos in
-  let pos, length = decodeInteger8 s pos in
+    let pos, r, rheader = decode_elt s pos in
+    let pos, s_, sheader= decode_elt s pos in
 
-  let pos, r = decode_elt s pos in
-  let pos, s_ = decode_elt s pos in
+    let pos, sigType = decodeInteger8 s pos in
 
-	let pos, sigType = decodeInteger8 s pos in
-	r, s_
-
-
+    match header = 0x30 && rheader = 0x02 && sheader = 0x02 with 
+      | true -> Some (r, s_)
+      | false -> None
+  with _  
+    -> None
 
 
 

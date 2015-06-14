@@ -141,24 +141,29 @@ let process_output x (i,output,hash) =
 
 let process_input x (i, (input : M.tx_in ), hash) =
   x >>= fun x -> 
-
+    (* extract der signature and r,s keys *)
     let script = M.decode_script input.script in
     let ders = L.fold_left (fun acc elt ->
         match elt with
           | BYTES s -> ( 
-            try  (M.decode_der_signature s ) :: acc 
-            with _ -> acc 
+              match M.decode_der_signature s with  
+                Some der -> der :: acc
+                | None -> acc
           )
           | _ -> acc
     ) [] script
-
-   in
+    (* lookup *) 
+    in
       let f x der = 
         x >>= fun x -> 
         let r,s = der in
         match RValues.mem r x.r_values with 
           true -> 
-            log @@ "found !!! " ^ M.hex_of_string r 
+            log @@ "found !!! " ^ 
+              " tx " ^ M.hex_of_string hash ^ 
+              " previous " ^ M.hex_of_string input.previous ^ 
+              " index " ^ string_of_int i ^ 
+              " r_value " ^ M.hex_of_string r 
             >> return x 
           | false -> 
             return { x with r_values = RValues.add r "mytx" x.r_values }
