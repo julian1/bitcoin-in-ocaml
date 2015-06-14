@@ -1,6 +1,8 @@
 
 open OUnit2;;
 
+module M = Message
+
 
 
 (* corebuild  -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax test10.byte
@@ -61,17 +63,17 @@ let _, txprev = Message.decodeTx txprev_s 0
 (* let () = Printf.printf "%s\n" @@ Message.formatTx tx *)
 
 (* must be an easier way to drill down into the scripts that we want *)
-let subscript = (List.hd txprev.outputs).script 
+let subscript = M.decode_script @@ (List.hd txprev.outputs).script 
 
-let tx_input_script = (List.hd tx.inputs).script 
+let tx_input_script = M.decode_script @@ (List.hd tx.inputs).script 
 
 (* do these need to be reversed ?? 
 	eg. reverse sig and then 
 	Not according to blockchain info
 *)
 
-let signature = match List.hd tx_input_script with Bytes s -> s 
-let pubkey    = match List.nth tx_input_script 1 with Bytes s -> s
+let signature = match List.hd tx_input_script with BYTES s -> s 
+let pubkey    = match List.nth tx_input_script 1 with BYTES s -> s
 
 let pubkey = Microecc.decompress pubkey 
 
@@ -87,7 +89,7 @@ let () = Printf.printf "subscript %s\n" @@ Message.format_script subscript
 let tx_clear_inputs (tx: Message.tx ) = 
 	let clear_input_script (input : Message.tx_in) = 
 	{ input  with
-		script = []	
+		script = M.encode_script []	
 	} in
 	{ tx with inputs = List.map clear_input_script tx.inputs }
 
@@ -100,8 +102,8 @@ let tx = tx_clear_inputs tx
 (* substitute input script, and clear others *)
 let tx = 
 	let f index (input: Message.tx_in ) = 
-		if index == 0 then { input with script = subscript; }  
-		else { input with script = [] } 
+		if index == 0 then { input with script = M.encode_script subscript; }  
+		else { input with script = M.encode_script [] } 
 	in
 	{ tx with inputs = List.mapi f tx.inputs }  
 
@@ -124,7 +126,10 @@ let hash = ( s |> Message.sha256d (*|> Message.strrev *) )
 let test1 test_ctxt = 
 	let decoded_sig = decode_der_signature signature in
 	let x = Microecc.verify pubkey hash decoded_sig in
+
+	let () = Printf.printf "sig result %b\n" x in
 	assert_equal x true 
+	
 
 let tests =
  ["test10">::: 
@@ -133,7 +138,12 @@ let tests =
 	]
 ;;
 
+	let decoded_sig = decode_der_signature signature in
+	let x = Microecc.verify pubkey hash decoded_sig in
 
+	let () = Printf.printf "sig result %b\n" x in
+    ()
+	
 
 
 
