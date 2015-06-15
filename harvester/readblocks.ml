@@ -244,7 +244,7 @@ let process_input x (i, (input : M.tx_in ), hash) =
 
 (* process tx by processing inputs then outputs *)
 let process_tx x (hash,tx) =
-  x >>= fun x ->
+  x >>= fun x -> 
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
     let group index a = (index,a,hash) in
@@ -270,7 +270,8 @@ let process_block f x payload =
       in hash, tx
     ) txs
     in
-    L.fold_left f (return x) txs
+    (* L.fold_left (fun x e -> x >>= f x e)  (return x) txs *)
+    L.fold_left f  (return x) txs
 
 
 
