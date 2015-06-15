@@ -1,4 +1,44 @@
 
+
+
+
+module type OrderedType =
+sig
+    type t
+end
+
+
+module type S =
+sig
+    type my_header =
+    {
+        previous : string;
+        pos : int;
+        height : int;
+    }
+    module HM : module type of Map.Make(String)    
+    type t
+
+    val get_leaves : my_header HM.t -> string list
+    val get_sequence : string -> my_header HM.t -> string list 
+    val get_height : string -> my_header HM.t -> int 
+    val get_longest_path : string list -> my_header HM.t -> string 
+    val scan_blocks : Lwt_unix.file_descr -> my_header HM.t Lwt.t 
+    (* val replay_blocks fd seq headers f x = *)
+    val replay_blocks : Lwt_unix.file_descr -> string list -> my_header HM.t 
+        -> (  t Lwt.t-> string -> t Lwt.t ) -> t -> t Lwt.t
+end  
+
+
+
+
+(*
+module Scanner (X : X_type) = struct
+end
+*)
+
+module Make(Ord: OrderedType) =
+  struct
 module L = List
 module HM = Map.Make(String)
 module HS = Set.Make(String)
@@ -13,6 +53,7 @@ let (>|=) = Lwt.(>|=)  (* like bind, but second arg return type is non-monadic *
 let return = Lwt.return
 
 
+type t = Ord.t
 
 type my_header =
 {
@@ -115,7 +156,6 @@ let read_block fd =
         | None -> raise (Failure "here2")
         | Some payload -> return payload
 
-type t
 
 (* scan through blocks in the given sequence
   - perhaps insted of passing in seq and headers should pass just pos list *)
@@ -146,4 +186,4 @@ let replay_blocks fd seq headers f x =
   in
   replay_blocks' seq (return x)
 
-
+end

@@ -280,7 +280,9 @@ module HM = Map.Make(String)
 module HS = Set.Make(String)
 
 
-open Scanner
+module Sc = Scanner.Make(struct type t = mytype end)
+
+(* open Sc *)
 
 (* get the tree leaf hashes as a list *)
 (*
@@ -363,6 +365,7 @@ let scan_blocks fd =
   in loop_blocks headers 0
 *)
 
+(*
 (* read a block at current pos and return it *)
 let read_block fd =
   Misc.read_bytes fd 24
@@ -404,26 +407,26 @@ let replay_blocks fd seq headers f x =
       | [] -> return x
   in
   replay_blocks' seq (return x)
-
+*)
 
 let process_file () =
     Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
       log "scanning blocks..."
-    >> scan_blocks fd
+    >> Sc.scan_blocks fd
     >>= fun headers ->
       log "done scanning blocks - getting leaves"
     >>
-      let leaves = get_leaves headers in
+      let leaves = Sc.get_leaves headers in
       log @@ "leaves " ^ (leaves |> L.length |> string_of_int)
     >>
-      let longest = get_longest_path leaves headers in
+      let longest = Sc.get_longest_path leaves headers in
       log @@ "longest " ^ M.hex_of_string longest
     >>
       (* let leaves_work = L.map (fun hash -> (hash, get_pow2 hash headers )) leaves in *)
       log "computed leaves work "
     >>
-      let seq = get_sequence longest headers in
+      let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
       let seq = CL.take seq 200000 in 
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
@@ -440,7 +443,7 @@ let process_file () =
         output_count = 0; 
       } in
       let process_block = process_block process_tx in
-      replay_blocks fd seq headers process_block x
+      Sc.replay_blocks fd seq headers process_block x
     >>
       log "finished "
 
