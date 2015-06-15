@@ -23,11 +23,13 @@ type tx = M.tx
 
 (*
   - timings 200,000 blocks
-    4 10 for hash,i  set
-    4 41 for i,hash  set
-    4 13 for hash,i  map
+    4m 10 for hash,i  set
+    4m 41 for i,hash  set
+    4m 13 for hash,i  map
 
-    1 12 without set or map!!
+    1m 12 without set or map!!
+
+    4m 21 recording r_values
 
   height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
 
@@ -36,6 +38,11 @@ type tx = M.tx
   - we need to factor into a module, analysis and the action scanning
   - outputting value, so we can get a sense of how much value is
     being sent, in what period of time, and if it's worthwhile trying to compete...
+
+  - lets output the value of the previous...
+    by looking up the matching output tx details script ...
+      - but will have to store all tx's with their values.
+      - actually we'd be more interested in the amounuggh.
 *)
 
 
@@ -48,7 +55,7 @@ module RValues = Map.Make(struct type t = string let compare = compare end)
 
 type mytype =
 {
-  unspent : string Utxos.t;
+  unspent : tx_out Utxos.t;
   tx_count : int;
   output_count : int;
 
@@ -120,9 +127,9 @@ let process_output x (i,output,hash) =
     >>
     return { x with
         output_count = succ x.output_count ;
-    (*    unspent =
+        unspent =
           let key = (hash,i) in
-          Utxos.add key "u" x.unspent *)
+          Utxos.add key output x.unspent
     }
 
 
@@ -137,6 +144,24 @@ let process_output x (i,output,hash) =
 
 (*
   so we record r values...
+    
+  - all the tx's will be spent.
+    what we want is to find any other uses of the pubkey/ address that are unspent..
+
+    ... hmmmn
+  ok, we normally have
+    SIG PUBKEY
+
+  which means we have the pubkey. without referencing the previous tx. in fact i 
+
+  - so it's easy to reference with what's been spent.
+  - remember what we want is indication how often... so whether we run a process
+  - it's only if the address is reused.
+
+  - want to find out when and if recent.
+ 
+  - all founds are repitions.  
+  - it means we can front run if fast enough. 
 *)
 
 let process_input x (i, (input : M.tx_in ), hash) =
@@ -158,17 +183,38 @@ let process_input x (i, (input : M.tx_in ), hash) =
         x >>= fun x -> 
         let r,s = der in
         match RValues.mem r x.r_values with 
-          true -> 
+          true -> begin 
             log @@ "found !!! " ^ 
               " tx " ^ M.hex_of_string hash ^ 
               " previous " ^ M.hex_of_string input.previous ^ 
               " index " ^ string_of_int i ^ 
               " r_value " ^ M.hex_of_string r 
-            >> return x 
+            >> 
+            (* ok, if we want the output value, then we have to store it *)
+            let key = (input.previous,input.index) in
+            match Utxos.mem key x.unspent with
+              | true -> 
+                  let output = Utxos.find key x.unspent in 
+                  let value = output.value in
+                  log @@ " value " ^ string_of_float ((Int64.to_float value ) /. 100000000.)
+                  >> 
+                  return x
+              | false -> raise ( Failure "ughh here" )
+            end
           | false -> 
             return { x with r_values = RValues.add r "mytx" x.r_values }
     in
     L.fold_left f (return x) ders
+    >|= fun x ->
+    (* why can't we pattern match here ? eg. function *)
+    if input.previous = coinbase then
+      x
+    else
+      let key = (input.previous,input.index) in
+      match Utxos.mem key x.unspent with
+        | true -> { x with unspent = Utxos.remove key x.unspent }
+        | false -> raise ( Failure "ughh here" )
+
 (*
     >>= fun x -> 
     log @@ "tx " ^ M.hex_of_string hash ^ 
@@ -178,20 +224,8 @@ let process_input x (i, (input : M.tx_in ), hash) =
       " ders " ^ string_of_int (L.length ders) 
 *)
 
-(*
-  let u = match script with *)
+(* let u = match script with *)
 
-(*
-  x >>= fun x ->
-    (* why can't we pattern match here ? eg. function *)
-    if input.previous = coinbase then
-      return x
-    else
-      let key = (input.previous,input.index) in
-      match Utxos.mem key x.unspent with
-        | true ->  return { x with unspent = Utxos.remove key x.unspent }
-        | false -> raise ( Failure "ughh here" )
- *)
 
 
 (* process tx by processing inputs then outputs *)
@@ -378,7 +412,7 @@ let process_file () =
     >>
       let seq = get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      let seq = CL.take seq 200000 in
+      let seq = CL.take seq 200000 in 
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
       Db.open_db "myhashes"

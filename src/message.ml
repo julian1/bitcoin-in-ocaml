@@ -86,9 +86,12 @@ type tx_out =
   script : string;
 
 
-  (* calculated on parse *)
+  (* calculated on parse 
+    TODO remove. we don't need these
+  
   pos : int;
   length : int ;
+*)
 }
 
 type tx =
@@ -415,8 +418,10 @@ let decodeTxOutput s pos =
   let pos, scriptLen = decodeVarInt s pos in
   let pos, script = decs_ s pos scriptLen in
   pos, { value = value; script = (* decode_script *) script;
+  (*
     pos = first;
     length = pos - first;
+*)
   }
 
 
