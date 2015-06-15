@@ -43,6 +43,20 @@ type tx = M.tx
     by looking up the matching output tx details script ...
       - but will have to store all tx's with their values.
       - actually we'd be more interested in the amounuggh.
+
+  -----
+    - need to index the tx, maybe output
+    - index the rvalue.
+
+    - OK, now hang on if we want to use db to do this stuff...
+    - we can't store the tx_out output script ... or can we? 
+  
+    -- hmmmm reading the full tx, to get the output is going to be slow????
+  
+    -- it's getting more and more complicated. we really want to factor this...  
+
+    -- scanner
+
 *)
 
 
@@ -266,15 +280,10 @@ module HM = Map.Make(String)
 module HS = Set.Make(String)
 
 
-type my_header =
-{
-    previous : string;
-    pos : int;
-    height : int;
-}
-
+open Scanner
 
 (* get the tree leaf hashes as a list *)
+(*
 let get_leaves headers =
     (* create set of all previous hashes *)
     let f _ header acc = HS.add header.previous acc in
@@ -283,8 +292,9 @@ let get_leaves headers =
     HM.filter (fun hash _ -> not @@ HS.mem hash previous ) headers
     |> HM.bindings
     |> L.rev_map (fun (tip,_) -> tip)
+*)
 
-
+(*
 (* trace sequence back to genesis and return hashes as a list *)
 let get_sequence hash headers =
   let rec get_list hash lst =
@@ -296,16 +306,18 @@ let get_sequence hash headers =
       | false -> lst
   in
   get_list hash []
+*)
 
-
+(*
 (* assuming calculate as we go
   - probably should be able to calulate difficulty dynamically  *)
 let get_height hash headers =
   match HM.mem hash headers with
     | true -> (HM.find hash headers).height
     | false -> 0
+*)
 
-
+(*
 (* given list of leaves - return hash of the longest one -
     horrible - should be recursive and use just the headers
 *)
@@ -318,8 +330,9 @@ let get_longest_path leaves headers =
     let _,bh = b in
     if ah > bh then a else b) ("",-1) x in
   longest
+*)
 
-
+(*
 (* scan blocks and return a headers structure *)
 let scan_blocks fd =
   let rec loop_blocks headers count =
@@ -348,7 +361,7 @@ let scan_blocks fd =
   in
   let headers = HM.empty
   in loop_blocks headers 0
-
+*)
 
 (* read a block at current pos and return it *)
 let read_block fd =
