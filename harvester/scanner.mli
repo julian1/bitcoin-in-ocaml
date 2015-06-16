@@ -26,6 +26,11 @@ val replay_blocks : Lwt_unix.file_descr -> string list -> my_header HM.t
     -> ('a -> string -> 'a Lwt.t ) -> 'a -> 'a Lwt.t
 
 
+val replay_tx : Lwt_unix.file_descr -> string list -> my_header HM.t 
+    -> ('a -> (string * Message.tx ) -> 'a Lwt.t ) -> 'a -> 'a Lwt.t
+
+
+
 
 (* val get_block file_desc string my_header  - might be useful *) 
 

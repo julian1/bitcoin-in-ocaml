@@ -243,8 +243,9 @@ let process_input x (i, (input : M.tx_in ), hash) =
 
 
 (* process tx by processing inputs then outputs *)
+
 let process_tx x (hash,tx) =
-  x >>= fun x -> 
+(*  x >>= fun x ->  *)
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
     let group index a = (index,a,hash) in
@@ -254,32 +255,15 @@ let process_tx x (hash,tx) =
   >>= fun x ->
     let outputs = L.mapi group tx.outputs in 
     L.fold_left process_output (return x) outputs
+  >>= fun x -> 
+    return x
 
-
-(* process block by scanning txs *)
-let process_block f x payload =
-  (*log "block"
-  >> *)
-    (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
-    (* decode tx's and get tx hash *)
-    let pos = 80 in
-    let pos, tx_count = M.decodeVarInt payload pos in
-    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    let txs = L.map (fun tx ->
-      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
-      in hash, tx
-    ) txs
-    in
-    (* L.fold_left (fun x e -> x >>= f x e)  (return x) txs *)
-    L.fold_left f  (return x) txs
-
-
+(*
+let process_tx x (hash,tx) =
+  return x
+*)
 
 module Sc = Scanner
-
-let replay_tx fd seq headers process_tx x =
-  let process_block = process_block process_tx in
-  Sc.replay_blocks fd seq headers process_block x
 
 
 
@@ -321,7 +305,7 @@ let process_file () =
       Sc.replay_blocks fd seq headers process_block x
 *)
 
-      replay_tx fd seq headers process_tx x 
+      Sc.replay_tx fd seq headers process_tx x 
 
     >>
       log "finished "

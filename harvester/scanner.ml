@@ -148,3 +148,31 @@ let replay_blocks fd seq headers f x =
   in
   replay_blocks' seq (return x)
 
+
+
+(* process block by scanning txs *)
+let process_block f x payload =
+  (* TODO - change this to just decode enough of the tx, to pull them 
+    out. let process_tx calculate hash, and decode *)
+  (*log "block"
+  >> *)
+    (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
+    (* decode tx's and get tx hash *)
+    let pos = 80 in
+    let pos, tx_count = M.decodeVarInt payload pos in
+    let _, (txs : M.tx list ) = M.decodeNItems payload pos M.decodeTx tx_count in
+    let txs = L.map (fun (tx : M.tx) ->
+      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
+      in hash, tx
+    ) txs
+    in
+    L.fold_left (fun x e -> x >>= fun x -> f x e)  (return x) txs 
+    (*L.fold_left f  (x) txs *)
+
+
+let replay_tx fd seq headers process_tx x =
+  let process_block = process_block process_tx in
+  replay_blocks fd seq headers process_block x
+
+
+
