@@ -100,18 +100,17 @@ type my_script =
   should change x to xs or acc
   alternatively write a fold_m 
 *)
-let adapt f x e = x >>= fun x -> f x e 
 
 
 let fold_m f acc lst = 
+  let adapt f acc e = acc >>= fun acc -> f acc e in
   L.fold_left (adapt f) (return acc) lst 
 
 
 
-let adapt2 f x e = x >> f e 
-
 let map_m f lst = 
-  L.fold_left (adapt2 f) (return ()) lst 
+  let adapt f acc e = acc >> f e in
+  L.fold_left (adapt f) (return ()) lst 
 
 
 
