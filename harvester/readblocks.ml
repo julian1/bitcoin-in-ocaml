@@ -275,8 +275,12 @@ let process_block f x payload =
 
 
 
-
 module Sc = Scanner
+
+let replay_tx fd seq headers process_tx x =
+  let process_block = process_block process_tx in
+  Sc.replay_blocks fd seq headers process_block x
+
 
 
 let process_file () =
@@ -312,8 +316,13 @@ let process_file () =
         r_values = RValues.empty; 
         output_count = 0; 
       } in
+(*
       let process_block = process_block process_tx in
       Sc.replay_blocks fd seq headers process_block x
+*)
+
+      replay_tx fd seq headers process_tx x 
+
     >>
       log "finished "
 
