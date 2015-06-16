@@ -96,7 +96,24 @@ type my_script =
   | None
   | Strange
 
+(*  is really confusing here. in haskell it would be the element 
+  should change x to xs or acc
+  alternatively write a fold_m 
+*)
 let adapt f x e = x >>= fun x -> f x e 
+
+
+let fold_m f acc lst = 
+  L.fold_left (adapt f) (return acc) lst 
+
+
+
+let adapt2 f x e = x >> f e 
+
+let map_m f lst = 
+  L.fold_left (adapt2 f) (return ()) lst 
+
+
 
 let process_output x (i,output,hash) =
 (**)
@@ -216,7 +233,8 @@ let process_input x (i, (input : M.tx_in ), hash) =
           | false -> 
             return { x with r_values = RValues.add r "mytx" x.r_values }
     in
-    L.fold_left (adapt f) (return x) ders
+    fold_m f x ders
+    (* L.fold_left (adapt f) (return x) ders *)
     >|= fun x ->
     (* why can't we pattern match here ? eg. function *)
     if input.previous = coinbase then
@@ -259,10 +277,10 @@ let process_tx x (hash,tx) =
     let group index a = (index,a,hash) in
 
     let inputs = L.mapi group tx.inputs in
-    L.fold_left (adapt process_input) (return x) inputs
+    fold_m process_input x inputs
   >>= fun x ->
     let outputs = L.mapi group tx.outputs in 
-    L.fold_left (adapt process_output) (return x) outputs
+    fold_m process_output x outputs 
 
 
 module Sc = Scanner
@@ -314,9 +332,16 @@ let process_file () =
 
 
 
+let test () =
+  let lst = [ "hi"; "there"; "folks" ] in
+  map_m log lst
+
+
 let () = Lwt_main.run (
   Lwt.catch (
-    process_file
+    (* process_file *)
+    test
+
   )
   (fun exn ->
     (* must close *)
