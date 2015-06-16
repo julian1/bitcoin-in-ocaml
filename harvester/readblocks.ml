@@ -96,6 +96,7 @@ type my_script =
   | None
   | Strange
 
+let adapt f x e = x >>= fun x -> f x e 
 
 let process_output x (i,output,hash) =
 (**)
@@ -192,7 +193,6 @@ let process_input x (i, (input : M.tx_in ), hash) =
     (* lookup *) 
     in
       let f x der = 
-        x >>= fun x -> 
         let r,s = der in
         match RValues.mem r x.r_values with 
           true -> begin 
@@ -216,7 +216,7 @@ let process_input x (i, (input : M.tx_in ), hash) =
           | false -> 
             return { x with r_values = RValues.add r "mytx" x.r_values }
     in
-    L.fold_left f (return x) ders
+    L.fold_left (adapt f) (return x) ders
     >|= fun x ->
     (* why can't we pattern match here ? eg. function *)
     if input.previous = coinbase then
@@ -253,20 +253,16 @@ let process_tx x (hash,tx) =
       ] 
       | _ -> return ()
   end
-    >>
+  >>
+    let x = { x with tx_count = succ x.tx_count } in
+  (*log "tx" >> *)
+    let group index a = (index,a,hash) in
 
-  let x = { x with tx_count = succ x.tx_count } in
-(*log "tx" >> *)
-  let group index a = (index,a,hash) in
-
-
-  let adapt f x e = x >>= fun x -> f x e in
-
-  let inputs = L.mapi group tx.inputs in
-  L.fold_left (adapt process_input) (return x) inputs
->>= fun x ->
-  let outputs = L.mapi group tx.outputs in 
-  L.fold_left (adapt process_output) (return x) outputs
+    let inputs = L.mapi group tx.inputs in
+    L.fold_left (adapt process_input) (return x) inputs
+  >>= fun x ->
+    let outputs = L.mapi group tx.outputs in 
+    L.fold_left (adapt process_output) (return x) outputs
 
 
 module Sc = Scanner
