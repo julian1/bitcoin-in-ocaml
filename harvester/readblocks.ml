@@ -276,7 +276,7 @@ let process_block f x payload =
 
 
 
-module Sc = Scanner.Make(struct type t = mytype end)
+module Sc = Scanner
 
 
 let process_file () =
