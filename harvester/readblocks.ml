@@ -98,7 +98,6 @@ type my_script =
 
 
 let process_output x (i,output,hash) =
-  x  >>= fun x ->
 (**)
     let script = M.decode_script output.script in
     let u = match script with
@@ -179,7 +178,6 @@ let process_output x (i,output,hash) =
 *)
 
 let process_input x (i, (input : M.tx_in ), hash) =
-  x >>= fun x -> 
     (* extract der signature and r,s keys *)
     let script = M.decode_script input.script in
     let ders = L.fold_left (fun acc elt ->
@@ -261,11 +259,14 @@ let process_tx x (hash,tx) =
 (*log "tx" >> *)
   let group index a = (index,a,hash) in
 
+
+  let adapt f x e = x >>= fun x -> f x e in
+
   let inputs = L.mapi group tx.inputs in
-  L.fold_left process_input (return x) inputs
+  L.fold_left (adapt process_input) (return x) inputs
 >>= fun x ->
   let outputs = L.mapi group tx.outputs in 
-  L.fold_left process_output (return x) outputs
+  L.fold_left (adapt process_output) (return x) outputs
 
 
 module Sc = Scanner

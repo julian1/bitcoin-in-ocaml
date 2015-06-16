@@ -20,24 +20,19 @@ val get_longest_path : string list -> my_header HM.t -> string
 
 val scan_blocks : Lwt_unix.file_descr -> my_header HM.t Lwt.t 
 
-(* only really this function needs the functor *)
-(* val replay_blocks fd seq headers f x = *)
+(*
+  rather than, 
+    string list -> my_header HM.t  
+  could just use pos
+    int list 
+*)
+
 val replay_blocks : Lwt_unix.file_descr -> string list -> my_header HM.t 
     -> ('a -> string -> 'a Lwt.t ) -> 'a -> 'a Lwt.t
 
-
+(*
+  we should be allowing the handler to handle this message
+*)
 val replay_tx : Lwt_unix.file_descr -> string list -> my_header HM.t 
     -> ('a -> (string * Message.tx ) -> 'a Lwt.t ) -> 'a -> 'a Lwt.t
-
-
-
-
-(* val get_block file_desc string my_header  - might be useful *) 
-
-(* VERY IMPORTANT - we may not have needed a functor - just abstract type t *)
-
-
-(*val replay_tx : Lwt_unix.file_descr -> string list -> my_header HM.t 
-
-*)
 

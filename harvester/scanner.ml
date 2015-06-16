@@ -166,7 +166,7 @@ let process_block f x payload =
       in hash, tx
     ) txs
     in
-    L.fold_left (fun x e -> x >>= fun x -> f x e)  (return x) txs 
+    L.fold_left (fun x e -> x >>= fun x -> f x e) (return x) txs 
     (*L.fold_left f  (x) txs *)
 
 
