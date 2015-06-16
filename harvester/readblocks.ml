@@ -245,23 +245,28 @@ let process_input x (i, (input : M.tx_in ), hash) =
 (* process tx by processing inputs then outputs *)
 
 let process_tx x (hash,tx) =
-(*  x >>= fun x ->  *)
-    let x = { x with tx_count = succ x.tx_count } in
-  (*log "tx" >> *)
-    let group index a = (index,a,hash) in
+  begin
+    match x.tx_count mod 100000 with
+      | 0 -> log @@ S.concat "" [
+        " tx_count "; string_of_int x.tx_count;
+          " output_count "; string_of_int x.output_count;
+          " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
+          " rvalues "; x.r_values |> RValues.cardinal |> string_of_int
+      ] 
+      | _ -> return ()
+  end
+    >>
 
-    let inputs = L.mapi group tx.inputs in
-    L.fold_left process_input (return x) inputs
-  >>= fun x ->
-    let outputs = L.mapi group tx.outputs in 
-    L.fold_left process_output (return x) outputs
-  >>= fun x -> 
-    return x
+  let x = { x with tx_count = succ x.tx_count } in
+(*log "tx" >> *)
+  let group index a = (index,a,hash) in
 
-(*
-let process_tx x (hash,tx) =
-  return x
-*)
+  let inputs = L.mapi group tx.inputs in
+  L.fold_left process_input (return x) inputs
+>>= fun x ->
+  let outputs = L.mapi group tx.outputs in 
+  L.fold_left process_output (return x) outputs
+
 
 module Sc = Scanner
 
