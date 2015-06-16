@@ -31,6 +31,11 @@ type tx = M.tx
 
     4m 21 recording r_values
 
+    7m.40 doing both.
+
+    73 minutes to 190k blocks.  10x slower = 2.7k ops / s
+
+
   height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
 
   - native goes through in 12 minutes - including output script decoding.
@@ -52,11 +57,11 @@ type tx = M.tx
     - we can't store the tx_out output script ... or can we? 
   
     -- hmmmm reading the full tx, to get the output is going to be slow????
-  
     -- it's getting more and more complicated. we really want to factor this...  
-
     -- scanner
-
+  -----
+  
+    what do we store in the db. the r_value ...  yes... might be enough
 *)
 
 
@@ -73,7 +78,7 @@ type mytype =
   tx_count : int;
   output_count : int;
 
-  r_values : string RValues.t;
+(*  r_values : string RValues.t; *)
 
   db :  Db.t ;  (* db of hashes, maybe change name *)
 }
@@ -107,11 +112,23 @@ let fold_m f acc lst =
   L.fold_left (adapt f) (return acc) lst 
 
 
-
 let map_m f lst = 
   let adapt f acc e = acc >> f e in
   L.fold_left (adapt f) (return ()) lst 
 
+(*
+let map_m f lst = 
+  (* should return a list, not null *)
+  (* let adapt f acc e = acc >>= fun acc -> f e >>= fun g -> (return (g :: acc)) in *)
+  let adapt f acc e = acc >> f e in
+  (* let adapt f acc e = acc >>= fun acc -> f e >>= fun g -> return [] in *)
+  L.fold_left (adapt f) (return ()) lst 
+*)
+
+(*
+let map_m f lst =
+  fold_m (fun acc e -> (return acc) ) [] lst
+*)
 
 
 let process_output x (i,output,hash) =
@@ -137,6 +154,7 @@ let process_output x (i,output,hash) =
     match u with
       | Some hash160 ->
         begin
+          
 (*
           Db.get x.db hash160
           >>= function
@@ -210,32 +228,38 @@ let process_input x (i, (input : M.tx_in ), hash) =
     in
       let f x der = 
         let r,s = der in
-        match RValues.mem r x.r_values with 
-          true -> begin 
-            log @@ "found !!! " ^ 
-              " tx " ^ M.hex_of_string hash ^ 
-              " previous " ^ M.hex_of_string input.previous ^ 
-              " index " ^ string_of_int i ^ 
-              " r_value " ^ M.hex_of_string r 
-            >> 
+
+        Db.get x.db r 
+        >>= function 
+          (* match RValues.mem r x.r_values with  *)
+          Some value -> begin 
             (* ok, if we want the output value, then we have to store it *)
             let key = (input.previous,input.index) in
             match Utxos.mem key x.unspent with
               | true -> 
-                  let output = Utxos.find key x.unspent in 
-                  let value = output.value in
-                  log @@ " value " ^ string_of_float ((Int64.to_float value ) /. 100000000.)
-                  >> 
+                let output = Utxos.find key x.unspent in 
+                let value = output.value in
+                let value = (Int64.to_float value) /. 100000000. in
+                log @@ "found !!! " ^ 
+                  " tx " ^ M.hex_of_string hash ^ 
+                  " previous " ^ M.hex_of_string input.previous ^ 
+                  " index " ^ string_of_int i ^ 
+                  " r_value " ^ M.hex_of_string r ^ 
+                  " value " ^ string_of_float value 
+                >> 
                   return x
               | false -> raise ( Failure "ughh here" )
             end
-          | false -> 
-            return { x with r_values = RValues.add r "mytx" x.r_values }
+          | None -> 
+            Db.put x.db r  ""
+            >> 
+            return x (* { x with r_values = RValues.add r "mytx" x.r_values } *)
+
     in
     fold_m f x ders
     (* L.fold_left (adapt f) (return x) ders *)
     >|= fun x ->
-    (* why can't we pattern match here ? eg. function *)
+    (* why can't we pattern match on string here ? eg. function *)
     if input.previous = coinbase then
       x
     else
@@ -266,7 +290,7 @@ let process_tx x (hash,tx) =
         " tx_count "; string_of_int x.tx_count;
           " output_count "; string_of_int x.output_count;
           " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
-          " rvalues "; x.r_values |> RValues.cardinal |> string_of_int
+          (* " rvalues "; x.r_values |> RValues.cardinal |> string_of_int *)
       ] 
       | _ -> return ()
   end
@@ -308,15 +332,16 @@ let process_file () =
       let seq = CL.take seq 200000 in 
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
-      Db.open_db "myhashes"
+      let filename = "rvalues" in
+      Db.open_db filename
     >>= fun db ->
-      log "opened myhashes db"
+      log @@ "opened db " ^ filename
     >>
       let x = { 
         unspent = Utxos.empty; 
         db = db; 
         tx_count = 0; 
-        r_values = RValues.empty; 
+        (* r_values = RValues.empty;  *)
         output_count = 0; 
       } in
 (*
@@ -338,8 +363,8 @@ let test () =
 
 let () = Lwt_main.run (
   Lwt.catch (
-    (* process_file *)
-    test
+    process_file 
+     (* test *)
 
   )
   (fun exn ->
