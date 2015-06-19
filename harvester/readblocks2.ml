@@ -1,7 +1,11 @@
 
 (* scan blocks and compute tx indexes
   native.
-  corebuild -I src -package leveldb,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax  harvester/readblocks.native
+
+  corebuild -I src -package pgocaml,microecc,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.byte
+
+  Need to get rid of leveldb ref, coming from misc.ml 126
+
 *)
 
 let (>>=) = Lwt.(>>=)
@@ -17,6 +21,15 @@ module Sc = Scanner
 
 open M
 
+
+module Lwt_thread = struct
+    include Lwt 
+    include Lwt_chan
+end
+
+module Lwt_PGOCaml = PGOCaml_generic.Make (Lwt_thread)
+
+
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
 module RValues = Map.Make(struct type t = string let compare = compare end)
 
@@ -26,7 +39,7 @@ type mytype =
   unspent : tx_out Utxos.t;
   tx_count : int;
   output_count : int;
-
+(*  input_count : int;   *) 
   (* db :  Db.t ; *)
 }
 
@@ -222,9 +235,22 @@ let process_file () =
       log "finished "
 
 
+
+let create_db db = 
+  let query = "select * from pg_class where relnamespace = $1  " in
+  Lwt_PGOCaml.prepare db ~query (* ~name*) ()
+  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[ Some (Lwt_PGOCaml.string_of_int 11) ] ()
+
+
 let () = Lwt_main.run (
   Lwt.catch (
-    process_file
+    fun () ->
+    Lwt_PGOCaml.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
+    >>= fun db -> create_db db
+    >> return ()
+
+(*    process_file
+*)
   )
   (fun exn ->
     (* must close *)
