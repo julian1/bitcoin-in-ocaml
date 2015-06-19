@@ -110,9 +110,8 @@ let process_output x (i,output,hash) =
     match u with
       | Some hash160 ->
         begin
-          let query = "insert into tx(hash,index,amount) values ($1,$2,$3)" in
-          Lwt_PGOCaml.prepare x.db ~query  ()
-          >> Lwt_PGOCaml.execute x.db ~params:[ 
+          (* inject just runs statement *)
+Lwt_PGOCaml.execute x.db ~name:"myinsert" ~params:[ 
             Some (Lwt_PGOCaml.string_of_bytea hash160); 
             Some (Lwt_PGOCaml.string_of_int i); 
             Some (Lwt_PGOCaml.string_of_int64 output.value ) 
@@ -211,8 +210,15 @@ let process_tx x (hash,tx) =
         " tx_count "; string_of_int x.tx_count;
           " output_count "; string_of_int x.output_count;
           " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
+
+ 
           (* " rvalues "; x.r_values |> RValues.cardinal |> string_of_int *)
-      ]
+      ] >>
+          log "comitting"
+        >> Lwt_PGOCaml.commit x.db 
+        >> log "done comitting, starting new transction"
+        >> Lwt_PGOCaml.begin_work x.db 
+
       | _ -> return ()
   end
   >>
@@ -255,6 +261,11 @@ let process_file () =
       >>= fun db ->
         create_db db 
       >>
+          let query = "insert into tx(hash,index,amount) values ($1,$2,$3)" in
+          Lwt_PGOCaml.prepare db ~name:"myinsert" ~query  ()
+      >>
+          Lwt_PGOCaml.begin_work db 
+      >> 
 
       let x = {
         unspent = Utxos.empty;
