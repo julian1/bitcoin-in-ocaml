@@ -13,13 +13,69 @@ module L = List
 module CL = Core.Core_list
 module S = String
 
-open M 
+open M
 (*
 type tx_out = M.tx_out
 type tx = M.tx
 *)
 
+(*
+  IMPORTANT - fold_m
+  - It should be possible to use the new fold_m with the iterator stuff in leveldb...
+  - eg. so we can output to stdout etc... without having to write a recursive function... 
 
+  - the iterator will be the first fold accumulator
+  - or one element of the values.
+
+  - should make it easier to do combined keys...
+
+  - pubkey / transaction
+
+  - input script
+  - might be better to use hash160 than pubkeys. 
+      - because we can always create for an output. simple pay to public key, it's not in 
+      the input script. 
+      - because of tx malleability
+
+  - so for output we always have hash160 or pubkey
+  - do we only need to index outputs???? 
+
+  - yes. but then we need to track whether spent or unspent. and we do that by previous hash. 
+    anything that refers to that tx,i is a spend and we don't care where.
+  
+  - order by block number.
+
+  hash160 / unspent / tx / i      <- for money sent to the hash 
+
+  hash160 / spent / previous / i    <- eg. we take the previous,i and lookit up. get the hash160 and mark it.
+
+  or why not just create forward links ...
+
+  hash160 / txhash / i = nothing if unspent. ( created by process_output )
+                       = the tx that spent it. (created by looking up the previous tx,i and usng the output) 
+
+  hash160, txhash, i, spending_tx 
+  txhash, pos, height
+  it's still pretty relational. 
+
+  to lookup previous, we have to index back into the chain. 
+  we'll have to have an index of txhashes - to be able to forward map. 
+  
+  -------------------------------------
+  NO. we just need,
+   id (hash,i)  - (block_height),output address,amount)    id (spending_tx,i) 
+
+  - then we can do a view - to join inputs and outputs ... 
+  - and a view to get all txs for an address, just with an index on address . 
+  - this is really good.
+
+  - OR
+    just use the previous,id
+   
+    hash,i     (output address,ammount)  previous_hash,i 
+
+    we should be able to relationally do all our view stuff... on that... 
+*)
 
 (*
   - timings 200,000 blocks
@@ -33,7 +89,9 @@ type tx = M.tx
 
     7m.40 doing both.
 
-    73 minutes to 190k blocks.  10x slower = 2.7k ops / s
+    116m using leveldb 200k
+
+      10x slower = 2.7k ops / s , leveldb is 422 MB,
 
 
   height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
@@ -54,13 +112,13 @@ type tx = M.tx
     - index the rvalue.
 
     - OK, now hang on if we want to use db to do this stuff...
-    - we can't store the tx_out output script ... or can we? 
-  
+    - we can't store the tx_out output script ... or can we?
+
     -- hmmmm reading the full tx, to get the output is going to be slow????
-    -- it's getting more and more complicated. we really want to factor this...  
+    -- it's getting more and more complicated. we really want to factor this...
     -- scanner
   -----
-  
+
     what do we store in the db. the r_value ...  yes... might be enough
 *)
 
@@ -68,7 +126,7 @@ type tx = M.tx
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
 (* module Utxos = Set.Make(struct type t = string * int let compare = compare end) *)
 
- 
+
 module RValues = Map.Make(struct type t = string let compare = compare end)
 
 
@@ -101,28 +159,28 @@ type my_script =
   | None
   | Strange
 
-(*  is really confusing here. in haskell it would be the element 
+(*  is really confusing here. in haskell it would be the element
   should change x to xs or acc
-  alternatively write a fold_m 
+  alternatively write a fold_m
 *)
 
 
-let fold_m f acc lst = 
+let fold_m f acc lst =
   let adapt f acc e = acc >>= fun acc -> f acc e in
-  L.fold_left (adapt f) (return acc) lst 
+  L.fold_left (adapt f) (return acc) lst
 
 
-let map_m f lst = 
+let map_m f lst =
   let adapt f acc e = acc >> f e in
-  L.fold_left (adapt f) (return ()) lst 
+  L.fold_left (adapt f) (return ()) lst
 
 (*
-let map_m f lst = 
+let map_m f lst =
   (* should return a list, not null *)
   (* let adapt f acc e = acc >>= fun acc -> f e >>= fun g -> (return (g :: acc)) in *)
   let adapt f acc e = acc >> f e in
   (* let adapt f acc e = acc >>= fun acc -> f e >>= fun g -> return [] in *)
-  L.fold_left (adapt f) (return ()) lst 
+  L.fold_left (adapt f) (return ()) lst
 *)
 
 (*
@@ -154,7 +212,7 @@ let process_output x (i,output,hash) =
     match u with
       | Some hash160 ->
         begin
-          
+
 (*
           Db.get x.db hash160
           >>= function
@@ -192,7 +250,7 @@ let process_output x (i,output,hash) =
 
 (*
   so we record r values...
-    
+
   - all the tx's will be spent.
     what we want is to find any other uses of the pubkey/ address that are unspent..
 
@@ -200,16 +258,16 @@ let process_output x (i,output,hash) =
   ok, we normally have
     SIG PUBKEY
 
-  which means we have the pubkey. without referencing the previous tx. in fact i 
+  which means we have the pubkey. without referencing the previous tx. in fact i
 
   - so it's easy to reference with what's been spent.
   - remember what we want is indication how often... so whether we run a process
   - it's only if the address is reused.
 
   - want to find out when and if recent.
- 
-  - all founds are repitions.  
-  - it means we can front run if fast enough. 
+
+  - all founds are repitions.
+  - it means we can front run if fast enough.
 *)
 
 let process_input x (i, (input : M.tx_in ), hash) =
@@ -217,42 +275,42 @@ let process_input x (i, (input : M.tx_in ), hash) =
     let script = M.decode_script input.script in
     let ders = L.fold_left (fun acc elt ->
         match elt with
-          | BYTES s -> ( 
-              match M.decode_der_signature s with  
+          | BYTES s -> (
+              match M.decode_der_signature s with
                 Some der -> der :: acc
                 | None -> acc
           )
           | _ -> acc
     ) [] script
-    (* lookup *) 
+    (* lookup *)
     in
-      let f x der = 
+      let f x der =
         let r,s = der in
 
-        Db.get x.db r 
-        >>= function 
+        Db.get x.db r
+        >>= function
           (* match RValues.mem r x.r_values with  *)
-          Some value -> begin 
+          Some value -> begin
             (* ok, if we want the output value, then we have to store it *)
             let key = (input.previous,input.index) in
             match Utxos.mem key x.unspent with
-              | true -> 
-                let output = Utxos.find key x.unspent in 
+              | true ->
+                let output = Utxos.find key x.unspent in
                 let value = output.value in
                 let value = (Int64.to_float value) /. 100000000. in
-                log @@ "found !!! " ^ 
-                  " tx " ^ M.hex_of_string hash ^ 
-                  " previous " ^ M.hex_of_string input.previous ^ 
-                  " index " ^ string_of_int i ^ 
-                  " r_value " ^ M.hex_of_string r ^ 
-                  " value " ^ string_of_float value 
-                >> 
+                log @@ "found !!! " ^
+                  " tx " ^ M.hex_of_string hash ^
+                  " previous " ^ M.hex_of_string input.previous ^
+                  " index " ^ string_of_int i ^
+                  " r_value " ^ M.hex_of_string r ^
+                  " value " ^ string_of_float value
+                >>
                   return x
               | false -> raise ( Failure "ughh here" )
             end
-          | None -> 
+          | None ->
             Db.put x.db r  ""
-            >> 
+            >>
             return x (* { x with r_values = RValues.add r "mytx" x.r_values } *)
 
     in
@@ -269,12 +327,12 @@ let process_input x (i, (input : M.tx_in ), hash) =
         | false -> raise ( Failure "ughh here" )
 
 (*
-    >>= fun x -> 
-    log @@ "tx " ^ M.hex_of_string hash ^ 
-      " previous " ^ M.hex_of_string input.previous ^ 
-      " index " ^ string_of_int input.index ^ 
-      " script " ^ M.format_script script ^ 
-      " ders " ^ string_of_int (L.length ders) 
+    >>= fun x ->
+    log @@ "tx " ^ M.hex_of_string hash ^
+      " previous " ^ M.hex_of_string input.previous ^
+      " index " ^ string_of_int input.index ^
+      " script " ^ M.format_script script ^
+      " ders " ^ string_of_int (L.length ders)
 *)
 
 (* let u = match script with *)
@@ -291,7 +349,7 @@ let process_tx x (hash,tx) =
           " output_count "; string_of_int x.output_count;
           " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
           (* " rvalues "; x.r_values |> RValues.cardinal |> string_of_int *)
-      ] 
+      ]
       | _ -> return ()
   end
   >>
@@ -302,8 +360,8 @@ let process_tx x (hash,tx) =
     let inputs = L.mapi group tx.inputs in
     fold_m process_input x inputs
   >>= fun x ->
-    let outputs = L.mapi group tx.outputs in 
-    fold_m process_output x outputs 
+    let outputs = L.mapi group tx.outputs in
+    fold_m process_output x outputs
 
 
 module Sc = Scanner
@@ -329,7 +387,7 @@ let process_file () =
     >>
       let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      let seq = CL.take seq 200000 in 
+      (* let seq = CL.take seq 200000 in *)
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
       let filename = "rvalues" in
@@ -337,19 +395,19 @@ let process_file () =
     >>= fun db ->
       log @@ "opened db " ^ filename
     >>
-      let x = { 
-        unspent = Utxos.empty; 
-        db = db; 
-        tx_count = 0; 
+      let x = {
+        unspent = Utxos.empty;
+        db = db;
+        tx_count = 0;
         (* r_values = RValues.empty;  *)
-        output_count = 0; 
+        output_count = 0;
       } in
 (*
       let process_block = process_block process_tx in
       Sc.replay_blocks fd seq headers process_block x
 *)
 
-      Sc.replay_tx fd seq headers process_tx x 
+      Sc.replay_tx fd seq headers process_tx x
 
     >>
       log "finished "
@@ -363,7 +421,7 @@ let test () =
 
 let () = Lwt_main.run (
   Lwt.catch (
-    process_file 
+    process_file
      (* test *)
 
   )
