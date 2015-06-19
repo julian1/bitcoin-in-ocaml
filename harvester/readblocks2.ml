@@ -41,7 +41,23 @@ type mytype =
   output_count : int;
 (*  input_count : int;   *) 
   (* db :  Db.t ; *)
+  db : int Lwt_PGOCaml.t ; (* TODO what is this *)
 }
+
+(*
+  prepare once, then use...
+*)
+
+let simple_query db query =
+  (* think this is a complete transaction *)
+  Lwt_PGOCaml.prepare db ~query (* ~name*) ()
+  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[] ()
+
+
+let create_db db = 
+  simple_query db "drop table if exists tx" 
+  >> simple_query db "create table tx(id serial primary key, hash bytea, index int, amount int)" 
+
 
 
 let log = Lwt_io.write_line Lwt_io.stdout
@@ -94,6 +110,12 @@ let process_output x (i,output,hash) =
     match u with
       | Some hash160 ->
         begin
+          let query = "insert into tx(hash,index,amount) values ($1,0,200)" in
+          Lwt_PGOCaml.prepare x.db ~query  ()
+          >> Lwt_PGOCaml.execute x.db ~params:[ Some (Lwt_PGOCaml.string_of_bytea hash160) ] ()
+
+          >>
+
 (*
           Db.get x.db hash160
           >>= function
@@ -225,39 +247,36 @@ let process_file () =
       let seq = CL.take seq 200000 in
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
+      Lwt_PGOCaml.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
+      >>= fun db ->
+        create_db db 
+      >>
+
       let x = {
         unspent = Utxos.empty;
         tx_count = 0;
         output_count = 0;
+        db = db;
       } in
       Sc.replay_tx fd seq headers process_tx x
     >>
       log "finished "
 
 
-
-let create_db db = 
-  let query = "drop table if exists tx" in
-  Lwt_PGOCaml.prepare db ~query (* ~name*) ()
-  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[ ] ()
-
-  >>
-  let query = " create table tx(id serial primary key, hash bytea, index int, amount int)  " in
-  Lwt_PGOCaml.prepare db ~query (* ~name*) ()
-  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[ ] ()
-
-
-
-
+(*
+  insert into tx(hash,index,amount) values (E'\\x0000',0,200);
+*)
 let () = Lwt_main.run (
   Lwt.catch (
+(*
     fun () ->
     Lwt_PGOCaml.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
     >>= fun db -> create_db db
     >> return ()
-
-(*    process_file
 *)
+
+    process_file
+
   )
   (fun exn ->
     (* must close *)
