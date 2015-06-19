@@ -56,7 +56,7 @@ let simple_query db query =
 
 let create_db db = 
   simple_query db "drop table if exists tx" 
-  >> simple_query db "create table tx(id serial primary key, hash bytea, index int, amount int)" 
+  >> simple_query db "create table tx(id serial primary key, hash bytea, index int, amount bigint)" 
 
 
 
@@ -110,9 +110,13 @@ let process_output x (i,output,hash) =
     match u with
       | Some hash160 ->
         begin
-          let query = "insert into tx(hash,index,amount) values ($1,0,200)" in
+          let query = "insert into tx(hash,index,amount) values ($1,$2,$3)" in
           Lwt_PGOCaml.prepare x.db ~query  ()
-          >> Lwt_PGOCaml.execute x.db ~params:[ Some (Lwt_PGOCaml.string_of_bytea hash160) ] ()
+          >> Lwt_PGOCaml.execute x.db ~params:[ 
+            Some (Lwt_PGOCaml.string_of_bytea hash160); 
+            Some (Lwt_PGOCaml.string_of_int i); 
+            Some (Lwt_PGOCaml.string_of_int64 output.value ) 
+            ] ()
 
           >>
 
