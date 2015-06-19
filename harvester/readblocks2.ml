@@ -237,9 +237,16 @@ let process_file () =
 
 
 let create_db db = 
-  let query = "select * from pg_class where relnamespace = $1  " in
+  let query = "drop table if exists tx" in
   Lwt_PGOCaml.prepare db ~query (* ~name*) ()
-  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[ Some (Lwt_PGOCaml.string_of_int 11) ] ()
+  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[ ] ()
+
+  >>
+  let query = " create table tx(id serial primary key, hash bytea, index int, amount int)  " in
+  Lwt_PGOCaml.prepare db ~query (* ~name*) ()
+  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[ ] ()
+
+
 
 
 let () = Lwt_main.run (
