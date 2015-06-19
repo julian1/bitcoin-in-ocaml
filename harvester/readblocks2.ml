@@ -111,12 +111,13 @@ let process_output x (i,output,hash) =
       | Some hash160 ->
         begin
           (* inject just runs statement *)
-Lwt_PGOCaml.execute x.db ~name:"myinsert" ~params:[ 
-            Some (Lwt_PGOCaml.string_of_bytea hash160); 
-            Some (Lwt_PGOCaml.string_of_int i); 
-            Some (Lwt_PGOCaml.string_of_int64 output.value ) 
+          Lwt_PGOCaml.(
+            execute x.db ~name:"myinsert" ~params:[ 
+            Some (string_of_bytea hash160); 
+            Some (string_of_int i); 
+            Some (string_of_int64 output.value ) 
             ] ()
-
+          )
           >>
 
 (*
