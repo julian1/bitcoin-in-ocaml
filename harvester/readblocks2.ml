@@ -27,7 +27,7 @@ type mytype =
   tx_count : int;
   output_count : int;
 
-  db :  Db.t ;  (* db of hashes, maybe change name *)
+  (* db :  Db.t ; *)
 }
 
 
@@ -110,7 +110,7 @@ let process_output x (i,output,hash) =
 let process_input x (i, (input : M.tx_in ), hash) =
     (* extract der signature and r,s keys *)
     let script = M.decode_script input.script in
-    let ders = L.fold_left (fun acc elt ->
+ (* let ders = L.fold_left (fun acc elt ->
         match elt with
           | BYTES s -> (
               match M.decode_der_signature s with
@@ -148,19 +148,20 @@ let process_input x (i, (input : M.tx_in ), hash) =
           | None ->
             Db.put x.db r  ""
             >>
-            return x (* { x with r_values = RValues.add r "mytx" x.r_values } *)
-
+            return x
     in
     fold_m f x ders
-    (* L.fold_left (adapt f) (return x) ders *)
+
     >|= fun x ->
+*)
+
     (* why can't we pattern match on string here ? eg. function *)
     if input.previous = coinbase then
-      x
+      return x
     else
       let key = (input.previous,input.index) in
       match Utxos.mem key x.unspent with
-        | true -> { x with unspent = Utxos.remove key x.unspent }
+        | true -> return { x with unspent = Utxos.remove key x.unspent }
         | false -> raise ( Failure "ughh here" )
 
 
@@ -208,19 +209,12 @@ let process_file () =
     >>
       let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      (* let seq = CL.take seq 200000 in *)
+      let seq = CL.take seq 200000 in
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
-      let filename = "rvalues" in
-      Db.open_db filename
-    >>= fun db ->
-      log @@ "opened db " ^ filename
-    >>
       let x = {
         unspent = Utxos.empty;
-        db = db;
         tx_count = 0;
-        (* r_values = RValues.empty;  *)
         output_count = 0;
       } in
       Sc.replay_tx fd seq headers process_tx x
