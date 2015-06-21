@@ -66,8 +66,11 @@ let create_db db =
     >> inject db "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )"
 
     >> inject db "create index on tx(hash)"
+    >> inject db "create index on output(tx_id)"
+
     (* >> inject db "create index on output(index)" *)
     (* important- can put the prepared statements in here *)
+    (* important - need to commit and close the connection *)
     >> PG.commit db
   )
 
@@ -280,7 +283,7 @@ let process_file () =
     >>
       let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      let seq = CL.take seq 50000 in
+      (* let seq = CL.take seq 50000 in *)
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
 
