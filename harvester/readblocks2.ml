@@ -165,16 +165,41 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
       return x
     else
 
-        PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.id where tx.hash = $1 and output.index = $2" ()
+(* i think the outputs are not getting recorded??? 
+ 
+  or we are overwriting them?
+  or we're counting them incorrectly, with coinbase 
+
+  this tx has two outputs but it doesn't find second
+    and in fact it doesn't seem to exist 
+  https://blockchain.info/tx/f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16
+
+ok we have them, so there
+meteo=> select * from output where tx_id = 171
+meteo-> ;
+ id  | tx_id | index |   amount   
+-----+-------+-------+------------
+ 171 |   171 |     0 | 1000000000
+ 172 |   171 |     1 | 4000000000
+ok, it appears correct, so why do our joins not work...  
+
+   id  |                                hash                                
+-----+--------------------------------------------------------------------
+ 171 | \xf4184fc596403
+
+*)
+
+        (*PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.id where tx.hash = $1 and output.index = $2" () *)
+        PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
       >> PG.execute x.db  ~params:[
         Some (PG.string_of_bytea input.previous);
         Some (PG.string_of_int input.index); ] ()
       >>= fun rows ->
         let tx_id = match rows with
           (Some field ::_ )::_ -> PG.int_of_string field 
-          | _ -> -1    
+          | _ -> raise (Failure "previous tx not found") 
         in
-        log @@ "found " ^ string_of_int tx_id
+        log @@ "found " ^ string_of_int tx_id ^ " " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
        
     >>
       return x
