@@ -115,7 +115,7 @@ let map_m f lst =
 
 *)
 
-let process_output x (i,output,hash) =
+let process_output x (i,output,hash,tx_id) =
     let script = 
     let open M in
     M.decode_script output.script in
@@ -174,7 +174,7 @@ let process_output x (i,output,hash) =
     }
 
 
-let process_input x (i, (input : M.tx_in ), hash) =
+let process_input x (i, (input : M.tx_in ), hash,tx_id) =
     (* extract der signature and r,s keys *)
     let script = M.decode_script input.script in
 
@@ -206,19 +206,23 @@ let process_tx x (hash,tx) =
       | _ -> return ()
   end
   >>
+    (* we can get rid of this tx_count *)
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
-    let group index a = (index,a,hash) in
+
+    PG.prepare x.db ~query:"insert into tx(hash) values ($1) returning id" ()
+  >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
+  >>= fun rows -> 
+    let tx_id = match rows with 
+      (Some field ::_ )::_ -> PG.int_of_string field 
+      | _ -> raise (Failure "uggh") 
+    in
+
+    (* can get rid of the hash *)
+    let group index a = (index,a,hash,tx_id) in
+
     let open M in
 
-    PG.prepare x.db ~query:"insert into tx(hash) values ($1) returning id"  ()
-  >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
-  >>= (function 
-      (Some field :: _  ) :: _ -> log @@ "whoot " ^ field 
-      | _ -> log "whoot"
-  )
-
-  >>
     let inputs = L.mapi group tx.inputs in
     fold_m process_input x inputs
   >>= fun x ->
