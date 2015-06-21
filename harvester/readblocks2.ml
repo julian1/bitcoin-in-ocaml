@@ -211,9 +211,14 @@ let process_tx x (hash,tx) =
     let group index a = (index,a,hash) in
     let open M in
 
-    let query = "insert into tx(hash) values ($1) returning id" in
-    PG.prepare x.db ~query ()
+    PG.prepare x.db ~query:"insert into tx(hash) values ($1) returning id"  ()
   >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
+  >>= fun rows -> ( 
+    match rows  with 
+      row  :: _ -> log "whoot 2"  
+      | _ -> log "whoot"
+  )
+
   >>
     let inputs = L.mapi group tx.inputs in
     fold_m process_input x inputs
