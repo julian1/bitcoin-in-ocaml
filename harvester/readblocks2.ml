@@ -139,15 +139,13 @@ let process_output x (i,output,hash,tx_id) =
       | Some hash160 ->
         begin
           (* inject is no argument statement *)
-(*
-          PG.(
-            execute x.db ~name:"myinsert" ~params:[ 
-              Some (string_of_int i); 
-              Some (string_of_int64 output.value ) 
+          PG.prepare x.db ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3)" ()
+          >> PG.execute x.db  ~params:[ 
+              Some (PG.string_of_int tx_id); 
+              Some (PG.string_of_int i); 
+              Some (PG.string_of_int64 output.value ) 
             ] ()
-          )
           >>
-*)
 (*
           Db.get x.db hash160
           >>= function
