@@ -48,15 +48,16 @@ type mytype =
   prepare once, then use...
 *)
 
+(*
 let simple_query db query =
   (* think this is a complete transaction *)
   Lwt_PGOCaml.prepare db ~query (* ~name*) ()
   >> Lwt_PGOCaml.execute db (* ~name*) ~params:[] ()
-
+*)
 
 let create_db db = 
-  simple_query db "drop table if exists tx" 
-  >> simple_query db "create table tx(id serial primary key, hash bytea, index int, amount bigint)" 
+  Lwt_PGOCaml.inject db "drop table if exists tx" 
+  >> Lwt_PGOCaml.inject db "create table tx(id serial primary key, hash bytea, index int, amount bigint)" 
 
 
 
@@ -88,6 +89,19 @@ let map_m f lst =
   L.fold_left (adapt f) (return ()) lst
 *)
 
+(*
+  we have
+    - a tx table having tx hash, block id
+    - an output table with tx_id, output_index, address, amount
+    - an input table with tx_id, and referencing output table id.
+
+  - then we can join everything. for a tx or address 
+  - it's append only
+  - inputs refer directly to outputs using primary_id of output.
+  - no aggregate indexes
+  - easy to remove txs.
+
+*)
 
 let process_output x (i,output,hash) =
     let script = M.decode_script output.script in
@@ -110,12 +124,12 @@ let process_output x (i,output,hash) =
     match u with
       | Some hash160 ->
         begin
-          (* inject just runs statement *)
+          (* inject is no argument statement *)
           Lwt_PGOCaml.(
             execute x.db ~name:"myinsert" ~params:[ 
-            Some (string_of_bytea hash160); 
-            Some (string_of_int i); 
-            Some (string_of_int64 output.value ) 
+              Some (string_of_bytea hash160); 
+              Some (string_of_int i); 
+              Some (string_of_int64 output.value ) 
             ] ()
           )
           >>
