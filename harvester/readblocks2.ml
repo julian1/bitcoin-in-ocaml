@@ -155,19 +155,25 @@ let process_output x (i,output,hash,tx_id) =
 
 
 
-let process_input x (i, (input : M.tx_in ), hash,tx_id) =
+let process_input x (i, (input : M.tx_in ), hash,tx_id) = 
+(* let process_input x (i, input, hash,tx_id) = *)
     (* extract der signature and r,s keys *)
-    let script = M.decode_script input.script in
+   
+    let script = M.decode_script input.script  in
 
     (* why can't we pattern match on string here ? eg. function *)
 
     (* so we have to look up the tx hash, which means we need an index on it *)
+
     if input.previous = coinbase then
       return x
     else
 
     (* Important - in fact we don't have to return the value, but could just 
         select the correct output id and insert at the same time.               
+        -
+      - need an index on tx.hash at least.
+      - but should do timing.
     *) 
         PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
       >> PG.execute x.db  ~params:[
