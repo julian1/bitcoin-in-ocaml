@@ -57,12 +57,13 @@ let simple_query db query =
 let create_db db =
   PG.(
     PG.begin_work db
+    >> inject db "drop table if exists input"
     >> inject db "drop table if exists output"
     >> inject db "drop table if exists tx"
     >> inject db "create table tx(id serial primary key, hash bytea)"
     >> inject db @@ "create table output(id serial primary key, tx_id integer references tx(id), "
                   ^ "index int, amount bigint)"
-
+    >> inject db "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )"
 
     >> PG.commit db
   )
@@ -166,23 +167,28 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
     else
 
     (* Important - in fact we don't have to return the value, but could just 
-        select and insert at the same time.               
+        select the correct output id and insert at the same time.               
     *) 
-
-        (*PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.id where tx.hash = $1 and output.index = $2" () *)
         PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
       >> PG.execute x.db  ~params:[
         Some (PG.string_of_bytea input.previous);
         Some (PG.string_of_int input.index); ] ()
       >>= fun rows ->
-        let tx_id = match rows with
+        let output_id = match rows with
           (Some field ::_ )::_ -> PG.int_of_string field 
           | _ -> raise (Failure "previous tx not found") 
         in
-        log @@ "found " ^ string_of_int tx_id ^ " " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
+        log @@ "found " ^ string_of_int output_id ^ " " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
        
     >>
-      return x
+      PG.prepare x.db ~query:"insert into input(tx_id,output_id) values ($1,$2)" ()
+    >> PG.execute x.db  ~params:[
+        Some (PG.string_of_int tx_id);
+        Some (PG.string_of_int output_id);
+      ] ()
+    >> return x
+
+
 (*
       let key = (input.previous,input.index) in
       match Utxos.mem key x.unspent with
