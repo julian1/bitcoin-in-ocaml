@@ -53,11 +53,23 @@ let simple_query db query =
   (* think this is a complete transaction *)
   PG.prepare db ~query (* ~name*) ()
   >> PG.execute db (* ~name*) ~params:[] ()
+
+  IMARY KEY,
+    product_no integer REFERENCES products (product_no),
 *)
 
 let create_db db = 
-  PG.inject db "drop table if exists tx" 
-  >> PG.inject db "create table tx(id serial primary key, hash bytea, index int, amount bigint)" 
+  PG.(
+    PG.begin_work db 
+    >> inject db "drop table if exists output" 
+    >> inject db "drop table if exists tx" 
+    >> inject db "create table tx(id serial primary key, hash bytea)" 
+    >> inject db @@ "create table output(id serial primary key, tx_id integer references tx(id), "
+                  ^ "index int, amount bigint)" 
+
+
+    >> PG.commit db 
+  )
 
 
 
@@ -127,15 +139,15 @@ let process_output x (i,output,hash) =
       | Some hash160 ->
         begin
           (* inject is no argument statement *)
+(*
           PG.(
             execute x.db ~name:"myinsert" ~params:[ 
-              Some (string_of_bytea hash160); 
               Some (string_of_int i); 
               Some (string_of_int64 output.value ) 
             ] ()
           )
           >>
-
+*)
 (*
           Db.get x.db hash160
           >>= function
@@ -165,50 +177,6 @@ let process_output x (i,output,hash) =
 let process_input x (i, (input : M.tx_in ), hash) =
     (* extract der signature and r,s keys *)
     let script = M.decode_script input.script in
- (* let ders = L.fold_left (fun acc elt ->
-        match elt with
-          | BYTES s -> (
-              match M.decode_der_signature s with
-                Some der -> der :: acc
-                | None -> acc
-          )
-          | _ -> acc
-    ) [] script
-    (* lookup *)
-    in
-      let f x der =
-        let r,s = der in
-
-        Db.get x.db r
-        >>= function
-          (* match RValues.mem r x.r_values with  *)
-          Some value -> begin
-            (* ok, if we want the output value, then we have to store it *)
-            let key = (input.previous,input.index) in
-            match Utxos.mem key x.unspent with
-              | true ->
-                let output = Utxos.find key x.unspent in
-                let value = output.value in
-                let value = (Int64.to_float value) /. 100000000. in
-                log @@ "found !!! " ^
-                  " tx " ^ M.hex_of_string hash ^
-                  " previous " ^ M.hex_of_string input.previous ^
-                  " index " ^ string_of_int i ^
-                  " r_value " ^ M.hex_of_string r ^
-                  " value " ^ string_of_float value
-                >>
-                  return x
-              | false -> raise ( Failure "ughh here" )
-            end
-          | None ->
-            Db.put x.db r  ""
-            >>
-            return x
-    in
-    fold_m f x ders
-
-    >|= fun x ->
-*)
 
     (* why can't we pattern match on string here ? eg. function *)
     if input.previous = coinbase then
@@ -222,12 +190,11 @@ let process_input x (i, (input : M.tx_in ), hash) =
 
 let process_tx x (hash,tx) =
   begin
-    match x.tx_count mod 100000 with
+    match x.tx_count mod 10000 with
       | 0 -> log @@ S.concat "" [
         " tx_count "; string_of_int x.tx_count;
           " output_count "; string_of_int x.output_count;
           " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
-
  
           (* " rvalues "; x.r_values |> RValues.cardinal |> string_of_int *)
       ] >>
@@ -243,6 +210,11 @@ let process_tx x (hash,tx) =
   (*log "tx" >> *)
     let group index a = (index,a,hash) in
     let open M in
+
+    let query = "insert into tx(hash) values ($1) returning id" in
+    PG.prepare x.db ~query ()
+  >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
+  >>
     let inputs = L.mapi group tx.inputs in
     fold_m process_input x inputs
   >>= fun x ->
@@ -254,7 +226,15 @@ let process_tx x (hash,tx) =
 
 
 let process_file () =
-    Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
+
+    log "connecting and create db"
+
+    >> 
+    PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
+    >>= fun db ->
+        create_db db 
+    >>
+      Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
       log "scanning blocks..."
     >> Sc.scan_blocks fd
@@ -274,13 +254,11 @@ let process_file () =
       let seq = CL.take seq 200000 in
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
-      PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
-      >>= fun db ->
-        create_db db 
-      >>
-          let query = "insert into tx(hash,index,amount) values ($1,$2,$3)" in
+
+(*          let query = "insert into tx(hash,index,amount) values ($1,$2,$3)" in
           PG.prepare db ~name:"myinsert" ~query  ()
       >>
+*)
           PG.begin_work db 
       >> 
 
