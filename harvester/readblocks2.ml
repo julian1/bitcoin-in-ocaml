@@ -23,7 +23,7 @@ module Sc = Scanner
 
 
 module Lwt_thread = struct
-    include Lwt 
+    include Lwt
     include Lwt_chan
 end
 
@@ -54,17 +54,17 @@ let simple_query db query =
     product_no integer REFERENCES products (product_no),
 *)
 
-let create_db db = 
+let create_db db =
   PG.(
-    PG.begin_work db 
-    >> inject db "drop table if exists output" 
-    >> inject db "drop table if exists tx" 
-    >> inject db "create table tx(id serial primary key, hash bytea)" 
+    PG.begin_work db
+    >> inject db "drop table if exists output"
+    >> inject db "drop table if exists tx"
+    >> inject db "create table tx(id serial primary key, hash bytea)"
     >> inject db @@ "create table output(id serial primary key, tx_id integer references tx(id), "
-                  ^ "index int, amount bigint)" 
+                  ^ "index int, amount bigint)"
 
 
-    >> PG.commit db 
+    >> PG.commit db
   )
 
 
@@ -103,7 +103,7 @@ let map_m f lst =
     - an output table with tx_id, output_index, address, amount
     - an input table with tx_id, and referencing output table id.
 
-  - then we can join everything. for a tx or address 
+  - then we can join everything. for a tx or address
   - it's append only
   - inputs refer directly to outputs using primary_id of output.
   - no aggregate indexes
@@ -112,7 +112,7 @@ let map_m f lst =
 *)
 
 let process_output x (i,output,hash,tx_id) =
-    let script = 
+    let script =
     let open M in
     M.decode_script output.script in
     let u = match script with
@@ -145,10 +145,10 @@ let process_output x (i,output,hash,tx_id) =
     (* we need to rearrange to encode the hash160 as PG option type *)
     >>
     PG.prepare x.db ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3)" ()
-    >> PG.execute x.db  ~params:[ 
-        Some (PG.string_of_int tx_id); 
-        Some (PG.string_of_int i); 
-        Some (PG.string_of_int64 output.value ) 
+    >> PG.execute x.db  ~params:[
+        Some (PG.string_of_int tx_id);
+        Some (PG.string_of_int i);
+        Some (PG.string_of_int64 output.value )
       ] ()
     >> return x
 
@@ -159,14 +159,29 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
     let script = M.decode_script input.script in
 
     (* why can't we pattern match on string here ? eg. function *)
+
+    (* so we have to look up the tx hash, which means we need an index on it *)
     if input.previous = coinbase then
       return x
     else
+
+        PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.id where tx.hash = $1 and output.index = $2" ()
+      >> PG.execute x.db  ~params:[
+        Some (PG.string_of_bytea input.previous);
+        Some (PG.string_of_int input.index); ] ()
+      >>= fun rows ->
+        let tx_id = match rows with
+          (Some field ::_ )::_ -> PG.int_of_string field 
+          | _ -> -1    
+        in
+        log @@ "found " ^ string_of_int tx_id
+       
+    >>
       return x
 (*
       let key = (input.previous,input.index) in
       match Utxos.mem key x.unspent with
-        | true -> return x 
+        | true -> return x
         | false -> raise ( Failure "ughh here" )
 *)
 
@@ -177,9 +192,9 @@ let process_tx x (hash,tx) =
         " tx_count "; string_of_int x.tx_count;
       ] >>
           log "comitting"
-        >> PG.commit x.db 
+        >> PG.commit x.db
         >> log "done comitting, starting new transction"
-        >> PG.begin_work x.db 
+        >> PG.begin_work x.db
       | _ -> return ()
   end
   >>
@@ -187,10 +202,10 @@ let process_tx x (hash,tx) =
 
     PG.prepare x.db ~query:"insert into tx(hash) values ($1) returning id" ()
   >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
-  >>= fun rows -> 
-    let tx_id = match rows with 
-      (Some field ::_ )::_ -> PG.int_of_string field 
-      | _ -> raise (Failure "uggh") 
+  >>= fun rows ->
+    let tx_id = match rows with
+      (Some field ::_ )::_ -> PG.int_of_string field
+      | _ -> raise (Failure "uggh")
     in
 
     (* can get rid of the hash *)
@@ -212,10 +227,10 @@ let process_file () =
 
     log "connecting and create db"
 
-    >> 
+    >>
     PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
-        create_db db 
+        create_db db
     >>
       Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
@@ -242,8 +257,8 @@ let process_file () =
           PG.prepare db ~name:"myinsert" ~query  ()
       >>
 *)
-          PG.begin_work db 
-      >> 
+          PG.begin_work db
+      >>
 
       let x = {
         tx_count = 0;
