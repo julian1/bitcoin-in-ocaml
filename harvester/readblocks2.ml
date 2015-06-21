@@ -27,7 +27,7 @@ module Lwt_thread = struct
     include Lwt_chan
 end
 
-module Lwt_PGOCaml = PGOCaml_generic.Make (Lwt_thread)
+module PG = PGOCaml_generic.Make (Lwt_thread)
 
 
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
@@ -41,7 +41,7 @@ type mytype =
   output_count : int;
 (*  input_count : int;   *) 
   (* db :  Db.t ; *)
-  db : int Lwt_PGOCaml.t ; (* TODO what is this *)
+  db : int PG.t ; (* TODO what is this *)
 }
 
 (*
@@ -51,13 +51,13 @@ type mytype =
 (*
 let simple_query db query =
   (* think this is a complete transaction *)
-  Lwt_PGOCaml.prepare db ~query (* ~name*) ()
-  >> Lwt_PGOCaml.execute db (* ~name*) ~params:[] ()
+  PG.prepare db ~query (* ~name*) ()
+  >> PG.execute db (* ~name*) ~params:[] ()
 *)
 
 let create_db db = 
-  Lwt_PGOCaml.inject db "drop table if exists tx" 
-  >> Lwt_PGOCaml.inject db "create table tx(id serial primary key, hash bytea, index int, amount bigint)" 
+  PG.inject db "drop table if exists tx" 
+  >> PG.inject db "create table tx(id serial primary key, hash bytea, index int, amount bigint)" 
 
 
 
@@ -125,7 +125,7 @@ let process_output x (i,output,hash) =
       | Some hash160 ->
         begin
           (* inject is no argument statement *)
-          Lwt_PGOCaml.(
+          PG.(
             execute x.db ~name:"myinsert" ~params:[ 
               Some (string_of_bytea hash160); 
               Some (string_of_int i); 
@@ -230,9 +230,9 @@ let process_tx x (hash,tx) =
           (* " rvalues "; x.r_values |> RValues.cardinal |> string_of_int *)
       ] >>
           log "comitting"
-        >> Lwt_PGOCaml.commit x.db 
+        >> PG.commit x.db 
         >> log "done comitting, starting new transction"
-        >> Lwt_PGOCaml.begin_work x.db 
+        >> PG.begin_work x.db 
 
       | _ -> return ()
   end
@@ -272,14 +272,14 @@ let process_file () =
       let seq = CL.take seq 200000 in
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
-      Lwt_PGOCaml.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
+      PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
       >>= fun db ->
         create_db db 
       >>
           let query = "insert into tx(hash,index,amount) values ($1,$2,$3)" in
-          Lwt_PGOCaml.prepare db ~name:"myinsert" ~query  ()
+          PG.prepare db ~name:"myinsert" ~query  ()
       >>
-          Lwt_PGOCaml.begin_work db 
+          PG.begin_work db 
       >> 
 
       let x = {
@@ -300,7 +300,7 @@ let () = Lwt_main.run (
   Lwt.catch (
 (*
     fun () ->
-    Lwt_PGOCaml.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
+    PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
     >>= fun db -> create_db db
     >> return ()
 *)
