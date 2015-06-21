@@ -165,29 +165,9 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
       return x
     else
 
-(* i think the outputs are not getting recorded??? 
- 
-  or we are overwriting them?
-  or we're counting them incorrectly, with coinbase 
-
-  this tx has two outputs but it doesn't find second
-    and in fact it doesn't seem to exist 
-  https://blockchain.info/tx/f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16
-
-ok we have them, so there
-meteo=> select * from output where tx_id = 171
-meteo-> ;
- id  | tx_id | index |   amount   
------+-------+-------+------------
- 171 |   171 |     0 | 1000000000
- 172 |   171 |     1 | 4000000000
-ok, it appears correct, so why do our joins not work...  
-
-   id  |                                hash                                
------+--------------------------------------------------------------------
- 171 | \xf4184fc596403
-
-*)
+    (* Important - in fact we don't have to return the value, but could just 
+        select and insert at the same time.               
+    *) 
 
         (*PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.id where tx.hash = $1 and output.index = $2" () *)
         PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
