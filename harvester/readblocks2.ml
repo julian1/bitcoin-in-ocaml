@@ -65,6 +65,9 @@ let create_db db =
                   ^ "index int, amount bigint)"
     >> inject db "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )"
 
+    >> inject db "create index on tx(hash)"
+    (* >> inject db "create index on output(index)" *)
+    (* important- can put the prepared statements in here *)
     >> PG.commit db
   )
 
@@ -174,6 +177,16 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
         -
       - need an index on tx.hash at least.
       - but should do timing.
+      - and avoid preparing the statement each time. should do it in createdb
+      2m 5 - to 50k with no index
+      1m 19 with index on tx(hash)
+      1m 40 with index on tx(hash) and output(index)
+      
+      we should create another table for addresses (for more than one)
+        - since not every output is associated with an address and there
+        maybe more than one.
+        - likewise for pubkeys - to avoid nulls
+      and der sigs...
     *) 
         PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
       >> PG.execute x.db  ~params:[
@@ -184,9 +197,10 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
           (Some field ::_ )::_ -> PG.int_of_string field 
           | _ -> raise (Failure "previous tx not found") 
         in
-        log @@ "found " ^ string_of_int output_id ^ " " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
+(*        log @@ "found " ^ string_of_int output_id ^ " " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
        
     >>
+*)
       PG.prepare x.db ~query:"insert into input(tx_id,output_id) values ($1,$2)" ()
     >> PG.execute x.db  ~params:[
         Some (PG.string_of_int tx_id);
@@ -266,7 +280,7 @@ let process_file () =
     >>
       let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      let seq = CL.take seq 200000 in
+      let seq = CL.take seq 50000 in
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
 
