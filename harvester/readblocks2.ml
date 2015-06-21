@@ -36,11 +36,7 @@ module RValues = Map.Make(struct type t = string let compare = compare end)
 
 type mytype =
 {
-  unspent : M.tx_out Utxos.t;
   tx_count : int;
-  output_count : int;
-(*  input_count : int;   *) 
-  (* db :  Db.t ; *)
   db : int PG.t ; (* TODO what is this *)
 }
 
@@ -138,24 +134,7 @@ let process_output x (i,output,hash,tx_id) =
     match u with
       | Some hash160 ->
         begin
-          (* inject is no argument statement *)
-          PG.prepare x.db ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3)" ()
-          >> PG.execute x.db  ~params:[ 
-              Some (PG.string_of_int tx_id); 
-              Some (PG.string_of_int i); 
-              Some (PG.string_of_int64 output.value ) 
-            ] ()
-          >>
-(*
-          Db.get x.db hash160
-          >>= function
-            | Some found ->
-              log @@ "found hash160 " ^ M.hex_of_string hash160 ^ " " ^ found
-                ^ " " ^ format_tx hash i output.value script
-            | _ ->
-              (*log @@ "not found "
-              >>*) return ()
-*)
+          (* we should add the hash160..., and pubkey etc if available... *)
           return ()
         end
       | Strange ->
@@ -163,13 +142,16 @@ let process_output x (i,output,hash,tx_id) =
       | None ->
         return ()
     )
+    (* we need to rearrange to encode the hash160 as PG option type *)
     >>
-    return { x with
-        output_count = succ x.output_count ;
-        unspent =
-          let key = (hash,i) in
-          Utxos.add key output x.unspent
-    }
+    PG.prepare x.db ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3)" ()
+    >> PG.execute x.db  ~params:[ 
+        Some (PG.string_of_int tx_id); 
+        Some (PG.string_of_int i); 
+        Some (PG.string_of_int64 output.value ) 
+      ] ()
+    >> return x
+
 
 
 let process_input x (i, (input : M.tx_in ), hash,tx_id) =
@@ -180,33 +162,28 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
     if input.previous = coinbase then
       return x
     else
+      return x
+(*
       let key = (input.previous,input.index) in
       match Utxos.mem key x.unspent with
-        | true -> return { x with unspent = Utxos.remove key x.unspent }
+        | true -> return x 
         | false -> raise ( Failure "ughh here" )
-
+*)
 
 let process_tx x (hash,tx) =
   begin
     match x.tx_count mod 10000 with
       | 0 -> log @@ S.concat "" [
         " tx_count "; string_of_int x.tx_count;
-          " output_count "; string_of_int x.output_count;
-          " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
- 
-          (* " rvalues "; x.r_values |> RValues.cardinal |> string_of_int *)
       ] >>
           log "comitting"
         >> PG.commit x.db 
         >> log "done comitting, starting new transction"
         >> PG.begin_work x.db 
-
       | _ -> return ()
   end
   >>
-    (* we can get rid of this tx_count *)
     let x = { x with tx_count = succ x.tx_count } in
-  (*log "tx" >> *)
 
     PG.prepare x.db ~query:"insert into tx(hash) values ($1) returning id" ()
   >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
@@ -269,9 +246,7 @@ let process_file () =
       >> 
 
       let x = {
-        unspent = Utxos.empty;
         tx_count = 0;
-        output_count = 0;
         db = db;
       } in
       Sc.replay_tx fd seq headers process_tx x
