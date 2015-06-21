@@ -215,7 +215,7 @@ let process_tx x (hash,tx) =
   >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
   >>= fun rows -> ( 
     match rows  with 
-      row  :: _ -> log "whoot 2"  
+      (Some field :: _  ) :: _ -> log @@ "whoot " ^ field 
       | _ -> log "whoot"
   )
 
