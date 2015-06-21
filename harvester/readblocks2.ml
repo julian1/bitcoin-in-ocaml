@@ -19,7 +19,7 @@ module S = String
 module M = Message
 module Sc = Scanner
 
-open M
+(* open M *)
 
 
 module Lwt_thread = struct
@@ -36,7 +36,7 @@ module RValues = Map.Make(struct type t = string let compare = compare end)
 
 type mytype =
 {
-  unspent : tx_out Utxos.t;
+  unspent : M.tx_out Utxos.t;
   tx_count : int;
   output_count : int;
 (*  input_count : int;   *) 
@@ -104,7 +104,9 @@ let map_m f lst =
 *)
 
 let process_output x (i,output,hash) =
-    let script = M.decode_script output.script in
+    let script = 
+    let open M in
+    M.decode_script output.script in
     let u = match script with
       (* pay to pubkey *)
       | BYTES s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
@@ -240,7 +242,7 @@ let process_tx x (hash,tx) =
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
     let group index a = (index,a,hash) in
-
+    let open M in
     let inputs = L.mapi group tx.inputs in
     fold_m process_input x inputs
   >>= fun x ->
