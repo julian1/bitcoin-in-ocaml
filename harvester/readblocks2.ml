@@ -213,8 +213,7 @@ let process_tx x (hash,tx) =
 
     PG.prepare x.db ~query:"insert into tx(hash) values ($1) returning id"  ()
   >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
-  >>= fun rows -> ( 
-    match rows  with 
+  >>= (function 
       (Some field :: _  ) :: _ -> log @@ "whoot " ^ field 
       | _ -> log "whoot"
   )
