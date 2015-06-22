@@ -70,7 +70,16 @@ let coinbase = M.zeros 32
 
 
 let create_db db =
-    (* note we're already doing a lot more than with leveldb *)
+    (* note we're already doing a lot more than with leveldb 
+
+        - address hashes are not normalized here. doesn't really matter 
+        - likewise for der values
+   
+        - we want block (for date, ordering), pubkey and der. 
+        - and some views to make joining stuff easier.
+        - we could normalize address
+        - and a flag on block if it's valid chain sequence 
+    *)
   PG.(
     begin_work db
 
