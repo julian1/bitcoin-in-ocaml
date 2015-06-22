@@ -199,7 +199,8 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
 
     now,
         43,50 secs to 50k.
-        33 sec best with separated prepare. but it varys.
+        30 sec best with separated prepare. but it varys.
+            seems to use bitmap scan initially - which is slower.
 
       we should create another table for addresses (for more than one)
         - since not every output is associated with an address and there
@@ -312,7 +313,9 @@ let process_file () =
         db = db;
       } in
       Sc.replay_tx fd seq headers process_tx x
-    >>
+    >> PG.commit db
+    >> PG.close db
+    >> 
       log "finished "
 
 
