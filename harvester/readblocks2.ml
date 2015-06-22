@@ -74,8 +74,12 @@ let create_db db =
     >> PG.commit db
   )
 
+(*
+    - need to put postgres logs in /home/postgres
+    - and figure out why they're so large 
 
-
+    - used all fs
+*)
 let log = Lwt_io.write_line Lwt_io.stdout
 
 let coinbase = M.zeros 32
