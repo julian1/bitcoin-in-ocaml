@@ -192,15 +192,10 @@ let process_output x (index,output,hash,tx_id) =
       | None ->
         return x 
 
-(*
-  - ok, we want the coinbase tx, because it's hard to see
-  - and perhaps block hashes
-  - and the der.
 
-*)
 
 let process_input x (index, (input : M.tx_in ), hash,tx_id) =
-(* let process_input x (i, input, hash,tx_id) = *)
+  (* let process_input x (i, input, hash,tx_id) = *)
     (* extract der signature and r,s keys *)
 
     let script = M.decode_script input.script  in
