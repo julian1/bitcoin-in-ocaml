@@ -74,6 +74,7 @@ let create_db db =
   PG.(
     begin_work db
 
+    >> inject db "drop table if exists coinbase"
     >> inject db "drop table if exists address"
     >> inject db "drop table if exists input"
     >> inject db "drop table if exists output"
@@ -94,6 +95,10 @@ let create_db db =
     >> inject db "create index on address(hash)"
   
 
+    >> inject db "create table coinbase(id serial primary key, tx_id integer references tx(id))"
+    >> inject db "create index on coinbase(tx_id)"
+
+
     >> prepare db ~name:"insert_tx" ~query:"insert into tx(hash) values ($1) returning id" ()
     >> prepare db ~name:"select_output_id" ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
 
@@ -103,11 +108,10 @@ let create_db db =
 
     >> prepare db ~name:"insert_address" ~query:"insert into address(output_id, hash) values ($1,$2)" ()
 
- (* 
-    (* need to return the tx_id *)
-    PG.execute x.db ~name:"insert_tx"  ~params:[ Some (PG.string_of_bytea hash); ] ()
-    0000000000000000000000000000000000000000000000000000000000000000 4294967295
-*)
+    >> prepare db ~name:"insert_coinbase" ~query:"insert into coinbase(tx_id) values ($1)" ()
+
+
+ 
     >> commit db
   )
 
@@ -204,11 +208,11 @@ let process_input x (index, (input : M.tx_in ), hash,tx_id) =
     (* so we have to look up the tx hash, which means we need an index on it *)
 
     if input.previous = coinbase then
-      log @@ "coinbase " ^ M.hex_of_string coinbase 
-        ^ " " ^ string_of_int input.index
-      >>
-      return x
+      PG.execute x.db ~name:"insert_coinbase" ~params:[
+        Some (PG.string_of_int tx_id); ] ()
+      >> return x
     else
+
 
     (* Important - in fact we don't have to return the value, but could just
         select the correct output id and insert at the same time.
