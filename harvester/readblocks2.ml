@@ -54,6 +54,21 @@ let simple_query db query =
     product_no integer REFERENCES products (product_no),
 *)
 
+let log = Lwt_io.write_line Lwt_io.stdout
+
+let decode_id rows =
+  (* >>= fun rows -> *)
+  match rows with
+    (Some field ::_ )::_ -> PG.int_of_string field
+    | _ -> raise (Failure "previous tx not found")
+
+
+
+let coinbase = M.zeros 32
+
+
+
+
 let create_db db =
     (* note we're already doing a lot more than with leveldb *)
   PG.(
@@ -88,19 +103,13 @@ let create_db db =
 
     >> prepare db ~name:"insert_address" ~query:"insert into address(output_id, hash) values ($1,$2)" ()
 
+ (* 
+    (* need to return the tx_id *)
+    PG.execute x.db ~name:"insert_tx"  ~params:[ Some (PG.string_of_bytea hash); ] ()
+    0000000000000000000000000000000000000000000000000000000000000000 4294967295
+*)
     >> commit db
   )
-
-(*
-    - need to put postgres logs in /home/postgres
-    - and figure out why they're so large
-
-    - used all fs
-*)
-let log = Lwt_io.write_line Lwt_io.stdout
-
-let coinbase = M.zeros 32
-
 
 let format_tx hash i value script =
   " i " ^ string_of_int i
@@ -118,6 +127,7 @@ type my_script =
 let fold_m f acc lst =
   let adapt f acc e = acc >>= fun acc -> f acc e in
   L.fold_left (adapt f) (return acc) lst
+
 
 (*
 let map_m f lst =
@@ -139,25 +149,17 @@ let map_m f lst =
 
 *)
 
-let process_output x (i,output,hash,tx_id) =
-    (* we need to rearrange to encode the hash160 as PG option type *)
-
+let process_output x (index,output,hash,tx_id) =
     let open M in
     PG.( execute x.db ~name:"insert_output" ~params:[
         Some (string_of_int tx_id);
-        Some (string_of_int i);
+        Some (string_of_int index);
         Some (string_of_int64 output.value)
         ] () )
     >>= fun rows ->
-    let output_id = match rows with
-      (Some field ::_ )::_ -> PG.int_of_string field
-      | _ -> raise (Failure "previous tx not found")
-    in
-
-
-    let script =
-    M.decode_script output.script in
-    let u = match script with
+    let output_id = decode_id rows in 
+    let script = M.decode_script output.script in
+    let decoded_script = match script with
       (* pay to pubkey *)
       | BYTES s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
       (* pay to pubkey hash*)
@@ -172,35 +174,39 @@ let process_output x (i,output,hash,tx_id) =
       | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
 
       | _ -> Strange
-    in (
-    match u with
+    in 
+    match decoded_script with
       | Some hash160 ->
           PG.( execute x.db ~name:"insert_address" ~params:[
             Some (string_of_int output_id ); 
             Some (string_of_bytea hash160 ) ] ()
           )
-          >>     
-          (* we should add the hash160..., and pubkey etc if available... *)
-          return ()
+          >> return x 
       | Strange ->
-          log @@ "strange " ^ format_tx hash i output.value script
+          log @@ "strange " ^ format_tx hash index output.value script
+          >> return x
       | None ->
-        return ()
-    )
-    >> return x
+        return x 
 
+(*
+  - ok, we want the coinbase tx, because it's hard to see
+  - and perhaps block hashes
+  - and the der.
 
-let process_input x (i, (input : M.tx_in ), hash,tx_id) =
+*)
+
+let process_input x (index, (input : M.tx_in ), hash,tx_id) =
 (* let process_input x (i, input, hash,tx_id) = *)
     (* extract der signature and r,s keys *)
 
     let script = M.decode_script input.script  in
-
     (* why can't we pattern match on string here ? eg. function *)
-
     (* so we have to look up the tx hash, which means we need an index on it *)
 
     if input.previous = coinbase then
+      log @@ "coinbase " ^ M.hex_of_string coinbase 
+        ^ " " ^ string_of_int input.index
+      >>
       return x
     else
 
@@ -231,27 +237,13 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
         Some (PG.string_of_bytea input.previous);
         Some (PG.string_of_int input.index); ] ()
       >>= fun rows ->
-        let output_id = match rows with
-          (Some field ::_ )::_ -> PG.int_of_string field
-          | _ -> raise (Failure "previous tx not found")
-        in
-(*        log @@ "found " ^ string_of_int output_id ^ " " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
-
-    >>
-*)
-     PG.execute x.db ~name:"insert_input" ~params:[
-        Some (PG.string_of_int tx_id);
-        Some (PG.string_of_int output_id);
-      ] ()
+        let output_id = decode_id rows in 
+        PG.execute x.db ~name:"insert_input" ~params:[
+          Some (PG.string_of_int tx_id);
+          Some (PG.string_of_int output_id);
+        ] ()
     >> return x
 
-
-(*
-      let key = (input.previous,input.index) in
-      match Utxos.mem key x.unspent with
-        | true -> return x
-        | false -> raise ( Failure "ughh here" )
-*)
 
 let process_tx x (hash,tx) =
   begin
@@ -267,14 +259,9 @@ let process_tx x (hash,tx) =
   end
   >>
     let x = { x with tx_count = succ x.tx_count } in
-
- PG.execute x.db ~name:"insert_tx"  ~params:[ Some (PG.string_of_bytea hash); ] ()
+    PG.execute x.db ~name:"insert_tx"  ~params:[ Some (PG.string_of_bytea hash); ] ()
   >>= fun rows ->
-    let tx_id = match rows with
-      (Some field ::_ )::_ -> PG.int_of_string field
-      | _ -> raise (Failure "uggh")
-    in
-
+    let tx_id = decode_id rows in 
     (* can get rid of the hash *)
     let group index a = (index,a,hash,tx_id) in
 
@@ -316,42 +303,25 @@ let process_file () =
     >>
       let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      let seq = CL.take seq 50000 in
+      (*let seq = CL.take seq 50000 in *)
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
-
-(*          let query = "insert into tx(hash,index,amount) values ($1,$2,$3)" in
-          PG.prepare db ~name:"myinsert" ~query  ()
-      >>
-*)
-          PG.begin_work db
-      >>
-
-      let x = {
+     let x = {
         tx_count = 0;
         db = db;
       } in
-      Sc.replay_tx fd seq headers process_tx x
+
+      PG.begin_work db
+    >> Sc.replay_tx fd seq headers process_tx x
     >> PG.commit db
     >> PG.close db
     >> 
       log "finished "
 
-
-(*
-  insert into tx(hash,index,amount) values (E'\\x0000',0,200);
-*)
 let () = Lwt_main.run (
   Lwt.catch (
-(*
-    fun () ->
-    PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
-    >>= fun db -> create_db db
-    >> return ()
-*)
 
     process_file
-
   )
   (fun exn ->
     (* must close *)
