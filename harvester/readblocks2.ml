@@ -55,31 +55,40 @@ let simple_query db query =
 *)
 
 let create_db db =
+    (* note we're already doing a lot more than with leveldb *)
   PG.(
-    PG.begin_work db
+    begin_work db
+
+    >> inject db "drop table if exists address"
     >> inject db "drop table if exists input"
     >> inject db "drop table if exists output"
     >> inject db "drop table if exists tx"
-    >> inject db "create table tx(id serial primary key, hash bytea)"
-    >> inject db @@ "create table output(id serial primary key, tx_id integer references tx(id), "
-                  ^ "index int, amount bigint)"
-    >> inject db "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )"
 
+    >> inject db "create table tx(id serial primary key, hash bytea)"
     >> inject db "create index on tx(hash)"
+    
+    >> inject db @@ "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)"
     >> inject db "create index on output(tx_id)"
 
+    >> inject db "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )"
+    >> inject db "create index on input(tx_id)"
+    >> inject db "create index on input(output_id)"
+
+    >> inject db "create table address(id serial primary key, output_id integer references output(id), hash bytea)"
+    >> inject db "create index on address(output_id)"
+    >> inject db "create index on address(hash)"
+  
+
+    >> prepare db ~name:"insert_tx" ~query:"insert into tx(hash) values ($1) returning id" ()
     >> prepare db ~name:"select_output_id" ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
 
-    >> prepare db ~name:"insert_output" ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3)" ()
+    >> prepare db ~name:"insert_output" ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" ()
 
     >> prepare db ~name:"insert_input" ~query:"insert into input(tx_id,output_id) values ($1,$2)" ()
 
-    >> prepare db ~name:"insert_tx" ~query:"insert into tx(hash) values ($1) returning id" ()
+    >> prepare db ~name:"insert_address" ~query:"insert into address(output_id, hash) values ($1,$2)" ()
 
-    (* >> inject db "create index on output(index)" *)
-    (* important- can put the prepared statements in here *)
-    (* important - need to commit and close the connection *)
-    >> PG.commit db
+    >> commit db
   )
 
 (*
@@ -139,8 +148,13 @@ let process_output x (i,output,hash,tx_id) =
         Some (string_of_int i);
         Some (string_of_int64 output.value)
         ] () )
+    >>= fun rows ->
+    let output_id = match rows with
+      (Some field ::_ )::_ -> PG.int_of_string field
+      | _ -> raise (Failure "previous tx not found")
+    in
 
-    >>
+
     let script =
     M.decode_script output.script in
     let u = match script with
@@ -162,6 +176,14 @@ let process_output x (i,output,hash,tx_id) =
     match u with
       | Some hash160 ->
         begin
+(*
+    >> prepare db ~name:"insert_address" ~query:"insert into address(output_id, hash) values ($1,$2)" ()
+    *)        
+          PG.execute x.db ~name:"insert_address" ~params:[
+            Some (PG.string_of_int output_id ); 
+            Some (PG.string_of_bytea hash160 ) ] ()
+          >>     
+
           (* we should add the hash160..., and pubkey etc if available... *)
           return ()
         end
@@ -201,6 +223,8 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
         43,50 secs to 50k.
         30 sec best with separated prepare. but it varys.
             seems to use bitmap scan initially - which is slower.
+    
+    important - we're also doing a lot more
 
       we should create another table for addresses (for more than one)
         - since not every output is associated with an address and there
