@@ -68,6 +68,14 @@ let create_db db =
     >> inject db "create index on tx(hash)"
     >> inject db "create index on output(tx_id)"
 
+    >> prepare db ~name:"select_output_id" ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
+
+    >> prepare db ~name:"insert_output" ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3)" ()
+
+    >> prepare db ~name:"insert_input" ~query:"insert into input(tx_id,output_id) values ($1,$2)" ()
+
+    >> prepare db ~name:"insert_tx" ~query:"insert into tx(hash) values ($1) returning id" ()
+
     (* >> inject db "create index on output(index)" *)
     (* important- can put the prepared statements in here *)
     (* important - need to commit and close the connection *)
@@ -76,7 +84,7 @@ let create_db db =
 
 (*
     - need to put postgres logs in /home/postgres
-    - and figure out why they're so large 
+    - and figure out why they're so large
 
     - used all fs
 *)
@@ -154,21 +162,19 @@ let process_output x (i,output,hash,tx_id) =
         return ()
     )
     (* we need to rearrange to encode the hash160 as PG option type *)
-    >>
-    PG.prepare x.db ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3)" ()
-    >> PG.execute x.db  ~params:[
-        Some (PG.string_of_int tx_id);
-        Some (PG.string_of_int i);
-        Some (PG.string_of_int64 output.value )
-      ] ()
+    >> PG.( execute x.db ~name:"insert_output" ~params:[
+        Some (string_of_int tx_id);
+        Some (string_of_int i);
+        Some (string_of_int64 output.value)
+      ] () )
     >> return x
 
 
 
-let process_input x (i, (input : M.tx_in ), hash,tx_id) = 
+let process_input x (i, (input : M.tx_in ), hash,tx_id) =
 (* let process_input x (i, input, hash,tx_id) = *)
     (* extract der signature and r,s keys *)
-   
+
     let script = M.decode_script input.script  in
 
     (* why can't we pattern match on string here ? eg. function *)
@@ -179,8 +185,8 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
       return x
     else
 
-    (* Important - in fact we don't have to return the value, but could just 
-        select the correct output id and insert at the same time.               
+    (* Important - in fact we don't have to return the value, but could just
+        select the correct output id and insert at the same time.
         -
       - need an index on tx.hash at least.
       - but should do timing.
@@ -188,28 +194,30 @@ let process_input x (i, (input : M.tx_in ), hash,tx_id) =
       2m 5 - to 50k with no index
       1m 19 with index on tx(hash)
       1m 40 with index on tx(hash) and output(index)
-      
+
+    now,
+        43,50 secs to 50k.
+        33 sec best with separated prepare. but it varys.
+
       we should create another table for addresses (for more than one)
         - since not every output is associated with an address and there
         maybe more than one.
         - likewise for pubkeys - to avoid nulls
       and der sigs...
-    *) 
-        PG.prepare x.db ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
-      >> PG.execute x.db  ~params:[
+    *)
+      PG.execute x.db ~name:"select_output_id" ~params:[
         Some (PG.string_of_bytea input.previous);
         Some (PG.string_of_int input.index); ] ()
       >>= fun rows ->
         let output_id = match rows with
-          (Some field ::_ )::_ -> PG.int_of_string field 
-          | _ -> raise (Failure "previous tx not found") 
+          (Some field ::_ )::_ -> PG.int_of_string field
+          | _ -> raise (Failure "previous tx not found")
         in
 (*        log @@ "found " ^ string_of_int output_id ^ " " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
-       
+
     >>
 *)
-      PG.prepare x.db ~query:"insert into input(tx_id,output_id) values ($1,$2)" ()
-    >> PG.execute x.db  ~params:[
+     PG.execute x.db ~name:"insert_input" ~params:[
         Some (PG.string_of_int tx_id);
         Some (PG.string_of_int output_id);
       ] ()
@@ -238,8 +246,7 @@ let process_tx x (hash,tx) =
   >>
     let x = { x with tx_count = succ x.tx_count } in
 
-    PG.prepare x.db ~query:"insert into tx(hash) values ($1) returning id" ()
-  >> PG.execute x.db  ~params:[ Some (PG.string_of_bytea hash); ] ()
+ PG.execute x.db ~name:"insert_tx"  ~params:[ Some (PG.string_of_bytea hash); ] ()
   >>= fun rows ->
     let tx_id = match rows with
       (Some field ::_ )::_ -> PG.int_of_string field
@@ -287,7 +294,7 @@ let process_file () =
     >>
       let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      (* let seq = CL.take seq 50000 in *)
+      let seq = CL.take seq 50000 in
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
 
