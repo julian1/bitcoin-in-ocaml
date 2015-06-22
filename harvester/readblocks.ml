@@ -5,67 +5,138 @@
 *)
 
 let (>>=) = Lwt.(>>=)
+let (>|=) = Lwt.(>|=)  (* like bind, but second arg return type is non-monadic *)
 let return = Lwt.return
-let (>|=) = Lwt.(>|=)  (* what does this do? *)
 
 module M = Message
 module L = List
-
 module CL = Core.Core_list
-
-
 module S = String
+
 open M
+(*
+type tx_out = M.tx_out
+type tx = M.tx
+*)
 
 (*
-  - 200,000
-    4min3sec for hash,i
-    4 41 for i,hash
+  IMPORTANT - fold_m
+  - It should be possible to use the new fold_m with the iterator stuff in leveldb...
+  - eg. so we can output to stdout etc... without having to write a recursive function... 
 
+  - the iterator will be the first fold accumulator
+  - or one element of the values.
+
+  - should make it easier to do combined keys...
+
+  - pubkey / transaction
+
+  - input script
+  - might be better to use hash160 than pubkeys. 
+      - because we can always create for an output. simple pay to public key, it's not in 
+      the input script. 
+      - because of tx malleability
+
+  - so for output we always have hash160 or pubkey
+  - do we only need to index outputs???? 
+
+  - yes. but then we need to track whether spent or unspent. and we do that by previous hash. 
+    anything that refers to that tx,i is a spend and we don't care where.
+  
+  - order by block number.
+
+  hash160 / unspent / tx / i      <- for money sent to the hash 
+
+  hash160 / spent / previous / i    <- eg. we take the previous,i and lookit up. get the hash160 and mark it.
+
+  or why not just create forward links ...
+
+  hash160 / txhash / i = nothing if unspent. ( created by process_output )
+                       = the tx that spent it. (created by looking up the previous tx,i and usng the output) 
+
+  hash160, txhash, i, spending_tx 
+  txhash, pos, height
+  it's still pretty relational. 
+
+  to lookup previous, we have to index back into the chain. 
+  we'll have to have an index of txhashes - to be able to forward map. 
+  
+  -------------------------------------
+  NO. we just need,
+   id (hash,i)  - (block_height),output address,amount)    id (spending_tx,i) 
+
+  - then we can do a view - to join inputs and outputs ... 
+  - and a view to get all txs for an address, just with an index on address . 
+  - this is really good.
+
+  - OR
+    just use the previous,id
+   
+    hash,i     (output address,ammount)  previous_hash,i 
+
+    we should be able to relationally do all our view stuff... on that... 
+*)
+
+(*
+  - timings 200,000 blocks
+    4m 10 for hash,i  set
+    4m 41 for i,hash  set
+    4m 13 for hash,i  map
+
+    1m 12 without set or map!!
+
+    4m 21 recording r_values
+
+    7m.40 doing both.
+
+    116m using leveldb 200k
+
+      10x slower = 2.7k ops / s , leveldb is 422 MB,
+
+
+  height 200000 tx_count 7316307 output_count 16629435 unspent 2318465
 
   - native goes through in 12 minutes - including output script decoding.
 
-  - doing nothing, except call process_tx goes through in 23 minutes.
-  - adding the unspent 120 minutes. 64 million tx, 18mil unspent, = 10k / s
-      that seems too slow for in memory data structure...
-
-  - should count tx_outputs
-
   - we need to factor into a module, analysis and the action scanning
-  - we need to know the value, so we can get a sense of how much value is
+  - outputting value, so we can get a sense of how much value is
     being sent, in what period of time, and if it's worthwhile trying to compete...
 
+  - lets output the value of the previous...
+    by looking up the matching output tx details script ...
+      - but will have to store all tx's with their values.
+      - actually we'd be more interested in the amounuggh.
+
+  -----
+    - need to index the tx, maybe output
+    - index the rvalue.
+
+    - OK, now hang on if we want to use db to do this stuff...
+    - we can't store the tx_out output script ... or can we?
+
+    -- hmmmm reading the full tx, to get the output is going to be slow????
+    -- it's getting more and more complicated. we really want to factor this...
+    -- scanner
+  -----
+
+    what do we store in the db. the r_value ...  yes... might be enough
 *)
 
-(*
-    - no just track unspent, and keys separately.
-    - then we output those with keys only, and mark whether unspent.
-    - ok, but it means we need to carry io return type...  3o
-    - hang on maybe we write each one twice...
-    - or if we pass a structure, it could contain
-*)
 
-(*
-  - change db to do hash160
-  - then lookup
-*)
+module Utxos = Map.Make(struct type t = string * int let compare = compare end)
+(* module Utxos = Set.Make(struct type t = string * int let compare = compare end) *)
 
-(*
-    fold_lefti can be done with mapi and then feeding into fold...
-    OK. we want to make a key val store
-*)
-(*
-module UtxoMap = Map.Make(struct type t = int * string let compare = compare end)
-*)
-module UtxoSet = Set.Make(struct type t = string * int let compare = compare end)
+
+module RValues = Map.Make(struct type t = string let compare = compare end)
+
 
 type mytype =
 {
-  unspent : UtxoSet.t;
-
+  unspent : tx_out Utxos.t;
   tx_count : int;
-
   output_count : int;
+
+(*  r_values : string RValues.t; *)
 
   db :  Db.t ;  (* db of hashes, maybe change name *)
 }
@@ -73,9 +144,8 @@ type mytype =
 
 let log = Lwt_io.write_line Lwt_io.stdout
 
-
-
 let coinbase = M.zeros 32
+
 
 let format_tx hash i value script =
   " i " ^ string_of_int i
@@ -89,12 +159,39 @@ type my_script =
   | None
   | Strange
 
+(*  is really confusing here. in haskell it would be the element
+  should change x to xs or acc
+  alternatively write a fold_m
+*)
+
+
+let fold_m f acc lst =
+  let adapt f acc e = acc >>= fun acc -> f acc e in
+  L.fold_left (adapt f) (return acc) lst
+
+
+let map_m f lst =
+  let adapt f acc e = acc >> f e in
+  L.fold_left (adapt f) (return ()) lst
+
+(*
+let map_m f lst =
+  (* should return a list, not null *)
+  (* let adapt f acc e = acc >>= fun acc -> f e >>= fun g -> (return (g :: acc)) in *)
+  let adapt f acc e = acc >> f e in
+  (* let adapt f acc e = acc >>= fun acc -> f e >>= fun g -> return [] in *)
+  L.fold_left (adapt f) (return ()) lst
+*)
+
+(*
+let map_m f lst =
+  fold_m (fun acc e -> (return acc) ) [] lst
+*)
 
 
 let process_output x (i,output,hash) =
-  x  >>= fun x ->
 (**)
-    let script = decode_script output.script in
+    let script = M.decode_script output.script in
     let u = match script with
       (* pay to pubkey *)
       | BYTES s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
@@ -115,6 +212,7 @@ let process_output x (i,output,hash) =
     match u with
       | Some hash160 ->
         begin
+
 (*
           Db.get x.db hash160
           >>= function
@@ -128,7 +226,7 @@ let process_output x (i,output,hash) =
           return ()
         end
       | Strange ->
-          log @@ "invalid " ^ format_tx hash i output.value script
+          log @@ "strange " ^ format_tx hash i output.value script
       | None ->
         return ()
     )
@@ -137,7 +235,7 @@ let process_output x (i,output,hash) =
         output_count = succ x.output_count ;
         unspent =
           let key = (hash,i) in
-          UtxoSet.add key x.unspent
+          Utxos.add key output x.unspent
     }
 
 
@@ -150,267 +248,189 @@ let process_output x (i,output,hash) =
     can record the actual output script etc, or hash160, etc.
 *)
 
+(*
+  so we record r values...
 
+  - all the tx's will be spent.
+    what we want is to find any other uses of the pubkey/ address that are unspent..
 
-let process_input x input =
-  x >>= fun x ->
- (*   log @@ "input  " ^ M.hex_of_string input.previous
-      ^ " index " ^ (string_of_int input.index )
-  >> *)
-    (* why can't we pattern match here ? eg. function *)
+    ... hmmmn
+  ok, we normally have
+    SIG PUBKEY
+
+  which means we have the pubkey. without referencing the previous tx. in fact i
+
+  - so it's easy to reference with what's been spent.
+  - remember what we want is indication how often... so whether we run a process
+  - it's only if the address is reused.
+
+  - want to find out when and if recent.
+
+  - all founds are repitions.
+  - it means we can front run if fast enough.
+*)
+
+let process_input x (i, (input : M.tx_in ), hash) =
+    (* extract der signature and r,s keys *)
+    let script = M.decode_script input.script in
+    let ders = L.fold_left (fun acc elt ->
+        match elt with
+          | BYTES s -> (
+              match M.decode_der_signature s with
+                Some der -> der :: acc
+                | None -> acc
+          )
+          | _ -> acc
+    ) [] script
+    (* lookup *)
+    in
+      let f x der =
+        let r,s = der in
+
+        Db.get x.db r
+        >>= function
+          (* match RValues.mem r x.r_values with  *)
+          Some value -> begin
+            (* ok, if we want the output value, then we have to store it *)
+            let key = (input.previous,input.index) in
+            match Utxos.mem key x.unspent with
+              | true ->
+                let output = Utxos.find key x.unspent in
+                let value = output.value in
+                let value = (Int64.to_float value) /. 100000000. in
+                log @@ "found !!! " ^
+                  " tx " ^ M.hex_of_string hash ^
+                  " previous " ^ M.hex_of_string input.previous ^
+                  " index " ^ string_of_int i ^
+                  " r_value " ^ M.hex_of_string r ^
+                  " value " ^ string_of_float value
+                >>
+                  return x
+              | false -> raise ( Failure "ughh here" )
+            end
+          | None ->
+            Db.put x.db r  ""
+            >>
+            return x (* { x with r_values = RValues.add r "mytx" x.r_values } *)
+
+    in
+    fold_m f x ders
+    (* L.fold_left (adapt f) (return x) ders *)
+    >|= fun x ->
+    (* why can't we pattern match on string here ? eg. function *)
     if input.previous = coinbase then
-      return x
+      x
     else
       let key = (input.previous,input.index) in
-      match UtxoSet.mem key x.unspent with
-        | true ->  return { x with unspent = UtxoSet.remove key x.unspent }
+      match Utxos.mem key x.unspent with
+        | true -> { x with unspent = Utxos.remove key x.unspent }
         | false -> raise ( Failure "ughh here" )
-    x
+
+(*
+    >>= fun x ->
+    log @@ "tx " ^ M.hex_of_string hash ^
+      " previous " ^ M.hex_of_string input.previous ^
+      " index " ^ string_of_int input.index ^
+      " script " ^ M.format_script script ^
+      " ders " ^ string_of_int (L.length ders)
+*)
+
+(* let u = match script with *)
+
 
 
 (* process tx by processing inputs then outputs *)
+
 let process_tx x (hash,tx) =
-  x >>= fun x ->
+  begin
+    match x.tx_count mod 100000 with
+      | 0 -> log @@ S.concat "" [
+        " tx_count "; string_of_int x.tx_count;
+          " output_count "; string_of_int x.output_count;
+          " unspent "; x.unspent |> Utxos.cardinal |> string_of_int;
+          (* " rvalues "; x.r_values |> RValues.cardinal |> string_of_int *)
+      ]
+      | _ -> return ()
+  end
+  >>
     let x = { x with tx_count = succ x.tx_count } in
   (*log "tx" >> *)
-    L.fold_left process_input (return x) tx.inputs
+    let group index a = (index,a,hash) in
+
+    let inputs = L.mapi group tx.inputs in
+    fold_m process_input x inputs
   >>= fun x ->
-    let group i output = (i,output,hash) in
     let outputs = L.mapi group tx.outputs in
-    L.fold_left process_output (return x) outputs
+    fold_m process_output x outputs
 
 
-(* process block by scanning txs *)
-let process_block f x payload =
-  (*log "block"
-  >> *)
-    (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
-    (* decode tx's and get tx hash *)
-    let pos = 80 in
-    let pos, tx_count = M.decodeVarInt payload pos in
-    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    let txs = L.map (fun tx ->
-      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
-      in hash, tx
-    ) txs
-    in
-    L.fold_left f (x) txs
+module Sc = Scanner
 
 
 
-(* module HM = Map.Make(struct type t = string let compare = compare end) *)
-module HM = Map.Make( String )
-
-module HS = Set.Make(String);;
-
-
-type my_header =
-{
-    previous : string;
-    pos : int;
-    height : int;
-}
-
-(* so it's not fast
-  when we used to be able to scan over it very quickly...
-  - it is the datastructure not the io...
-  - takes 1minute to loop the blocks...
-
-  - no it's just the fricken cardinal/ordinal which is not efficient
-  - change name to index blocks?
-
-  - IMPORTANT - it's arguable height should be computed dynamically ...
-              and only when required. that would enable out-of-order blocks
-              to be calculated.
-  -
-*)
-
-(*
-  OK, it seems slower than it should be. and using 40% mem.
-
-  Need,
-    - to log how many tx's are being processed - just a count in x,
-      and do every 10k so we see if it slows down.
-    - log block count so we know where we are.
-    - funny there are not more op_return data ...
-
-  - memory issues could be leveldb. so maybe try without using leveldb.
-*)
-
-(* get the tree tip hashes as a list
-
-  TODO change name leaves to leaves
-*)
-let get_leaves headers =
-    (* create set of all previous hashes *)
-    let f key header acc = HS.add header.previous acc in
-    let previous = HM.fold f headers HS.empty in
-    (* leaves are headers that are not pointed at by any other header *)
-    HM.filter (fun hash _ -> not @@ HS.mem hash previous ) headers
-    |> HM.bindings
-    |> L.rev_map (fun (tip,_) -> tip)
-
-
-
-(* trace sequence back to genesis and return hashes as a list *)
-let get_sequence hash headers =
-  let rec get_list hash lst =
-    let lst = hash :: lst in
-    match HM.mem hash headers with
-      | true ->
-        let previous = (HM.find hash headers).previous in
-        get_list previous lst
-      | false -> lst
-  in
-  get_list hash []
-
-
-(* assuming calculate as we go
-  - probably should be able to calulate difficulty dynamically  *)
-let get_height hash headers =
-  match HM.mem hash headers with
-    | true -> (HM.find hash headers).height
-    | false -> 0
-
-
-
-(* scan blocks and return a headers structure *)
-let scan_blocks fd =
-  let rec loop_blocks headers count =
-    (
-    Lwt_unix.lseek fd 0 SEEK_CUR
-    >>= fun pos -> Misc.read_bytes fd (24 + 80)
-    >>= function
-      | Some s -> (
-        let _, msg_header = M.decodeHeader s 0 in
-        let block_hash = M.strsub s 24 80 |> M.sha256d |> M.strrev in
-        let _, block_header = decodeBlock s 24 in
-        let previous = block_header.previous in
-        let height = (get_height previous headers) + 1 in
-        let headers = HM.add block_hash { previous = previous; height = height; pos = pos } headers in
-        ( match count mod 10000 with
-          0 -> log @@ S.concat "" [
-            M.hex_of_string block_hash; " "; string_of_int pos; " "; string_of_int count;
-          ]
-          | _ -> return ()
-        )
-        >> Lwt_unix.lseek fd (msg_header.length - 80) SEEK_CUR
-        >> loop_blocks headers (succ count)
-      )
-      | _ -> return headers
-    )
-  in
-  let headers = HM.empty
-  in loop_blocks headers 0
-
-
-(* read a block at current pos and return it *)
-let read_block fd =
-  Misc.read_bytes fd 24
-  >>= function
-    | None -> raise (Failure "here0")
-    | Some s ->
-      let _, header = M.decodeHeader s 0 in
-      (* should check command is 'block' *)
-      Misc.read_bytes fd header.length
-      >>= function
-        | None -> raise (Failure "here2")
-        | Some payload -> return payload
-
-
-(* scan through blocks in the given sequence
-  - perhaps insteda of passing in seq and headers should just pass
-  in the mapped pos seq.
-  - it would be nice to include the number of txs... just put in x
-*)
-let replay_blocks fd seq headers f x =
-  let rec replay_blocks' seq x =
-    x >>= fun x ->
-    match seq with
-      | hash :: tl ->
-        let header = HM.find hash headers in begin
-          match header.height mod 10000 with
-            | 0 -> log @@ S.concat "" [
-              "height "; string_of_int header.height;
-              " tx_count "; string_of_int x.tx_count;
-              " output_count "; string_of_int x.output_count;
-              " unspent "; x.unspent |> UtxoSet.cardinal |> string_of_int
-              ]
-            | _ -> return ()
-        end
-        >> Lwt_unix.lseek fd header.pos SEEK_SET
-        >> read_block fd
-        >>= fun payload ->
-           f (return x) payload
-        >>= fun x ->
-          replay_blocks' tl (return x)
-      | [] -> return x
-  in
-  replay_blocks' seq (return x)
-
-
-
-let process_file2 () =
+let process_file () =
     Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
       log "scanning blocks..."
-    >> scan_blocks fd
+    >> Sc.scan_blocks fd
     >>= fun headers ->
       log "done scanning blocks - getting leaves"
     >>
-      let leaves = get_leaves headers in
+      let leaves = Sc.get_leaves headers in
       log @@ "leaves " ^ (leaves |> L.length |> string_of_int)
     >>
-      (*(* associate hash with height *)
-      let x = L.map (fun hash -> hash, (HM.find hash headers).height) leaves in
-      (* select hash with max height - must be a more elegant way*)
-      let longest, _ = L.fold_left (fun (ha1,ht1) (ha2,ht2)
-        -> if ht1 > ht2 then (ha1,ht1) else (ha2,ht2)) ("",-1) x in
-
-      *)
-      (* factor this crap into a function *)
-      let heights = L.map (fun hash -> (HM.find hash headers).height) leaves in
-      let max_height = L.fold_left max (-1) heights in
-      let longest = L.find (fun hash -> max_height = (HM.find hash headers).height) leaves in
-
-      log @@ "max height " ^ string_of_int max_height
-      >>
+      let longest = Sc.get_longest_path leaves headers in
       log @@ "longest " ^ M.hex_of_string longest
     >>
       (* let leaves_work = L.map (fun hash -> (hash, get_pow2 hash headers )) leaves in *)
       log "computed leaves work "
     >>
-      let seq = get_sequence longest headers in
+      let seq = Sc.get_sequence longest headers in
       let seq = CL.drop seq 1 in (* we are missng the first block *)
-      let seq = CL.take seq 200000 in
+      (* let seq = CL.take seq 200000 in *)
+      (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
-      (* should not be here *)
-      Db.open_db "myhashes"
+      let filename = "rvalues" in
+      Db.open_db filename
     >>= fun db ->
-      log "opened myhashes db"
+      log @@ "opened db " ^ filename
     >>
-(*      let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in
+      let x = {
+        unspent = Utxos.empty;
+        db = db;
+        tx_count = 0;
+        (* r_values = RValues.empty;  *)
+        output_count = 0;
+      } in
+(*
+      let process_block = process_block process_tx in
+      Sc.replay_blocks fd seq headers process_block x
 *)
 
-      let x = { unspent = UtxoSet.empty; db = db; tx_count = 0; output_count = 0; } in
-      let process_block = process_block process_tx in
-      replay_blocks fd seq headers process_block x
+      Sc.replay_tx fd seq headers process_tx x
+
     >>
       log "finished "
 
 
 
+let test () =
+  let lst = [ "hi"; "there"; "folks" ] in
+  map_m log lst
+
+
 let () = Lwt_main.run (
-    Lwt.catch (
-      process_file2
-    )
-    (fun exn ->
-        (* must close *)
-        let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-        Lwt_io.write_line Lwt_io.stdout ("finishing - exception " ^ s )
-        >> (* just exist cleanly *)
-          return ()
-    )
+  Lwt.catch (
+    process_file
+     (* test *)
+
+  )
+  (fun exn ->
+    (* must close *)
+    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
+    log ("finishing - exception " ^ s )
+    >> return ()
+  )
 )
 
 

@@ -86,9 +86,12 @@ type tx_out =
   script : string;
 
 
-  (* calculated on parse *)
+  (* calculated on parse 
+    TODO remove. we don't need these
+  
   pos : int;
   length : int ;
+*)
 }
 
 type tx =
@@ -415,8 +418,10 @@ let decodeTxOutput s pos =
   let pos, scriptLen = decodeVarInt s pos in
   let pos, script = decs_ s pos scriptLen in
   pos, { value = value; script = (* decode_script *) script;
+  (*
     pos = first;
     length = pos - first;
+*)
   }
 
 
@@ -649,6 +654,74 @@ let rec printRaw s a b =
   if a > b then ()
   else printRaw s (a+1) b
 *)
+
+(*
+  how do we deal with parse errors here?? 
+  to verify a tx 
+
+  TODO We have to pad with zero, if not 32 bits... 
+
+  https://bitcointalk.org/index.php?topic=653313.0
+
+  Actually - we may not need with the non-SSL version of our ECC implementation
+    it's not used for hashes.
+
+let decode_der_signature s =
+
+  let decode_elt s pos =
+    let pos, _0x02 = decodeInteger8 s pos in
+    let () = Printf.printf "02 %d\n" _0x02 in
+    let pos, r_length = decodeInteger8 s pos in
+    let () = Printf.printf "elt length %d\n" r_length in 
+    let pos, r = decs_ s pos r_length  in
+    pos, r
+  in
+	let () = Printf.printf "string length %d \n" (strlen s) in
+	let pos = 0 in
+	let pos, structure = decodeInteger8 s pos in
+  let pos, length = decodeInteger8 s pos in
+  let () = Printf.printf "length %d\n" length  in
+
+  let pos, r = decode_elt s pos in
+	let () = Printf.printf "r %s\n" (hex_of_string r) in
+  let pos, s_ = decode_elt s pos in
+	let () = Printf.printf "s %s\n" (hex_of_string s_) in
+
+	let pos, sigType = decodeInteger8 s pos in
+	let () = Printf.printf "sigType %d\n" sigType in
+	r, s_
+
+
+*)
+(*
+  - it would be much better to use option type to parse this... 
+  and probably need padding.
+*)
+
+let decode_der_signature s =
+  try 
+    let decode_elt s pos =
+      let pos, _0x02 = decodeInteger8 s pos in
+      let pos, length = decodeInteger8 s pos in
+      let pos, value = decs_ s pos length  in
+      pos, value, _0x02 
+    in
+    let pos = 0 in
+    let pos, header = decodeInteger8 s pos in
+    let pos, length = decodeInteger8 s pos in
+
+    let pos, r, rheader = decode_elt s pos in
+    let pos, s_, sheader= decode_elt s pos in
+
+    let pos, sigType = decodeInteger8 s pos in
+
+    match header = 0x30 && rheader = 0x02 && sheader = 0x02 with 
+      | true -> Some (r, s_)
+      | false -> None
+  with _  
+    -> None
+
+
 
 
 let formatHeader (h : header) =
