@@ -175,18 +175,13 @@ let process_output x (i,output,hash,tx_id) =
     in (
     match u with
       | Some hash160 ->
-        begin
-(*
-    >> prepare db ~name:"insert_address" ~query:"insert into address(output_id, hash) values ($1,$2)" ()
-    *)        
-          PG.execute x.db ~name:"insert_address" ~params:[
-            Some (PG.string_of_int output_id ); 
-            Some (PG.string_of_bytea hash160 ) ] ()
+          PG.( execute x.db ~name:"insert_address" ~params:[
+            Some (string_of_int output_id ); 
+            Some (string_of_bytea hash160 ) ] ()
+          )
           >>     
-
           (* we should add the hash160..., and pubkey etc if available... *)
           return ()
-        end
       | Strange ->
           log @@ "strange " ^ format_tx hash i output.value script
       | None ->
