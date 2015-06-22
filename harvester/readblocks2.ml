@@ -131,8 +131,17 @@ let map_m f lst =
 *)
 
 let process_output x (i,output,hash,tx_id) =
-    let script =
+    (* we need to rearrange to encode the hash160 as PG option type *)
+
     let open M in
+    PG.( execute x.db ~name:"insert_output" ~params:[
+        Some (string_of_int tx_id);
+        Some (string_of_int i);
+        Some (string_of_int64 output.value)
+        ] () )
+
+    >>
+    let script =
     M.decode_script output.script in
     let u = match script with
       (* pay to pubkey *)
@@ -161,14 +170,7 @@ let process_output x (i,output,hash,tx_id) =
       | None ->
         return ()
     )
-    (* we need to rearrange to encode the hash160 as PG option type *)
-    >> PG.( execute x.db ~name:"insert_output" ~params:[
-        Some (string_of_int tx_id);
-        Some (string_of_int i);
-        Some (string_of_int64 output.value)
-      ] () )
     >> return x
-
 
 
 let process_input x (i, (input : M.tx_in ), hash,tx_id) =
