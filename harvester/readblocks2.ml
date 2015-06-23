@@ -90,8 +90,9 @@ let create_db db =
     >> inject db "drop table if exists tx"
     >> inject db "drop table if exists block"
 
-    >> inject db "create table block(id serial primary key, hash bytea)"
+    >> inject db "create table block(id serial primary key, hash bytea, time timestamptz)"
     >> inject db "create index on block(hash)"
+
 
     >> inject db "create table tx(id serial primary key, block_id integer references block(id), hash bytea)"
     >> inject db "create index on tx(block_id)"
@@ -112,7 +113,9 @@ let create_db db =
     >> inject db "create index on coinbase(tx_id)"
 
 
-    >> prepare db ~name:"insert_block" ~query:"insert into block(hash) values ($1) returning id" ()
+    >> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,  
+
+        (SELECT to_timestamp($2) AT TIME ZONE 'UTC')) returning id" ()
 
     >> prepare db ~name:"insert_tx" ~query:"insert into tx(block_id,hash) values ($1, $2) returning id" ()
 
@@ -276,9 +279,6 @@ let process_tx x (block_id,hash,tx) =
   >>
     let x = { x with tx_count = succ x.tx_count } in
 
-(*    >> prepare db ~name:"insert_tx" ~query:"insert into tx(block_id,hash) values ($1, $2) returning id" ()
-*)
-
     PG.execute x.db ~name:"insert_tx"  ~params:[ 
       Some (PG.string_of_int block_id);
       Some (PG.string_of_bytea hash); 
@@ -304,11 +304,6 @@ let decode_block_txs payload =
     let pos, tx_count = M.decodeVarInt payload pos in
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
     txs
-(*
-    L.map (fun tx ->
-      M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev, tx
-    ) txs
-*)
   )
 
 let decode_block_hash payload =
@@ -319,12 +314,17 @@ let decode_block_hash payload =
 let process_block f x payload =
   (* decode tx's and get tx hash *)
 
-  let block = M.decodeBlock payload in
+  let _, block  = M.decodeBlock payload 0 in
   let hash = decode_block_hash payload in 
   (* height = headers.find *)
 
+  (* should record previous ?? yes but as an id... *) 
+  log @@ "time " ^ string_of_int block.nTime
+  >>
   PG.execute x.db ~name:"insert_block" ~params:[
-    Some (PG.string_of_bytea hash ); ] ()
+    Some (PG.string_of_bytea hash );
+    Some (PG.string_of_int block.nTime ); 
+  ] ()
   >>= fun rows ->
   let block_id = decode_id rows in
 
