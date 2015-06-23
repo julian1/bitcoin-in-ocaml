@@ -40,19 +40,6 @@ type mytype =
   db : int PG.t ; (* TODO what is this *)
 }
 
-(*
-  prepare once, then use...
-*)
-
-(*
-let simple_query db query =
-  (* think this is a complete transaction *)
-  PG.prepare db ~query (* ~name*) ()
-  >> PG.execute db (* ~name*) ~params:[] ()
-
-  IMARY KEY,
-    product_no integer REFERENCES products (product_no),
-*)
 
 let log = Lwt_io.write_line Lwt_io.stdout
 
@@ -63,10 +50,7 @@ let decode_id rows =
     | _ -> raise (Failure "previous tx not found")
 
 
-
 let coinbase = M.zeros 32
-
-
 
 
 let create_db db =
@@ -74,12 +58,21 @@ let create_db db =
 
         - address hashes are not normalized here. doesn't really matter
         - likewise for der values
-
-        - we want block (for date, ordering), pubkey and der.
+        - pubkey - and der.  after der, then we can start writing views.
         - and some views to make joining stuff easier.
         - we could normalize address
         - and a flag on block if it's valid chain sequence
     *)
+    (*
+      advantages,
+      - then we can join everything. for a tx or address
+      - it's append only
+      - inputs refer directly to outputs using primary_id of output.
+      - no aggregate indexes
+      - easy to remove txs.
+
+    *)
+
   PG.(
     begin_work db
 
@@ -113,7 +106,7 @@ let create_db db =
     >> inject db "create index on coinbase(tx_id)"
 
 
-    >> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,  
+    >> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,
         (select to_timestamp($2) at time zone 'UTC')) returning id" ()
 
     >> prepare db ~name:"insert_tx" ~query:"insert into tx(block_id,hash) values ($1, $2) returning id" ()
@@ -157,21 +150,9 @@ let map_m f lst =
   L.fold_left (adapt f) (return ()) lst
 *)
 
-(*
-  we have
-    - a tx table having tx hash, block id
-    - an output table with tx_id, output_index, address, amount
-    - an input table with tx_id, and referencing output table id.
 
-  - then we can join everything. for a tx or address
-  - it's append only
-  - inputs refer directly to outputs using primary_id of output.
-  - no aggregate indexes
-  - easy to remove txs.
-
-*)
-
-let process_output x (index,output,hash,tx_id) =
+let process_output x (index,output,tx_hash,tx_id) =
+    (* TODO should get rid of tx_hash argument used for loging strange *)
     let open M in
     PG.( execute x.db ~name:"insert_output" ~params:[
         Some (string_of_int tx_id);
@@ -192,7 +173,7 @@ let process_output x (index,output,hash,tx_id) =
       | OP_RETURN :: BYTES _ :: [] -> None
       (* common for embedding raw data, prior to op_return  *)
       | BYTES _ :: [] -> None
-      (* N K1 K2 K3 M CHECKMULTISIGVERIFY, addresses? *)
+      (* N K1 K2 K3 M CHECKMULTISIGVERIFY, addresses? TODO make generic *)
       | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
 
       | _ -> Strange
@@ -205,27 +186,10 @@ let process_output x (index,output,hash,tx_id) =
           )
           >> return x
       | Strange ->
-          log @@ "strange " ^ format_tx hash index output.value script
+          log @@ "strange " ^ format_tx tx_hash index output.value script
           >> return x
       | None ->
         return x
-
-
-
-let process_input x (index, (input : M.tx_in ), hash,tx_id) =
-  (* let process_input x (i, input, hash,tx_id) = *)
-    (* extract der signature and r,s keys *)
-
-    let script = M.decode_script input.script  in
-    (* why can't we pattern match on string here ? eg. function *)
-    (* so we have to look up the tx hash, which means we need an index on it *)
-
-    if input.previous = coinbase then
-      PG.execute x.db ~name:"insert_coinbase" ~params:[
-        Some (PG.string_of_int tx_id); ] ()
-      >> return x
-    else
-
 
     (* Important - in fact we don't have to return the value, but could just
         select the correct output id and insert at the same time.
@@ -250,6 +214,19 @@ let process_input x (index, (input : M.tx_in ), hash,tx_id) =
         - likewise for pubkeys - to avoid nulls
       and der sigs...
     *)
+
+
+let process_input x (index, (input : M.tx_in ), hash,tx_id) =
+  (* let process_input x (i, input, hash,tx_id) = *)
+    (* why can't we pattern match on string here ? eg. function *)
+    (* so we have to look up the tx hash, which means we need an index on it *)
+  
+  begin
+    if input.previous = coinbase then
+      PG.execute x.db ~name:"insert_coinbase" ~params:[
+        Some (PG.string_of_int tx_id); 
+      ] ()
+    else 
       PG.execute x.db ~name:"select_output_id" ~params:[
         Some (PG.string_of_bytea input.previous);
         Some (PG.string_of_int input.index); ] ()
@@ -259,7 +236,26 @@ let process_input x (index, (input : M.tx_in ), hash,tx_id) =
           Some (PG.string_of_int tx_id);
           Some (PG.string_of_int output_id);
         ] ()
-    >> return x
+  end
+  >> 
+  let script = M.decode_script input.script in
+
+  (* extract der signature and r,s keys *)
+  let ders = L.fold_left (fun acc elt ->
+    match elt with
+      | M.BYTES s -> (
+        match M.decode_der_signature s with
+          Some der -> der :: acc
+          | None -> acc
+      )
+      | _ -> acc
+  ) [] script in
+
+  let process_der x der =
+    (* let r,s = der in *)
+    return x 
+  in
+  fold_m process_der x ders
 
 
 let process_tx x (block_id,hash,tx) =
@@ -278,9 +274,9 @@ let process_tx x (block_id,hash,tx) =
   >>
     let x = { x with tx_count = succ x.tx_count } in
 
-    PG.execute x.db ~name:"insert_tx"  ~params:[ 
+    PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_int block_id);
-      Some (PG.string_of_bytea hash); 
+      Some (PG.string_of_bytea hash);
     ] ()
   >>= fun rows ->
     let tx_id = decode_id rows in
@@ -313,13 +309,13 @@ let decode_block_hash payload =
 let process_block f x payload =
 
   let _, block  = M.decodeBlock payload 0 in
-  let hash = decode_block_hash payload in 
+  let hash = decode_block_hash payload in
 
   PG.execute x.db ~name:"insert_block" ~params:[
     Some (PG.string_of_bytea hash );
-    Some (PG.string_of_int block.nTime ); 
-    (* should previous as an id... 
-       height = headers.find *) 
+    Some (PG.string_of_int block.nTime );
+    (* should previous as an id...
+       height = headers.find *)
   ] ()
   >>= fun rows ->
   let block_id = decode_id rows in
@@ -327,7 +323,7 @@ let process_block f x payload =
   let txs = decode_block_txs payload in
   let txs = L.map (fun (tx : M.tx) ->
     block_id,
-    M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev, 
+    M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
     tx
   ) txs
   in
