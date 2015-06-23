@@ -150,6 +150,12 @@ let replay_blocks fd seq headers f x =
 
 
 
+let fold_m f acc lst =
+  let adapt f acc e = acc >>= fun acc -> f acc e in
+  L.fold_left (adapt f) (return acc) lst
+
+
+
 (* process block by scanning txs *)
 let process_block f x payload =
   (* TODO - change this to just decode enough of the tx, to pull them 
@@ -166,7 +172,9 @@ let process_block f x payload =
       in hash, tx
     ) txs
     in
-    L.fold_left (fun x e -> x >>= fun x -> f x e) (return x) txs 
+   (* L.fold_left (fun x e -> x >>= fun x -> f x e) (return x) txs  *)
+   fold_m f (x) txs 
+    
     (*L.fold_left f  (x) txs *)
 
 
