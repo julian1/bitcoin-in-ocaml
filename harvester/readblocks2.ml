@@ -70,9 +70,13 @@ let create_db db =
       - inputs refer directly to outputs using primary_id of output.
       - no aggregate indexes
       - easy to remove txs.
-
     *)
-
+    (*
+        - we ought to be able to do chainstate rearrangement really simply... just
+        with a flag against the block. or another table, to say whether it's mainchain
+        then adjust the views accordingly.
+        - we need to get the db transactions organized around block. rather than tx_count
+    *)
   PG.(
     begin_work db
 
