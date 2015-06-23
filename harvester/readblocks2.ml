@@ -283,6 +283,31 @@ let process_tx x (hash,tx) =
 
 
 
+let process_block f x payload =
+  (* todo separate out the function to get tx 
+    also open M. to get the tx stuff...
+  *)
+  (* TODO - change this to just decode enough of the tx, to pull them 
+    out. let process_tx calculate hash, and decode *)
+  (*log "block"
+  >> *)
+    (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
+    (* decode tx's and get tx hash *)
+    let pos = 80 in
+    let pos, tx_count = M.decodeVarInt payload pos in
+    let _, (txs : M.tx list ) = M.decodeNItems payload pos M.decodeTx tx_count in
+    let txs = L.map (fun (tx : M.tx) ->
+      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
+      in hash, tx
+    ) txs
+    in
+   (* L.fold_left (fun x e -> x >>= fun x -> f x e) (return x) txs  *)
+   fold_m f (x) txs 
+
+ 
+let replay_tx fd seq headers process_tx x =
+  let process_block = process_block process_tx in
+  Sc.replay_blocks fd seq headers process_block x
 
 
 let process_file () =
@@ -320,7 +345,8 @@ let process_file () =
       } in
 
       PG.begin_work db
-    >> Sc.replay_tx fd seq headers process_tx x
+    (*>> Sc.replay_tx fd seq headers process_tx x *)
+    >> replay_tx fd seq headers process_tx x
     >> PG.commit db
     >> PG.close db
     >> 

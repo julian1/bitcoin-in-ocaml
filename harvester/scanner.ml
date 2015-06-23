@@ -175,7 +175,6 @@ let process_block f x payload =
    (* L.fold_left (fun x e -> x >>= fun x -> f x e) (return x) txs  *)
    fold_m f (x) txs 
     
-    (*L.fold_left f  (x) txs *)
 
 
 let replay_tx fd seq headers process_tx x =
