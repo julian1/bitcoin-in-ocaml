@@ -322,7 +322,7 @@ let decodeVarInt s pos =
     | _ -> (pos, first)
 
 
-(* change name decodeBlockHeader *)
+(* change name decode_block_header *)
 let decodeBlock (s:string) pos =
 	let pos, version = decodeInteger32 s pos in
 	let pos, previous = decodeHash32 s pos in

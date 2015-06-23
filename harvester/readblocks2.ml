@@ -93,9 +93,9 @@ let create_db db =
     >> inject db "create table block(id serial primary key, hash bytea)"
     >> inject db "create index on block(hash)"
 
-    >> inject db "create table tx(id serial primary key, hash bytea, block_id integer references block(id))"
-    >> inject db "create index on tx(hash)"
+    >> inject db "create table tx(id serial primary key, block_id integer references block(id), hash bytea)"
     >> inject db "create index on tx(block_id)"
+    >> inject db "create index on tx(hash)"
 
     >> inject db "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)"
     >> inject db "create index on output(tx_id)"
@@ -112,7 +112,10 @@ let create_db db =
     >> inject db "create index on coinbase(tx_id)"
 
 
-    >> prepare db ~name:"insert_tx" ~query:"insert into tx(hash) values ($1) returning id" ()
+    >> prepare db ~name:"insert_block" ~query:"insert into block(hash) values ($1) returning id" ()
+
+    >> prepare db ~name:"insert_tx" ~query:"insert into tx(block_id,hash) values ($1, $2) returning id" ()
+
     >> prepare db ~name:"select_output_id" ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
 
     >> prepare db ~name:"insert_output" ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" ()
@@ -257,8 +260,9 @@ let process_input x (index, (input : M.tx_in ), hash,tx_id) =
     >> return x
 
 
-let process_tx x (hash,tx) =
+let process_tx x (block_id,hash,tx) =
   begin
+    (* todo move commits to co-incide with blocks *)
     match x.tx_count mod 10000 with
       | 0 -> log @@ S.concat "" [
         " tx_count "; string_of_int x.tx_count;
@@ -271,7 +275,14 @@ let process_tx x (hash,tx) =
   end
   >>
     let x = { x with tx_count = succ x.tx_count } in
-    PG.execute x.db ~name:"insert_tx"  ~params:[ Some (PG.string_of_bytea hash); ] ()
+
+(*    >> prepare db ~name:"insert_tx" ~query:"insert into tx(block_id,hash) values ($1, $2) returning id" ()
+*)
+
+    PG.execute x.db ~name:"insert_tx"  ~params:[ 
+      Some (PG.string_of_int block_id);
+      Some (PG.string_of_bytea hash); 
+    ] ()
   >>= fun rows ->
     let tx_id = decode_id rows in
     (* can get rid of the hash *)
@@ -292,26 +303,46 @@ let decode_block_txs payload =
     let pos = 80 in
     let pos, tx_count = M.decodeVarInt payload pos in
     let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+    txs
+(*
     L.map (fun tx ->
       M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev, tx
     ) txs
+*)
   )
+
+let decode_block_hash payload =
+  M.strsub payload 0 80 |> M.sha256d |> M.strrev
+
 
 
 let process_block f x payload =
   (* decode tx's and get tx hash *)
 
+  let block = M.decodeBlock payload in
+  let hash = decode_block_hash payload in 
+  (* height = headers.find *)
+
+  PG.execute x.db ~name:"insert_block" ~params:[
+    Some (PG.string_of_bytea hash ); ] ()
+  >>= fun rows ->
+  let block_id = decode_id rows in
+
   let txs = decode_block_txs payload in
+  let txs = L.map (fun (tx : M.tx) ->
+    block_id,
+    M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev, 
+    tx
+  ) txs
+  in
+  fold_m f (x) txs
+
 
   (* so we're going to want to map in the block and get the block_id
         we want other stuff from the block
     tx hash, t
     VERY IMPORTANT - we don't need to compute
   *)
-  let block = M.decodeBlock payload in
-  let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
-  fold_m f (x) txs
-
 
 
 let replay_tx fd seq headers process_tx x =
