@@ -293,16 +293,20 @@ let process_block f x payload =
   >> *)
     (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
     (* decode tx's and get tx hash *)
-    let pos = 80 in
-    let pos, tx_count = M.decodeVarInt payload pos in
-    let _, (txs : M.tx list ) = M.decodeNItems payload pos M.decodeTx tx_count in
-    let txs = L.map (fun (tx : M.tx) ->
-      let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
-      in hash, tx
-    ) txs
+    let decode_txs payload =
+    M.(
+        let pos = 80 in
+        let pos, tx_count = M.decodeVarInt payload pos in
+        let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+        L.map (fun tx ->
+          let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
+          in hash, tx
+        ) txs
+    )
     in
-   (* L.fold_left (fun x e -> x >>= fun x -> f x e) (return x) txs  *)
+    let txs = decode_txs payload in 
    fold_m f (x) txs 
+  
 
  
 let replay_tx fd seq headers process_tx x =
