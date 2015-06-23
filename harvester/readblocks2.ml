@@ -76,6 +76,7 @@ let create_db db =
   PG.(
     begin_work db
 
+    >> inject db "drop table if exists signature"
     >> inject db "drop table if exists coinbase"
     >> inject db "drop table if exists address"
     >> inject db "drop table if exists input"
@@ -105,6 +106,11 @@ let create_db db =
     >> inject db "create table coinbase(id serial primary key, tx_id integer references tx(id))"
     >> inject db "create index on coinbase(tx_id)"
 
+    >> inject db "create table signature(id serial primary key, input_id integer references input(id), r bytea, s bytea )"
+    >> inject db "create index on signature(input_id)"
+    >> inject db "create index on signature(r)"
+
+
 
     >> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,
         (select to_timestamp($2) at time zone 'UTC')) returning id" ()
@@ -120,6 +126,8 @@ let create_db db =
     >> prepare db ~name:"insert_address" ~query:"insert into address(output_id, hash) values ($1,$2)" ()
 
     >> prepare db ~name:"insert_coinbase" ~query:"insert into coinbase(tx_id) values ($1)" ()
+
+    >> prepare db ~name:"insert_signature" ~query:"insert into signature(input_id,r,s) values ($1,$2,$3)" ()
 
 
 
@@ -217,7 +225,7 @@ let process_output x (index,output,tx_hash,tx_id) =
 
 
 
-let process_input_script x (input_id, input ) =
+let process_input_script x (input_id, input) =
   let (input : M.tx_in) = input in 
   (* maybe change name to process_signature *)
   let script = M.decode_script input.script in
@@ -233,10 +241,13 @@ let process_input_script x (input_id, input ) =
   ) [] script in
 
   let process_der x der =
+    (* ok, all we have to do is insert the der *) 
     let r,s = der in 
-    (* ok, all we have to do is insert the der ... 
-    *) 
-    log @@ "der " ^ M.hex_of_string r
+    PG.execute x.db ~name:"insert_signature" ~params:[
+      Some (PG.string_of_int input_id); 
+      Some (PG.string_of_bytea r); 
+      Some (PG.string_of_bytea s); 
+    ] ()
     >>
     return x 
   in
@@ -273,6 +284,7 @@ let process_input x (index, input, hash, tx_id) =
 
 
 let process_tx x (block_id,hash,tx) =
+(*
   begin
     (* todo move commits to co-incide with blocks *)
     match x.tx_count mod 10000 with
@@ -286,6 +298,7 @@ let process_tx x (block_id,hash,tx) =
       | _ -> return ()
   end
   >>
+*)
     let x = { x with tx_count = succ x.tx_count } in
 
     PG.execute x.db ~name:"insert_tx"  ~params:[
