@@ -217,7 +217,8 @@ let process_output x (index,output,tx_hash,tx_id) =
 
 
 
-let process_input_script x (input_id, (input : M.tx_in )) =
+let process_input_script x (input_id, input ) =
+  let (input : M.tx_in) = input in 
   (* maybe change name to process_signature *)
   let script = M.decode_script input.script in
   (* extract der signature and r,s keys *)
@@ -234,44 +235,40 @@ let process_input_script x (input_id, (input : M.tx_in )) =
   let process_der x der =
     let r,s = der in 
     (* ok, all we have to do is insert the der ... 
-        against the input_id ... k
-      actually it's part of the input 
-
-        ok, might be an issue with the 
     *) 
+    log @@ "der " ^ M.hex_of_string r
+    >>
     return x 
   in
   fold_m process_der x ders
 
 
  
-let process_input x (index, (input : M.tx_in ), hash,tx_id) =
-  (* let process_input x (i, input, hash,tx_id) = *)
-    (* why can't we pattern match on string here ? eg. function *)
-    (* so we have to look up the tx hash, which means we need an index on it *)
-  
-  begin
-    if input.previous = coinbase then
-      PG.execute x.db ~name:"insert_coinbase" ~params:[
-        Some (PG.string_of_int tx_id); 
-      ] ()
-      >> return x 
-    else 
-      PG.execute x.db ~name:"select_output_id" ~params:[
-          Some (PG.string_of_bytea input.previous);
-          Some (PG.string_of_int input.index); 
-        ] ()
-      >>= fun rows ->
-        let output_id = decode_id rows in
-        PG.execute x.db ~name:"insert_input" ~params:[
-          Some (PG.string_of_int tx_id);
-          Some (PG.string_of_int output_id);
-        ] ()
-      >>= fun rows ->
-        let input_id = decode_id rows in
+let process_input x (index, input, hash, tx_id) =
 
-        process_input_script x (input_id,input)
-    end
+  let (input : M.tx_in) = input in 
+  (* let process_input x (i, input, hash,tx_id) = *)
+  (* why can't we pattern match on string here ? eg. function *)
+  (* so we have to look up the tx hash, which means we need an index on it *)
+  if input.previous = coinbase then
+    PG.execute x.db ~name:"insert_coinbase" ~params:[
+      Some (PG.string_of_int tx_id); 
+    ] ()
+    >> return x 
+  else 
+    PG.execute x.db ~name:"select_output_id" ~params:[
+        Some (PG.string_of_bytea input.previous);
+        Some (PG.string_of_int input.index); 
+      ] ()
+    >>= fun rows ->
+      let output_id = decode_id rows in
+      PG.execute x.db ~name:"insert_input" ~params:[
+        Some (PG.string_of_int tx_id);
+        Some (PG.string_of_int output_id);
+      ] ()
+    >>= fun rows ->
+      let input_id = decode_id rows in
+      process_input_script x (input_id,input)
 
 
 
