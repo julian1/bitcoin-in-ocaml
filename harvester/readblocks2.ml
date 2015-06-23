@@ -241,7 +241,7 @@ let process_input_script x (input_id, input) =
   ) [] script in
 
   let process_der x der =
-    (* ok, all we have to do is insert the der *) 
+    (* ok, all we have to do is insert the der ...  *) 
     let r,s = der in 
     PG.execute x.db ~name:"insert_signature" ~params:[
       Some (PG.string_of_int input_id); 
@@ -284,7 +284,6 @@ let process_input x (index, input, hash, tx_id) =
 
 
 let process_tx x (block_id,hash,tx) =
-(*
   begin
     (* todo move commits to co-incide with blocks *)
     match x.tx_count mod 10000 with
@@ -298,7 +297,6 @@ let process_tx x (block_id,hash,tx) =
       | _ -> return ()
   end
   >>
-*)
     let x = { x with tx_count = succ x.tx_count } in
 
     PG.execute x.db ~name:"insert_tx"  ~params:[
