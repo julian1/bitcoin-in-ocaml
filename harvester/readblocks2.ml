@@ -114,8 +114,7 @@ let create_db db =
 
 
     >> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,  
-
-        (SELECT to_timestamp($2) AT TIME ZONE 'UTC')) returning id" ()
+        (select to_timestamp($2) at time zone 'UTC')) returning id" ()
 
     >> prepare db ~name:"insert_tx" ~query:"insert into tx(block_id,hash) values ($1, $2) returning id" ()
 
@@ -312,18 +311,15 @@ let decode_block_hash payload =
 
 
 let process_block f x payload =
-  (* decode tx's and get tx hash *)
 
   let _, block  = M.decodeBlock payload 0 in
   let hash = decode_block_hash payload in 
-  (* height = headers.find *)
 
-  (* should record previous ?? yes but as an id... *) 
-  log @@ "time " ^ string_of_int block.nTime
-  >>
   PG.execute x.db ~name:"insert_block" ~params:[
     Some (PG.string_of_bytea hash );
     Some (PG.string_of_int block.nTime ); 
+    (* should previous as an id... 
+       height = headers.find *) 
   ] ()
   >>= fun rows ->
   let block_id = decode_id rows in
@@ -335,14 +331,8 @@ let process_block f x payload =
     tx
   ) txs
   in
-  fold_m f (x) txs
+  fold_m f x txs
 
-
-  (* so we're going to want to map in the block and get the block_id
-        we want other stuff from the block
-    tx hash, t
-    VERY IMPORTANT - we don't need to compute
-  *)
 
 
 let replay_tx fd seq headers process_tx x =
