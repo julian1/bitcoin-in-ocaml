@@ -70,15 +70,15 @@ let coinbase = M.zeros 32
 
 
 let create_db db =
-    (* note we're already doing a lot more than with leveldb 
+    (* note we're already doing a lot more than with leveldb
 
-        - address hashes are not normalized here. doesn't really matter 
+        - address hashes are not normalized here. doesn't really matter
         - likewise for der values
-   
-        - we want block (for date, ordering), pubkey and der. 
+
+        - we want block (for date, ordering), pubkey and der.
         - and some views to make joining stuff easier.
         - we could normalize address
-        - and a flag on block if it's valid chain sequence 
+        - and a flag on block if it's valid chain sequence
     *)
   PG.(
     begin_work db
@@ -88,11 +88,16 @@ let create_db db =
     >> inject db "drop table if exists input"
     >> inject db "drop table if exists output"
     >> inject db "drop table if exists tx"
+    >> inject db "drop table if exists block"
 
-    >> inject db "create table tx(id serial primary key, hash bytea)"
+    >> inject db "create table block(id serial primary key, hash bytea)"
+    >> inject db "create index on block(hash)"
+
+    >> inject db "create table tx(id serial primary key, hash bytea, block_id integer references block(id))"
     >> inject db "create index on tx(hash)"
-    
-    >> inject db @@ "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)"
+    >> inject db "create index on tx(block_id)"
+
+    >> inject db "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)"
     >> inject db "create index on output(tx_id)"
 
     >> inject db "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )"
@@ -102,7 +107,6 @@ let create_db db =
     >> inject db "create table address(id serial primary key, output_id integer references output(id), hash bytea)"
     >> inject db "create index on address(output_id)"
     >> inject db "create index on address(hash)"
-  
 
     >> inject db "create table coinbase(id serial primary key, tx_id integer references tx(id))"
     >> inject db "create index on coinbase(tx_id)"
@@ -120,7 +124,7 @@ let create_db db =
     >> prepare db ~name:"insert_coinbase" ~query:"insert into coinbase(tx_id) values ($1)" ()
 
 
- 
+
     >> commit db
   )
 
@@ -170,7 +174,7 @@ let process_output x (index,output,hash,tx_id) =
         Some (string_of_int64 output.value)
         ] () )
     >>= fun rows ->
-    let output_id = decode_id rows in 
+    let output_id = decode_id rows in
     let script = M.decode_script output.script in
     let decoded_script = match script with
       (* pay to pubkey *)
@@ -187,19 +191,19 @@ let process_output x (index,output,hash,tx_id) =
       | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
 
       | _ -> Strange
-    in 
+    in
     match decoded_script with
       | Some hash160 ->
           PG.( execute x.db ~name:"insert_address" ~params:[
-            Some (string_of_int output_id ); 
+            Some (string_of_int output_id );
             Some (string_of_bytea hash160 ) ] ()
           )
-          >> return x 
+          >> return x
       | Strange ->
           log @@ "strange " ^ format_tx hash index output.value script
           >> return x
       | None ->
-        return x 
+        return x
 
 
 
@@ -232,7 +236,7 @@ let process_input x (index, (input : M.tx_in ), hash,tx_id) =
         43,50 secs to 50k.
         30 sec best with separated prepare. but it varys.
             seems to use bitmap scan initially - which is slower.
-    
+
     important - we're also doing a lot more
 
       we should create another table for addresses (for more than one)
@@ -245,7 +249,7 @@ let process_input x (index, (input : M.tx_in ), hash,tx_id) =
         Some (PG.string_of_bytea input.previous);
         Some (PG.string_of_int input.index); ] ()
       >>= fun rows ->
-        let output_id = decode_id rows in 
+        let output_id = decode_id rows in
         PG.execute x.db ~name:"insert_input" ~params:[
           Some (PG.string_of_int tx_id);
           Some (PG.string_of_int output_id);
@@ -269,7 +273,7 @@ let process_tx x (hash,tx) =
     let x = { x with tx_count = succ x.tx_count } in
     PG.execute x.db ~name:"insert_tx"  ~params:[ Some (PG.string_of_bytea hash); ] ()
   >>= fun rows ->
-    let tx_id = decode_id rows in 
+    let tx_id = decode_id rows in
     (* can get rid of the hash *)
     let group index a = (index,a,hash,tx_id) in
 
@@ -282,31 +286,34 @@ let process_tx x (hash,tx) =
     fold_m process_output x outputs
 
 
+(* move to message.ml ? *)
+let decode_block_txs payload =
+  M.(
+    let pos = 80 in
+    let pos, tx_count = M.decodeVarInt payload pos in
+    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+    L.map (fun tx ->
+      M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev, tx
+    ) txs
+  )
+
 
 let process_block f x payload =
   (* decode tx's and get tx hash *)
-  let decode_txs payload =
-    M.(
-      let pos = 80 in
-      let pos, tx_count = M.decodeVarInt payload pos in
-      let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-      L.map (fun tx ->
-        M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev, tx
-      ) txs
-    )
-  in
-  let txs = decode_txs payload in 
 
-  (* so we're going to want to map in the block and get the block_id 
+  let txs = decode_block_txs payload in
+
+  (* so we're going to want to map in the block and get the block_id
         we want other stuff from the block
-  *) 
-  let block = M.decodeBlock payload in    
-  let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in 
+    tx hash, t
+    VERY IMPORTANT - we don't need to compute
+  *)
+  let block = M.decodeBlock payload in
+  let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in
+  fold_m f (x) txs
 
-  fold_m f (x) txs 
 
 
- 
 let replay_tx fd seq headers process_tx x =
   let process_block = process_block process_tx in
   Sc.replay_blocks fd seq headers process_block x
@@ -351,7 +358,7 @@ let process_file () =
     >> replay_tx fd seq headers process_tx x
     >> PG.commit db
     >> PG.close db
-    >> 
+    >>
       log "finished "
 
 let () = Lwt_main.run (
