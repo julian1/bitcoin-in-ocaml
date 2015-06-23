@@ -284,29 +284,27 @@ let process_tx x (hash,tx) =
 
 
 let process_block f x payload =
-  (* todo separate out the function to get tx 
-    also open M. to get the tx stuff...
-  *)
-  (* TODO - change this to just decode enough of the tx, to pull them 
-    out. let process_tx calculate hash, and decode *)
-  (*log "block"
-  >> *)
-    (* let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in *)
-    (* decode tx's and get tx hash *)
-    let decode_txs payload =
+  (* decode tx's and get tx hash *)
+  let decode_txs payload =
     M.(
-        let pos = 80 in
-        let pos, tx_count = M.decodeVarInt payload pos in
-        let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-        L.map (fun tx ->
-          let hash = M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev
-          in hash, tx
-        ) txs
+      let pos = 80 in
+      let pos, tx_count = M.decodeVarInt payload pos in
+      let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
+      L.map (fun tx ->
+        M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev, tx
+      ) txs
     )
-    in
-    let txs = decode_txs payload in 
-   fold_m f (x) txs 
-  
+  in
+  let txs = decode_txs payload in 
+
+  (* so we're going to want to map in the block and get the block_id 
+        we want other stuff from the block
+  *) 
+  let block = M.decodeBlock payload in    
+  let block_hash = M.strsub payload 0 80 |> M.sha256d |> M.strrev in 
+
+  fold_m f (x) txs 
+
 
  
 let replay_tx fd seq headers process_tx x =
