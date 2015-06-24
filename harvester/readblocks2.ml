@@ -114,8 +114,8 @@ let create_db db =
     >> inject db "create index on input(tx_id)"
     >> inject db "create index on input(output_id)"
 
-    >> inject db "create table address(id serial primary key, output_id integer references output(id), hash bytea)"
-    >> inject db "create index on address(output_id)"
+    >> inject db "create table address(id serial primary key, hash bytea unique)"
+(*    >> inject db "create index on address(output_id)" *)
     >> inject db "create index on address(hash)"
 
     >> inject db "create table coinbase(id serial primary key, tx_id integer references tx(id))"
@@ -138,7 +138,26 @@ let create_db db =
 
     >> prepare db ~name:"insert_input" ~query:"insert into input(tx_id,output_id) values ($1,$2) returning id" ()
 
-    >> prepare db ~name:"insert_address" ~query:"insert into address(output_id, hash) values ($1,$2)" ()
+    >> prepare db ~name:"insert_address" ~query:"
+        with s as (
+            select id, hash 
+            from address
+            where hash = $1 
+        ), i as (
+            insert into address (hash)
+            select $1
+            where not exists (select 1 from s)
+            returning id, hash
+        )
+        select id, hash
+        from i
+        union all
+        select id, hash
+        from s
+      " ()
+(*
+insert into address(output_id, hash) values ($1,$2) ()
+*)
 
     >> prepare db ~name:"insert_coinbase" ~query:"insert into coinbase(tx_id) values ($1)" ()
 
@@ -204,9 +223,12 @@ let process_output x (index,output,tx_hash,tx_id) =
     match decoded_script with
       | Some hash160 ->
           PG.( execute x.db ~name:"insert_address" ~params:[
-            Some (string_of_int output_id );
             Some (string_of_bytea hash160 ) ] ()
           )
+          >>= fun rows ->
+          let address_id = decode_id rows in
+          log @@ "whooot" ^ string_of_int address_id
+
           >> return x
       | Strange ->
           log @@ "strange " ^ format_tx tx_hash index output.value script
