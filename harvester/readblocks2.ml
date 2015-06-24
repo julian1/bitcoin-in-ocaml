@@ -75,7 +75,18 @@ let create_db db =
         - we ought to be able to do chainstate rearrangement really simply... just
         with a flag against the block. or another table, to say whether it's mainchain
         then adjust the views accordingly.
+        - actually could even do it, as a single tip value... but probably easier to
+        mark. 
         - we need to get the db transactions organized around block. rather than tx_count
+    *)
+    (*
+      - if we stored the blocks in db. then could use substr
+        - get blocks by hash
+        - get tx by hash 
+    *)
+    (*
+        - if we have previous, then it ought to be possible to calculate height
+        dynamically - although may be expensive.
     *)
   PG.(
     begin_work db
