@@ -93,13 +93,14 @@ let create_db db =
 
     >> inject db "drop table if exists signature"
     >> inject db "drop table if exists coinbase"
+    >> inject db "drop table if exists output_address"
     >> inject db "drop table if exists address"
     >> inject db "drop table if exists input"
     >> inject db "drop table if exists output"
     >> inject db "drop table if exists tx"
     >> inject db "drop table if exists block"
 
-    >> inject db "create table block(id serial primary key, hash bytea, time timestamptz)"
+    >> inject db "create table block(id serial primary key, hash bytea unique, time timestamptz)"
     >> inject db "create index on block(hash)"
 
 
@@ -117,6 +118,11 @@ let create_db db =
     >> inject db "create table address(id serial primary key, hash bytea unique)"
 (*    >> inject db "create index on address(output_id)" *)
     >> inject db "create index on address(hash)"
+
+    >> inject db "create table output_address(id serial primary key, output_id integer references output(id), address_id integer references address(id))"
+    >> inject db "create index on output_address(output_id)"
+    >> inject db "create index on output_address(address_id)"
+
 
     >> inject db "create table coinbase(id serial primary key, tx_id integer references tx(id))"
     >> inject db "create index on coinbase(tx_id)"
@@ -158,6 +164,8 @@ let create_db db =
 (*
 insert into address(output_id, hash) values ($1,$2) ()
 *)
+    >> prepare db ~name:"insert_output_address" ~query:"insert into output_address(output_id,address_id) values ($1,$2)" ()
+
 
     >> prepare db ~name:"insert_coinbase" ~query:"insert into coinbase(tx_id) values ($1)" ()
 
@@ -227,9 +235,14 @@ let process_output x (index,output,tx_hash,tx_id) =
           )
           >>= fun rows ->
           let address_id = decode_id rows in
-          log @@ "whooot" ^ string_of_int address_id
 
+          PG.( execute x.db ~name:"insert_output_address" ~params:[
+            Some (string_of_int output_id); 
+            Some (string_of_int address_id); 
+          ] ()
+          )
           >> return x
+
       | Strange ->
           log @@ "strange " ^ format_tx tx_hash index output.value script
           >> return x
