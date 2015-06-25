@@ -15,7 +15,7 @@
 
 --explain select * from 
 
-select t.r, oa2.output_id, a.hash, amount 
+select t.r,  a.hash, received1( a.hash) 
 from test t 
 join input i on i.id = t.input_id
 join output o on o.id = i.output_id
@@ -23,7 +23,6 @@ join output_address oa on oa.output_id = o.id
 
 join address a on a.id = oa.address_id 
 
-join output_address oa2 on oa2.address_id = oa.address_id 
 
 -- join address a on a.id = oa.address_id 
 -- ok, maybe its not the join order. but the lack of  

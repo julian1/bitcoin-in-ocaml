@@ -27,13 +27,25 @@ join output o on o.id = oa.output_id
 group by a.hash
 ; 
 
-
 create or replace view x as 
 select a.hash, r.received, u.unspent  from  
 address a
 left join unspent u on u.hash = a.hash
 left join received r on r.hash = a.hash 
-
 ; 
+
+
+
+CREATE OR REPLACE FUNCTION received1( hash1 bytea )
+RETURNS bigint AS $total$
+declare
+    total bigint ;
+BEGIN
+   SELECT received into total FROM received where hash = hash1;
+   RETURN total;
+END;
+$total$ LANGUAGE plpgsql;
+
+
 
 
