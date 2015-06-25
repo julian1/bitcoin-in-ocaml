@@ -62,4 +62,7 @@ $total$ LANGUAGE plpgsql;
 -- the function constrains the query, we could even build another
 -- view from this if we wanted.  
 
+-- IMPORTANT
+-- should also try the (subset offset 0) trick 
+-- and we want transactions organized around blocks.
 
