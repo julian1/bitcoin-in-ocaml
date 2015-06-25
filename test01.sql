@@ -1,35 +1,18 @@
 
--- should be address focused? yes tx's that spend --
+-- ok, we want to join it with the 
+--- we could try to put this in a table... and then join to x.
+--- it's weird why it's slow?
 
--- we're not linking up inputs very well...
--- we want the block so that we can order them...
--- so we have one of the inputs.
+select t.r, o.amount, a.hash --, x.received, x.unspent
+from test t 
+join input i on i.id = t.input_id
+join output o on o.id = i.output_id
+join output_address oa on oa.output_id = o.id
+join address a on a.id = oa.address_id 
+-- join x on x.hash = a.hash 
+--join received on received.hash = a.hash 
 
--- think we have to select txes...
+-- left join address a on a.id =  
 
-select
-    --t.hash as tx,
-    ia.hash as inputaddress,
-    round( CAST(io.amount / 100000000. as numeric), 5),
-    c.id is not null as coinbase,
-    a.hash as address,
-    round( CAST(o.amount / 100000000. as numeric), 5)
-from address a
-join output o on o.id = a.output_id
-join tx t on t.id = o.tx_id
-
--- this isn't right because there might be lots of inputs...
-left join coinbase c on c.tx_id = t.id
-left join input i on i.tx_id = t.id  -- has to be left otherwise
-left join output io on io.id = i.output_id
-left join address ia on ia.output_id = io.id
-
-where a.hash = '\x119b098e2e980a229e139a9ed01a469e518e6f26'
-
--- order by a.hash
--- where tx.hash = 'xxxx' and output.index=0;
-
--- ok, we're
-
-
+; 
 

@@ -1,11 +1,14 @@
 
+-- drop table test;
+--create table test( id integer, input_id integer, r bytea, row integer );
 
+insert into test
 select * from
-
 (SELECT 
     id,
-    ROW_NUMBER() OVER(PARTITION BY r ) AS Row,
-    r
+    input_id,
+    r,
+    ROW_NUMBER() OVER(PARTITION BY r ) AS Row
     
     -- ROW_NUMBER() OVER(PARTITION BY r order by id ) AS Row
     FROM signature ) as s2
