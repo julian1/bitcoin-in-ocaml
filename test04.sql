@@ -27,12 +27,12 @@ join output o on o.id = oa.output_id
 group by a.hash
 ; 
 
-create or replace view x as 
-select a.hash, r.received, u.unspent  from  
-address a
-left join unspent u on u.hash = a.hash
-left join received r on r.hash = a.hash 
-; 
+-- create or replace view x as 
+-- select a.hash, r.received, u.unspent  from  
+-- address a
+-- left join unspent u on u.hash = a.hash
+-- left join received r on r.hash = a.hash 
+-- ; 
 
 
 
@@ -47,5 +47,19 @@ END;
 $total$ LANGUAGE plpgsql;
 
 
+CREATE OR REPLACE FUNCTION unspent1( hash1 bytea )
+RETURNS bigint AS $total$
+declare
+    total bigint ;
+BEGIN
+   SELECT unspent into total FROM unspent where hash = hash1;
+   RETURN total;
+END;
+$total$ LANGUAGE plpgsql;
+
+-- should have a count outputs function as well... 
+
+-- the function constrains the query, we could even build another
+-- view from this if we wanted.  
 
 
