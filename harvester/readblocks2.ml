@@ -103,77 +103,67 @@ let create_db db =
     begin_work db
     
     >> fold_m (fun db query -> inject db query >> return db ) db [
-        "drop table if exists signature";
-        "drop table if exists coinbase";
-        "drop table if exists output_address";
-        "drop table if exists address";
-        "drop table if exists input";
-        "drop table if exists output";
-        "drop table if exists tx";
-        "drop table if exists block";
+      "drop table if exists signature";
+      "drop table if exists coinbase";
+      "drop table if exists output_address";
+      "drop table if exists address";
+      "drop table if exists input";
+      "drop table if exists output";
+      "drop table if exists tx";
+      "drop table if exists block";
 
-        "create table block(id serial primary key, hash bytea unique, time timestamptz)";
-        "create index on block(hash)";
-        "create table tx(id serial primary key, block_id integer references block(id), hash bytea)";
-        "create index on tx(block_id)";
-        "create index on tx(hash)";
-        "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)";
-        "create index on output(tx_id)";
-        "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )";
-        "create index on input(tx_id)";
-        "create index on input(output_id)";
-        "create table address(id serial primary key, hash bytea unique)";
-        (* "create index on address(output_id)" *)
-        "create index on address(hash)";
-        "create table output_address(id serial primary key, output_id integer references output(id), address_id integer references address(id))";
-        "create index on output_address(output_id)";
-        "create index on output_address(address_id)";
-        "create table coinbase(id serial primary key, tx_id integer references tx(id))";
-        "create index on coinbase(tx_id)";
-        "create table signature(id serial primary key, input_id integer references input(id), r bytea, s bytea )";
-        "create index on signature(input_id)";
-        "create index on signature(r)";
+      "create table block(id serial primary key, hash bytea unique, time timestamptz)";
+      "create index on block(hash)";
+      "create table tx(id serial primary key, block_id integer references block(id), hash bytea)";
+      "create index on tx(block_id)";
+      "create index on tx(hash)";
+      "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)";
+      "create index on output(tx_id)";
+      "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )";
+      "create index on input(tx_id)";
+      "create index on input(output_id)";
+      "create table address(id serial primary key, hash bytea unique)";
+      (* "create index on address(output_id)" *)
+      "create index on address(hash)";
+      "create table output_address(id serial primary key, output_id integer references output(id), address_id integer references address(id))";
+      "create index on output_address(output_id)";
+      "create index on output_address(address_id)";
+      "create table coinbase(id serial primary key, tx_id integer references tx(id))";
+      "create index on coinbase(tx_id)";
+      "create table signature(id serial primary key, input_id integer references input(id), r bytea, s bytea )";
+      "create index on signature(input_id)";
+      "create index on signature(r)";
     ]
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
-        ("insert_block", "insert into block(hash,time) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
+      ("insert_block", "insert into block(hash,time) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
 
-   ("insert_tx", "insert into tx(block_id,hash) values ($1, $2) returning id"  );
-   ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
-   ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
-   ("insert_input", "insert into input(tx_id,output_id) values ($1,$2) returning id" );
+      ("insert_tx", "insert into tx(block_id,hash) values ($1, $2) returning id"  );
+      ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
+      ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
+      ("insert_input", "insert into input(tx_id,output_id) values ($1,$2) returning id" );
 
-   ("insert_address", "
-        with s as (
-            select id, hash 
-            from address
-            where hash = $1 
-        ), i as (
-            insert into address (hash)
-            select $1
-            where not exists (select 1 from s)
-            returning id, hash
-        )
-        select id, hash
-        from i
-        union all
-        select id, hash
-        from s
-      "  );
-    (*
-    insert into address(output_id, hash) values ($1,$2) ()
-    *)
-   ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
-   ("insert_coinbase", "insert into coinbase(tx_id) values ($1)"  );
-   ("insert_signature", "insert into signature(input_id,r,s) values ($1,$2,$3)"  );
-
+      ("insert_address", "
+          with s as (
+              select id, hash 
+              from address
+              where hash = $1 
+          ), i as (
+              insert into address (hash)
+              select $1
+              where not exists (select 1 from s)
+              returning id, hash
+          )
+          select id, hash
+          from i
+          union all
+          select id, hash
+          from s
+        "  );
+      ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
+      ("insert_coinbase", "insert into coinbase(tx_id) values ($1)"  );
+      ("insert_signature", "insert into signature(input_id,r,s) values ($1,$2,$3)"  );
     ]
-
-    (*>> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,
-        (select to_timestamp($2) at time zone 'UTC')) returning id" ()
-*)
-
-
     >> commit db
   )
 
