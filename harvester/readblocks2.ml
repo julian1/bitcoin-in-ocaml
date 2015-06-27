@@ -119,8 +119,9 @@ let create_db db =
       "drop table if exists tx";
       "drop table if exists block";
 
-      "create table block(id serial primary key, hash bytea unique, time timestamptz, previous_id integer)";
+      "create table block(id serial primary key, hash bytea unique, previous_id integer, time timestamptz)";
       "create index on block(hash)";
+      "create index on block(previous_id)"; (* not sure if needed *)
       "create table tx(id serial primary key, block_id integer references block(id), hash bytea)";
       "create index on tx(block_id)";
       "create index on tx(hash)";
@@ -145,7 +146,7 @@ let create_db db =
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
 (*      ("insert_block", "insert into block(hash,time, previous) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
 *)
-      ("insert_block", "insert into block(hash,time, previous_id) select $1, to_timestamp($2) at time zone 'UTC', b.id from block b where hash = $3 returning id" );
+      ("insert_block", "insert into block(hash,previous_id,time) select $1, (select b.id from block b where hash = $2) as previous_id, to_timestamp($3) at time zone 'UTC' returning id" );
 
       ("insert_block2", "insert into block(hash) select $1" );
 
@@ -376,9 +377,8 @@ let process_block f x payload =
   >>
   PG.execute x.db ~name:"insert_block" ~params:[
     Some (PG.string_of_bytea hash );
-    Some (PG.string_of_int block.nTime );
-
     Some (PG.string_of_bytea block.previous );
+    Some (PG.string_of_int block.nTime );
     (* should previous as an id...
        height = headers.find *)
   ] ()
@@ -442,11 +442,8 @@ let process_file () =
     let last = seq |> L.rev |> L.hd in
     log @@ "last hash " ^ M.hex_of_string last 
 
-   (* >> PG.begin_work db
-    >>PG.inject db "insert into block(hash) select E'\\x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'"
-    >> PG.commit x.db
-*)
-
+  
+  (* insert genesis *)
   >> PG.begin_work db 
   >> PG.execute x.db ~name:"insert_block2" ~params:[
     Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
