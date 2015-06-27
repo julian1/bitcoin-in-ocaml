@@ -361,10 +361,8 @@ let decode_block_hash payload =
 
 
 let process_block f x payload =
-
   let _, block  = M.decodeBlock payload 0 in
   let hash = decode_block_hash payload in
-
   begin
     (* todo move commits to co-incide with blocks *)
     match x.tx_count mod 10000 with
@@ -373,7 +371,7 @@ let process_block f x payload =
   end
   >>
   PG.begin_work x.db
-(*  >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
+  (* >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
   >>
   PG.execute x.db ~name:"insert_block" ~params:[
     Some (PG.string_of_bytea hash );
@@ -385,7 +383,6 @@ let process_block f x payload =
   >>= fun rows ->
     begin
     let block_id = decode_id rows in
-
     let txs = decode_block_txs payload in
     let txs = L.map (fun (tx : M.tx) ->
       block_id,
