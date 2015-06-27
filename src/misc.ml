@@ -123,7 +123,7 @@ type my_app_state =
 
   blocks_fd : Lwt_unix.file_descr ;
  
-  db : LevelDB.db ; 
+  (* db : LevelDB.db ;  *)
 }
 
 

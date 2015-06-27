@@ -44,6 +44,12 @@ let fold_m f acc lst =
   let adapt f acc e = acc >>= fun acc -> f acc e in
   L.fold_left (adapt f) (return acc) lst
 
+(*
+let map_m f lst =
+  let adapt f acc e = acc >> f e in
+  L.fold_left (adapt f) (return ()) lst
+*)
+
 
 type mytype =
 {
@@ -99,10 +105,14 @@ let create_db db =
         - if we have previous, then it ought to be possible to calculate height
         dynamically - although may be expensive.
     *)
+  (*
+    find the last block.
+    really w
+  *)
   PG.(
     begin_work db
-    
-    >> fold_m (fun db query -> inject db query >> return db ) db [
+    >> fold_m (fun db query -> inject db query >> return db ) db [ 
+    (*>> fold_m (fun _ query -> inject db query >> return () )  [ *)
       "drop table if exists signature";
       "drop table if exists coinbase";
       "drop table if exists output_address";
@@ -179,13 +189,6 @@ type my_script =
   | None
   | Strange
 
-
-
-(*
-let map_m f lst =
-  let adapt f acc e = acc >> f e in
-  L.fold_left (adapt f) (return ()) lst
-*)
 
 
 let process_output x (index,output,tx_hash,tx_id) =
@@ -321,19 +324,6 @@ let process_input x (index, input, hash, tx_id) =
 
 
 let process_tx x (block_id,hash,tx) =
-  begin
-    (* todo move commits to co-incide with blocks *)
-    match x.tx_count mod 10000 with
-      | 0 -> log @@ S.concat "" [
-        " tx_count "; string_of_int x.tx_count;
-      ] >>
-          log "comitting"
-        >> PG.commit x.db
-        >> log "done comitting, starting new transction"
-        >> PG.begin_work x.db
-      | _ -> return ()
-  end
-  >>
     let x = { x with tx_count = succ x.tx_count } in
 
     PG.execute x.db ~name:"insert_tx"  ~params:[
@@ -373,6 +363,32 @@ let process_block f x payload =
   let _, block  = M.decodeBlock payload 0 in
   let hash = decode_block_hash payload in
 
+  begin
+    (* todo move commits to co-incide with blocks *)
+    match x.tx_count mod 10000 with
+      | 0 -> log @@ " tx_count " ^ string_of_int x.tx_count;
+      | _ -> return ()
+  end
+  >>
+
+
+(*  begin
+    (* todo move commits to co-incide with blocks *)
+    match x.tx_count mod 10000 with
+      | 0 -> log @@ S.concat "" [
+        " tx_count "; string_of_int x.tx_count;
+      ] >>
+          log "comitting"
+        >> PG.commit x.db
+        >> log "done comitting, starting new transction"
+        >> PG.begin_work x.db
+      | _ -> return ()
+  end
+  >>
+*)
+  PG.begin_work x.db
+  >>
+  
   PG.execute x.db ~name:"insert_block" ~params:[
     Some (PG.string_of_bytea hash );
     Some (PG.string_of_int block.nTime );
@@ -380,17 +396,22 @@ let process_block f x payload =
        height = headers.find *)
   ] ()
   >>= fun rows ->
-  let block_id = decode_id rows in
+    begin
+    let block_id = decode_id rows in
 
-  let txs = decode_block_txs payload in
-  let txs = L.map (fun (tx : M.tx) ->
-    block_id,
-    M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
-    tx
-  ) txs
-  in
-  fold_m f x txs
+    let txs = decode_block_txs payload in
+    let txs = L.map (fun (tx : M.tx) ->
+      block_id,
+      M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
+      tx
+    ) txs
+    in
+    fold_m f x txs
+    end
+  
 
+  >>= fun x -> PG.commit x.db
+  >> return x
 
 
 let replay_tx fd seq headers process_tx x =
@@ -432,10 +453,14 @@ let process_file () =
         db = db;
       } in
 
-      PG.begin_work db
+    let last = seq |> L.rev |> L.hd in
+    log @@ "last hash " ^ M.hex_of_string last 
+
+    
+(*   >>   PG.begin_work db *)
     (*>> Sc.replay_tx fd seq headers process_tx x *)
     >> replay_tx fd seq headers process_tx x
-    >> PG.commit db
+(*    >> PG.commit db *)
     >> PG.close db
     >>
       log "finished "

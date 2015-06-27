@@ -1,4 +1,21 @@
 
+--
+
+- want transactions organized around blocks.
+
+- be very nice to have the previous_id. then we can compute height etc, and 
+    tips etc.
+
+    - very important the whole chain/heads structure could be put in db. 
+    - the issue of blocks coming in fast out-of-order sequence, can be handled
+    easily by just always pushing them in the sequential processing queue.
+    - when we have block.previous_id then it should be very simple to work
+    out the heads.
+
+
+
+-------------------
+
 Ok, we can now access the blocks mutex and descriptor and heads etc. 
 
 
