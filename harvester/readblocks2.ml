@@ -6,8 +6,7 @@
     out the heads.
 
 *)
-(* scan blocks and compute tx indexes
-  native.
+(* scan blocks and store to db 
 
 corebuild -I src -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.native
 
@@ -25,8 +24,6 @@ module S = String
 
 module M = Message
 module Sc = Scanner
-
-(* open M *)
 
 
 module Lwt_thread = struct
@@ -122,7 +119,7 @@ let create_db db =
       "drop table if exists tx";
       "drop table if exists block";
 
-      "create table block(id serial primary key, hash bytea unique, time timestamptz)";
+      "create table block(id serial primary key, hash bytea unique, time timestamptz, previous_id integer)";
       "create index on block(hash)";
       "create table tx(id serial primary key, block_id integer references block(id), hash bytea)";
       "create index on tx(block_id)";
@@ -146,7 +143,11 @@ let create_db db =
     ]
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
-      ("insert_block", "insert into block(hash,time) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
+(*      ("insert_block", "insert into block(hash,time, previous) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
+*)
+      ("insert_block", "insert into block(hash,time, previous_id) select $1, to_timestamp($2) at time zone 'UTC', b.id from block b where hash = $3 returning id" );
+
+      ("insert_block2", "insert into block(hash) select $1" );
 
       ("insert_tx", "insert into tx(block_id,hash) values ($1, $2) returning id"  );
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
@@ -370,28 +371,14 @@ let process_block f x payload =
       | _ -> return ()
   end
   >>
-
-
-(*  begin
-    (* todo move commits to co-incide with blocks *)
-    match x.tx_count mod 10000 with
-      | 0 -> log @@ S.concat "" [
-        " tx_count "; string_of_int x.tx_count;
-      ] >>
-          log "comitting"
-        >> PG.commit x.db
-        >> log "done comitting, starting new transction"
-        >> PG.begin_work x.db
-      | _ -> return ()
-  end
-  >>
-*)
   PG.begin_work x.db
+(*  >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
   >>
-  
   PG.execute x.db ~name:"insert_block" ~params:[
     Some (PG.string_of_bytea hash );
     Some (PG.string_of_int block.nTime );
+
+    Some (PG.string_of_bytea block.previous );
     (* should previous as an id...
        height = headers.find *)
   ] ()
@@ -408,9 +395,8 @@ let process_block f x payload =
     in
     fold_m f x txs
     end
-  
-
-  >>= fun x -> PG.commit x.db
+  >>= fun x -> 
+    PG.commit x.db
   >> return x
 
 
@@ -456,11 +442,19 @@ let process_file () =
     let last = seq |> L.rev |> L.hd in
     log @@ "last hash " ^ M.hex_of_string last 
 
+   (* >> PG.begin_work db
+    >>PG.inject db "insert into block(hash) select E'\\x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'"
+    >> PG.commit x.db
+*)
+
+  >> PG.begin_work db 
+  >> PG.execute x.db ~name:"insert_block2" ~params:[
+    Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
+  ] ()
+
+   >> PG.commit db  
     
-(*   >>   PG.begin_work db *)
-    (*>> Sc.replay_tx fd seq headers process_tx x *)
-    >> replay_tx fd seq headers process_tx x
-(*    >> PG.commit db *)
+    >> replay_tx fd seq headers process_tx x 
     >> PG.close db
     >>
       log "finished "
