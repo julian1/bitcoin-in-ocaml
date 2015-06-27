@@ -2,6 +2,8 @@
 -- drop table test;
 --create table test( id integer, input_id integer, r bytea, row integer );
 
+truncate test;
+
 insert into test
 select * from
 (SELECT 
@@ -13,5 +15,6 @@ select * from
     -- ROW_NUMBER() OVER(PARTITION BY r order by id ) AS Row
     FROM signature ) as s2
 
-    where Row > 1;
+    where Row =  2
+;
 
