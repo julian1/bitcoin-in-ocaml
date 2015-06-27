@@ -3,6 +3,7 @@
 *.swn
 _build
 *.byte
+*.native
 dumps
 blocks
 deps
