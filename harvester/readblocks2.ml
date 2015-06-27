@@ -1,8 +1,15 @@
+(*
+    - very important the whole chain/heads structure could be put in db. 
+    - the issue of blocks coming in fast out-of-order sequence, can be handled
+    easily by just always pushing them in the sequential processing queue.
+    - when we have block.previous_id then it should be very simple to work
+    out the heads.
 
+*)
 (* scan blocks and compute tx indexes
   native.
 
-  corebuild -I src -package pgocaml,microecc,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.byte
+corebuild -I src -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.native
 
   Need to get rid of leveldb ref, coming from misc.ml 126
 
@@ -32,6 +39,10 @@ module PG = PGOCaml_generic.Make (Lwt_thread)
 
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
 module RValues = Map.Make(struct type t = string let compare = compare end)
+
+let fold_m f acc lst =
+  let adapt f acc e = acc >>= fun acc -> f acc e in
+  L.fold_left (adapt f) (return acc) lst
 
 
 type mytype =
@@ -90,61 +101,49 @@ let create_db db =
     *)
   PG.(
     begin_work db
+    
+    >> fold_m (fun db query -> inject db query >> return db ) db [
+        "drop table if exists signature";
+        "drop table if exists coinbase";
+        "drop table if exists output_address";
+        "drop table if exists address";
+        "drop table if exists input";
+        "drop table if exists output";
+        "drop table if exists tx";
+        "drop table if exists block";
 
-    >> inject db "drop table if exists signature"
-    >> inject db "drop table if exists coinbase"
-    >> inject db "drop table if exists output_address"
-    >> inject db "drop table if exists address"
-    >> inject db "drop table if exists input"
-    >> inject db "drop table if exists output"
-    >> inject db "drop table if exists tx"
-    >> inject db "drop table if exists block"
+        "create table block(id serial primary key, hash bytea unique, time timestamptz)";
+        "create index on block(hash)";
+        "create table tx(id serial primary key, block_id integer references block(id), hash bytea)";
+        "create index on tx(block_id)";
+        "create index on tx(hash)";
+        "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)";
+        "create index on output(tx_id)";
+        "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )";
+        "create index on input(tx_id)";
+        "create index on input(output_id)";
+        "create table address(id serial primary key, hash bytea unique)";
+        (* "create index on address(output_id)" *)
+        "create index on address(hash)";
+        "create table output_address(id serial primary key, output_id integer references output(id), address_id integer references address(id))";
+        "create index on output_address(output_id)";
+        "create index on output_address(address_id)";
+        "create table coinbase(id serial primary key, tx_id integer references tx(id))";
+        "create index on coinbase(tx_id)";
+        "create table signature(id serial primary key, input_id integer references input(id), r bytea, s bytea )";
+        "create index on signature(input_id)";
+        "create index on signature(r)";
+    ]
 
-    >> inject db "create table block(id serial primary key, hash bytea unique, time timestamptz)"
-    >> inject db "create index on block(hash)"
+    >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
+        ("insert_block", "insert into block(hash,time) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
 
+   ("insert_tx", "insert into tx(block_id,hash) values ($1, $2) returning id"  );
+   ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
+   ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
+   ("insert_input", "insert into input(tx_id,output_id) values ($1,$2) returning id" );
 
-    >> inject db "create table tx(id serial primary key, block_id integer references block(id), hash bytea)"
-    >> inject db "create index on tx(block_id)"
-    >> inject db "create index on tx(hash)"
-
-    >> inject db "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)"
-    >> inject db "create index on output(tx_id)"
-
-    >> inject db "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )"
-    >> inject db "create index on input(tx_id)"
-    >> inject db "create index on input(output_id)"
-
-    >> inject db "create table address(id serial primary key, hash bytea unique)"
-(*    >> inject db "create index on address(output_id)" *)
-    >> inject db "create index on address(hash)"
-
-    >> inject db "create table output_address(id serial primary key, output_id integer references output(id), address_id integer references address(id))"
-    >> inject db "create index on output_address(output_id)"
-    >> inject db "create index on output_address(address_id)"
-
-
-    >> inject db "create table coinbase(id serial primary key, tx_id integer references tx(id))"
-    >> inject db "create index on coinbase(tx_id)"
-
-    >> inject db "create table signature(id serial primary key, input_id integer references input(id), r bytea, s bytea )"
-    >> inject db "create index on signature(input_id)"
-    >> inject db "create index on signature(r)"
-
-
-
-    >> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,
-        (select to_timestamp($2) at time zone 'UTC')) returning id" ()
-
-    >> prepare db ~name:"insert_tx" ~query:"insert into tx(block_id,hash) values ($1, $2) returning id" ()
-
-    >> prepare db ~name:"select_output_id" ~query:"select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2" ()
-
-    >> prepare db ~name:"insert_output" ~query:"insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" ()
-
-    >> prepare db ~name:"insert_input" ~query:"insert into input(tx_id,output_id) values ($1,$2) returning id" ()
-
-    >> prepare db ~name:"insert_address" ~query:"
+   ("insert_address", "
         with s as (
             select id, hash 
             from address
@@ -160,17 +159,19 @@ let create_db db =
         union all
         select id, hash
         from s
-      " ()
-(*
-insert into address(output_id, hash) values ($1,$2) ()
+      "  );
+    (*
+    insert into address(output_id, hash) values ($1,$2) ()
+    *)
+   ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
+   ("insert_coinbase", "insert into coinbase(tx_id) values ($1)"  );
+   ("insert_signature", "insert into signature(input_id,r,s) values ($1,$2,$3)"  );
+
+    ]
+
+    (*>> prepare db ~name:"insert_block" ~query:"insert into block(hash,time) values ($1,
+        (select to_timestamp($2) at time zone 'UTC')) returning id" ()
 *)
-    >> prepare db ~name:"insert_output_address" ~query:"insert into output_address(output_id,address_id) values ($1,$2)" ()
-
-
-    >> prepare db ~name:"insert_coinbase" ~query:"insert into coinbase(tx_id) values ($1)" ()
-
-    >> prepare db ~name:"insert_signature" ~query:"insert into signature(input_id,r,s) values ($1,$2,$3)" ()
-
 
 
     >> commit db
@@ -188,10 +189,6 @@ type my_script =
   | None
   | Strange
 
-
-let fold_m f acc lst =
-  let adapt f acc e = acc >>= fun acc -> f acc e in
-  L.fold_left (adapt f) (return acc) lst
 
 
 (*
