@@ -403,9 +403,7 @@ let replay_tx fd seq headers process_tx x =
 
 
 let process_file () =
-
     log "connecting and create db"
-
     >>
     PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
@@ -435,23 +433,20 @@ let process_file () =
         tx_count = 0;
         db = db;
       } in
+      let last = seq |> L.rev |> L.hd in
+      log @@ "last hash " ^ M.hex_of_string last 
 
-    let last = seq |> L.rev |> L.hd in
-    log @@ "last hash " ^ M.hex_of_string last 
+    (* insert genesis *)
+    >> PG.begin_work db 
+    >> PG.execute x.db ~name:"insert_block2" ~params:[
+      Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
+    ] ()
+    >> PG.commit db  
 
-  
-  (* insert genesis *)
-  >> PG.begin_work db 
-  >> PG.execute x.db ~name:"insert_block2" ~params:[
-    Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
-  ] ()
-
-   >> PG.commit db  
-    
     >> replay_tx fd seq headers process_tx x 
     >> PG.close db
-    >>
-      log "finished "
+    >> log "finished "
+
 
 let () = Lwt_main.run (
   Lwt.catch (
@@ -465,6 +460,4 @@ let () = Lwt_main.run (
     >> return ()
   )
 )
-
-
 
