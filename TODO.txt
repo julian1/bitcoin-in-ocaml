@@ -1,9 +1,27 @@
 
+- it would be nice to have a consistent interface to support 
+    either replay of blocks, or actual operational node. 
+        - add_block
+        - get_leaves
+        etc.
+
+- we need to get the chain current. to see how often dups are an issue 
+- done - need height, and tips in the db.
+- fix the received to match bc.info and native client.
+    - 
+
+- there were some very large amounts. and on doge lite networks. 
+
 --
+- we don't have to do anything sophisticated for ordering just use tx_id which
+    will be correct.
 
-- want transactions organized around blocks.
+--
+- done get previous_id in, and we can start experimenting with sql height etc.
 
-- be very nice to have the previous_id. then we can compute height etc, and 
+- done want transactions organized around blocks.
+
+- done be very nice to have the previous_id. then we can compute height etc, and 
     tips etc.
 
     - very important the whole chain/heads structure could be put in db. 
