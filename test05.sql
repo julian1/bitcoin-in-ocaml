@@ -6,7 +6,7 @@
 -- we can also always store the height manually, rather than compute dynamically. may not be bad...
 ------------
 
--- ok, it would be very nice to just fill the blocks with values...
+-- ok, it would be nice to test for speed etc by populating just the blocks table ...
 -- including orphans and then test out these functions...
 
 
@@ -16,6 +16,7 @@ select
   pb.hash as pb,
   pb.id
 from block b
+-- should reorder to left join...
 right join block pb on pb.id = b.previous_id
 where b.id is null
 ;
