@@ -345,18 +345,6 @@ let process_tx x (block_id,hash,tx) =
     fold_m process_output x outputs
 
 
-(* move to message.ml ? *)
-let decode_block_txs payload =
-  M.(
-    let pos = 80 in
-    let pos, tx_count = M.decodeVarInt payload pos in
-    let _, txs = M.decodeNItems payload pos M.decodeTx tx_count in
-    txs
-  )
-
-let decode_block_hash payload =
-  M.strsub payload 0 80 |> M.sha256d |> M.strrev
-
 
 
 let process_block x payload =
@@ -371,7 +359,7 @@ let process_block x payload =
   >>
 
   let _, block  = M.decodeBlock payload 0 in
-  let hash = decode_block_hash payload in
+  let hash = M.decode_block_hash payload in
 
 (*  >>
   PG.begin_work x.db
