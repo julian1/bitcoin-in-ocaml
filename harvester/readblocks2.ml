@@ -81,7 +81,8 @@ let create_db db =
     *)
     (*
       advantages,
-      - then we can join everything. for a tx or address
+      - transactional around blocks.
+      - we can join everything. for a tx or address, sum etc.
       - it's append only
       - inputs refer directly to outputs using primary_id of output.
       - no aggregate indexes
@@ -100,42 +101,13 @@ let create_db db =
         - get blocks by hash
         - get tx by hash
     *)
-
+    (*
+      - ok, do we pull the db creation out??? probably should - to support migrations. 
+      - we're going to have a bunch of views etc...  
+    *)
   PG.(
     begin_work db
     >> fold_m (fun db query -> inject db query >> return db ) db [
-    (*>> fold_m (fun _ query -> inject db query >> return () )  [ *)
-      "drop table if exists signature";
-      "drop table if exists coinbase";
-      "drop table if exists output_address";
-      "drop table if exists address";
-      "drop table if exists input";
-      "drop table if exists output";
-      "drop table if exists tx";
-      "drop table if exists block";
-
-      "create table block(id serial primary key, hash bytea unique, previous_id integer, time timestamptz)";
-      "create index on block(hash)";
-      "create index on block(previous_id)"; (* not sure if needed *)
-      "create table tx(id serial primary key, block_id integer references block(id), hash bytea)";
-      "create index on tx(block_id)";
-      "create index on tx(hash)";
-      "create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint)";
-      "create index on output(tx_id)";
-      "create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique )";
-      "create index on input(tx_id)";
-      "create index on input(output_id)";
-      "create table address(id serial primary key, hash bytea unique)";
-      (* "create index on address(output_id)" *)
-      "create index on address(hash)";
-      "create table output_address(id serial primary key, output_id integer references output(id), address_id integer references address(id))";
-      "create index on output_address(output_id)";
-      "create index on output_address(address_id)";
-      "create table coinbase(id serial primary key, tx_id integer references tx(id))";
-      "create index on coinbase(tx_id)";
-      "create table signature(id serial primary key, input_id integer references input(id), r bytea, s bytea )";
-      "create index on signature(input_id)";
-      "create index on signature(r)";
     ]
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
@@ -401,31 +373,31 @@ let replay_blocks fd f x =
 
 
 let process_file () =
-    log "connecting and create db"
-    >> PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
-    >>= fun db ->
-      create_db db
-    >> Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
-    >>= fun fd ->
-      log "scanning blocks..."
-    >>
-      let x = {
-        block_count = 0;
-        db = db;
-      }
-      in
-    (* insert genesis *)
-    PG.begin_work db
-    >> PG.execute x.db ~name:"insert_block2" ~params:[
-      Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
-    ] ()
-    >> PG.commit db
-    (* insert block data *)
-    (* >> PG.begin_work db  *)
-    >> replay_blocks fd process_block x
-    (* >> PG.commit db *)
-    >> PG.close db
-    >> log "finished "
+  log "connecting and create db"
+  >> PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
+  >>= fun db ->
+    create_db db
+  >> Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
+  >>= fun fd ->
+    log "scanning blocks..."
+  >>
+    let x = {
+      block_count = 0;
+      db = db;
+    }
+    in
+  (* insert genesis *)
+  PG.begin_work db
+  >> PG.execute x.db ~name:"insert_block2" ~params:[
+    Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
+  ] ()
+  >> PG.commit db
+  (* insert block data *)
+  (* >> PG.begin_work db  *)
+  >> replay_blocks fd process_block x
+  (* >> PG.commit db *)
+  >> PG.close db
+  >> log "finished "
 
 
 let () = Lwt_main.run (
