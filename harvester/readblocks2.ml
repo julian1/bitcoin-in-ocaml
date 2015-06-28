@@ -360,7 +360,7 @@ let decode_block_hash payload =
 
 
 
-let process_block f x payload =
+let process_block x payload =
   let _, block  = M.decodeBlock payload 0 in
   let hash = decode_block_hash payload in
   begin
@@ -390,17 +390,17 @@ let process_block f x payload =
       tx
     ) txs
     in
-    fold_m f x txs
+    fold_m process_tx x txs
     end
   >>= fun x -> 
     PG.commit x.db
   >> return x
 
-
+(*
 let replay_tx fd seq headers process_tx x =
   let process_block = process_block process_tx in
   Sc.replay_blocks fd seq headers process_block x
-
+*)
 
 let process_file () =
     log "connecting and create db"
@@ -443,7 +443,9 @@ let process_file () =
     ] ()
     >> PG.commit db  
 
-    >> replay_tx fd seq headers process_tx x 
+    (* >> replay_tx fd seq headers process_tx x  *)
+    >> Sc.replay_blocks fd seq headers process_block x
+
     >> PG.close db
     >> log "finished "
 
