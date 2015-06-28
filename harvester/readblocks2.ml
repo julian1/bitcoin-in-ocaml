@@ -1,12 +1,12 @@
 (*
-    - very important the whole chain/heads structure could be put in db. 
+    - very important the whole chain/heads structure could be put in db.
     - the issue of blocks coming in fast out-of-order sequence, can be handled
     easily by just always pushing them in the sequential processing queue.
     - when we have block.previous_id then it should be very simple to work
     out the heads.
 
 *)
-(* scan blocks and store to db 
+(* scan blocks and store to db
 
 corebuild -I src -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.native
 
@@ -92,18 +92,18 @@ let create_db db =
         with a flag against the block. or another table, to say whether it's mainchain
         then adjust the views accordingly.
         - actually could even do it, as a single tip value... but probably easier to
-        mark. 
+        mark.
         - we need to get the db transactions organized around block. rather than tx_count
     *)
     (*
       - if we stored the blocks in db. then could use substr
         - get blocks by hash
-        - get tx by hash 
+        - get tx by hash
     *)
 
   PG.(
     begin_work db
-    >> fold_m (fun db query -> inject db query >> return db ) db [ 
+    >> fold_m (fun db query -> inject db query >> return db ) db [
     (*>> fold_m (fun _ query -> inject db query >> return () )  [ *)
       "drop table if exists signature";
       "drop table if exists coinbase";
@@ -152,9 +152,9 @@ let create_db db =
 
       ("insert_address", "
           with s as (
-              select id, hash 
+              select id, hash
               from address
-              where hash = $1 
+              where hash = $1
           ), i as (
               insert into address (hash)
               select $1
@@ -185,7 +185,6 @@ type my_script =
   | Some of string
   | None
   | Strange
-
 
 
 let process_output x (index,output,tx_hash,tx_id) =
@@ -224,8 +223,8 @@ let process_output x (index,output,tx_hash,tx_id) =
           let address_id = decode_id rows in
 
           PG.( execute x.db ~name:"insert_output_address" ~params:[
-            Some (string_of_int output_id); 
-            Some (string_of_int address_id); 
+            Some (string_of_int output_id);
+            Some (string_of_int address_id);
           ] ()
           )
           >> return x
@@ -236,34 +235,34 @@ let process_output x (index,output,tx_hash,tx_id) =
       | None ->
         return x
 
-    (* Important - in fact we don't have to return the value, but could just
-        select the correct output id and insert at the same time.
-        -
-      - need an index on tx.hash at least.
-      - but should do timing.
-      - and avoid preparing the statement each time. should do it in createdb
-      2m 5 - to 50k with no index
-      1m 19 with index on tx(hash)
-      1m 40 with index on tx(hash) and output(index)
+(* Important - in fact we don't have to return the value, but could just
+    select the correct output id and insert at the same time.
+    -
+  - need an index on tx.hash at least.
+  - but should do timing.
+  - and avoid preparing the statement each time. should do it in createdb
+  2m 5 - to 50k with no index
+  1m 19 with index on tx(hash)
+  1m 40 with index on tx(hash) and output(index)
 
-    now,
-        43,50 secs to 50k.
-        30 sec best with separated prepare. but it varys.
-            seems to use bitmap scan initially - which is slower.
+now,
+    43,50 secs to 50k.
+    30 sec best with separated prepare. but it varys.
+        seems to use bitmap scan initially - which is slower.
 
-    important - we're also doing a lot more
+important - we're also doing a lot more
 
-      we should create another table for addresses (for more than one)
-        - since not every output is associated with an address and there
-        maybe more than one.
-        - likewise for pubkeys - to avoid nulls
-      and der sigs...
-    *)
+  we should create another table for addresses (for more than one)
+    - since not every output is associated with an address and there
+    maybe more than one.
+    - likewise for pubkeys - to avoid nulls
+  and der sigs...
+*)
 
 
 
 let process_input_script x (input_id, input) =
-  let (input : M.tx_in) = input in 
+  let (input : M.tx_in) = input in
   (* maybe change name to process_signature *)
   let script = M.decode_script input.script in
   (* extract der signature and r,s keys *)
@@ -278,35 +277,34 @@ let process_input_script x (input_id, input) =
   ) [] script in
 
   let process_der x der =
-    (* ok, all we have to do is insert the der ...  *) 
-    let r,s = der in 
+    (* ok, all we have to do is insert the der ...  *)
+    let r,s = der in
     PG.execute x.db ~name:"insert_signature" ~params:[
-      Some (PG.string_of_int input_id); 
-      Some (PG.string_of_bytea r); 
-      Some (PG.string_of_bytea s); 
+      Some (PG.string_of_int input_id);
+      Some (PG.string_of_bytea r);
+      Some (PG.string_of_bytea s);
     ] ()
     >>
-    return x 
+    return x
   in
   fold_m process_der x ders
 
 
- 
 let process_input x (index, input, hash, tx_id) =
 
-  let (input : M.tx_in) = input in 
+  let (input : M.tx_in) = input in
   (* let process_input x (i, input, hash,tx_id) = *)
   (* why can't we pattern match on string here ? eg. function *)
   (* so we have to look up the tx hash, which means we need an index on it *)
   if input.previous = coinbase then
     PG.execute x.db ~name:"insert_coinbase" ~params:[
-      Some (PG.string_of_int tx_id); 
+      Some (PG.string_of_int tx_id);
     ] ()
-    >> return x 
-  else 
+    >> return x
+  else
     PG.execute x.db ~name:"select_output_id" ~params:[
         Some (PG.string_of_bytea input.previous);
-        Some (PG.string_of_int input.index); 
+        Some (PG.string_of_int input.index);
       ] ()
     >>= fun rows ->
       let output_id = decode_id rows in
@@ -319,7 +317,6 @@ let process_input x (index, input, hash, tx_id) =
       process_input_script x (input_id,input)
 
 
-
 let process_tx x (block_id,hash,tx) =
   PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_int block_id);
@@ -329,16 +326,12 @@ let process_tx x (block_id,hash,tx) =
     let tx_id = decode_id rows in
     (* can get rid of the hash *)
     let group index a = (index,a,hash,tx_id) in
-
     let open M in
-
     let inputs = L.mapi group tx.inputs in
     fold_m process_input x inputs
   >>= fun x ->
     let outputs = L.mapi group tx.outputs in
     fold_m process_output x outputs
-
-
 
 
 let process_block x payload =
@@ -372,25 +365,23 @@ let process_block x payload =
     in
     fold_m process_tx x txs
     end
-  >>= fun x -> 
+  >>= fun x ->
     PG.commit x.db
   >> return x
-
 
 
 (* read a block at current pos and return it - private *)
 let read_block fd =
   Misc.read_bytes fd 24
   >>= function
-    | None -> return None 
+    | None -> return None
     | Some s ->
       let _, header = M.decodeHeader s 0 in
       (* should check command is 'block' *)
-      Misc.read_bytes fd header.length 
+      Misc.read_bytes fd header.length
       >>= function
         | None -> raise (Failure "here2")
         | Some payload -> return (Some payload)
-
 
 
 (* scan through blocks in the given sequence
@@ -400,8 +391,8 @@ let replay_blocks fd f x =
   let rec replay_blocks' x =
       read_block fd
     >>= function
-      | None -> return x 
-      | Some payload -> f x payload 
+      | None -> return x
+      | Some payload -> f x payload
     >>= fun x ->
       replay_blocks' x
   in
@@ -421,14 +412,14 @@ let process_file () =
       let x = {
         block_count = 0;
         db = db;
-      } 
+      }
       in
     (* insert genesis *)
-    PG.begin_work db 
+    PG.begin_work db
     >> PG.execute x.db ~name:"insert_block2" ~params:[
       Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
     ] ()
-    >> PG.commit db  
+    >> PG.commit db
     (* insert block data *)
     (* >> PG.begin_work db  *)
     >> replay_blocks fd process_block x
