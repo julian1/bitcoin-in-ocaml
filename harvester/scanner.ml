@@ -1,6 +1,6 @@
 
 (*
-  why do we have to repeat everything ?? 
+    In memory code, to handle chainstate. scanning blocks etc. 
 *)
 
 module L = List
