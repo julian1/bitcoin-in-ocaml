@@ -1,17 +1,17 @@
 
 begin;
 
-drop view if exists leaves; 
-drop view if exists block_; 
-drop table if exists signature;
-drop table if exists coinbase;
-drop table if exists output_address;
-drop table if exists address;
-drop table if exists input;
-drop table if exists output;
-drop table if exists tx;
-drop table if exists block;
-
+-- drop view if exists leaves; 
+-- drop view if exists block_; 
+-- drop table if exists signature;
+-- drop table if exists coinbase;
+-- drop table if exists output_address;
+-- drop table if exists address;
+-- drop table if exists input;
+-- drop table if exists output;
+-- drop table if exists tx;
+-- drop table if exists block;
+ 
 --  need pos of block in .dat file. 
 create table block(id serial primary key, hash bytea unique, previous_id integer, time timestamptz);
 create index on block(hash);

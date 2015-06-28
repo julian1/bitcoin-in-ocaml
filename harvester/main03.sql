@@ -1,4 +1,6 @@
 
+begin; 
+
 -- need to try a vacuum analyze on large data.
 -- the query with a limit of 10 should be easy
 
@@ -126,12 +128,11 @@ $$ LANGUAGE plpgsql;
 
 -- actually it's probably just one of the sigs for multi. and we won't have anything for the non-multi.
 -- we t
-
 --- 
-
-
 
 -- IMPORTANT
 -- should also try the (subset offset 0) trick 
 -- and we want transactions organized around blocks.
+
+commit; 
 

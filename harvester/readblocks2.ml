@@ -1,10 +1,12 @@
 (*
+  - it should be easy to stop. and resume this stuff as well, if we want.
+  - should test whether have block already and skip...
+------
     - very important the whole chain/heads structure could be put in db.
     - the issue of blocks coming in fast out-of-order sequence, can be handled
     easily by just always pushing them in the sequential processing queue.
     - when we have block.previous_id then it should be very simple to work
     out the heads.
-
 *)
 (* scan blocks and store to db
 
@@ -319,6 +321,8 @@ let process_block x payload =
     let hash = M.decode_block_hash payload in
     PG.begin_work x.db
   >>
+    (* IMPORTANT - lookup hash to test whether already have block
+      and skip processing if we do. this will allow scan stop/resume *)
     (* >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
     PG.execute x.db ~name:"insert_block" ~params:[
       Some (PG.string_of_bytea hash );
@@ -327,15 +331,15 @@ let process_block x payload =
     ] ()
   >>= fun rows ->
     begin
-    let block_id = decode_id rows in
-    let txs = M.decode_block_txs payload in
-    let txs = L.map (fun (tx : M.tx) ->
-      block_id,
-      M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
-      tx
-    ) txs
-    in
-    fold_m process_tx x txs
+      let block_id = decode_id rows in
+      let txs = M.decode_block_txs payload in
+      let txs = L.map (fun (tx : M.tx) ->
+        block_id,
+        M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
+        tx
+      ) txs
+      in
+      fold_m process_tx x txs
     end
   >>= fun x ->
     PG.commit x.db

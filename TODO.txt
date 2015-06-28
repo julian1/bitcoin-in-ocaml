@@ -1,4 +1,14 @@
 
+To verify tx's in a new block, we actually have to set the chainstate at the 
+parent of that new block, to verify that the utxo's have not been spent.
+    - this is more complicated than it appears.  
+
+--- 
+
+Ok, think we want to change - so it populates with the actual block
+data, without figuring out the leaves in code.
+
+----
 - it would be nice to have a consistent interface to support 
     either replay of blocks, or actual operational node. 
         - add_block

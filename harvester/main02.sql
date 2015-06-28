@@ -1,4 +1,6 @@
 
+begin;
+
 -- important chainstate projection to tx ought to be easy, we just
 -- create a view of tx's that are the mainchain only, and use that
 -- for all the received, unspent etc.
@@ -21,9 +23,7 @@ right join block pb on pb.id = b.previous_id
 where b.id is null
 ;
 
-
 -- a view of the block table including height
--- 
 
 drop view if exists block_ ; 
 
@@ -39,11 +39,10 @@ select t.height, block.*
 FROM t join block on block.id = t.id;
 
 
-
 -- could return more than one entry...
 
 select * from block_ where
 height = (SELECT max(height) FROM block_ ) ; 
 
-;
+commit;
 
