@@ -50,7 +50,7 @@ let map_m f lst =
 
 type mytype =
 {
-  tx_count : int;
+  block_count : int;
   db : int PG.t ; (* TODO what is this *)
 }
 
@@ -326,7 +326,6 @@ let process_input x (index, input, hash, tx_id) =
 
 
 let process_tx x (block_id,hash,tx) =
-    let x = { x with tx_count = succ x.tx_count } in
 
     PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_int block_id);
@@ -361,18 +360,24 @@ let decode_block_hash payload =
 
 
 let process_block x payload =
-  let _, block  = M.decodeBlock payload 0 in
-  let hash = decode_block_hash payload in
+
+  let x = { x with block_count = succ x.block_count } in
   begin
     (* todo move commits to co-incide with blocks *)
-    match x.tx_count mod 10000 with
-      | 0 -> log @@ " tx_count " ^ string_of_int x.tx_count;
+    match x.block_count mod 10000 with
+      | 0 -> log @@ " block_count " ^ string_of_int x.block_count;
       | _ -> return ()
   end
   >>
+
+  let _, block  = M.decodeBlock payload 0 in
+  let hash = decode_block_hash payload in
+
+(*  >>
   PG.begin_work x.db
-  (* >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
   >>
+*)
+  (* >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
   PG.execute x.db ~name:"insert_block" ~params:[
     Some (PG.string_of_bytea hash );
     Some (PG.string_of_bytea block.previous );
@@ -380,6 +385,7 @@ let process_block x payload =
     (* should previous as an id...
        height = headers.find *)
   ] ()
+(*
   >>= fun rows ->
     begin
     let block_id = decode_id rows in
@@ -393,7 +399,9 @@ let process_block x payload =
     fold_m process_tx x txs
     end
   >>= fun x -> 
+
     PG.commit x.db
+*)
   >> return x
 
 (*
@@ -430,7 +438,7 @@ let process_file () =
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
 
      let x = {
-        tx_count = 0;
+        block_count = 0;
         db = db;
       } in
       let last = seq |> L.rev |> L.hd in
@@ -443,8 +451,10 @@ let process_file () =
     ] ()
     >> PG.commit db  
 
-    (* >> replay_tx fd seq headers process_tx x  *)
+    (* insert block data *)
+    >> PG.begin_work db 
     >> Sc.replay_blocks fd seq headers process_block x
+    >> PG.commit db  
 
     >> PG.close db
     >> log "finished "
