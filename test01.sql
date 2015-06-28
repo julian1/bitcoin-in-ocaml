@@ -7,7 +7,11 @@
 
 
 
-select t.r,  a.hash, format_amount( unspent1( a.hash) ) 
+select 
+    t.r,  
+    a.hash, 
+    format_amount( received( a.hash) ) as received, 
+    format_amount( unspent( a.hash) ) as unspent 
 from test t 
 join input i on i.id = t.input_id
 join output o on o.id = i.output_id
