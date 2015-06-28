@@ -23,7 +23,7 @@ module CL = Core.Core_list
 module S = String
 
 module M = Message
-module Sc = Scanner
+(* module Sc = Scanner *)
 
 
 module Lwt_thread = struct
@@ -410,6 +410,45 @@ let replay_tx fd seq headers process_tx x =
   Sc.replay_blocks fd seq headers process_block x
 *)
 
+(*
+  - as well as fold_m should have takeWhile ...
+  - actually it's easy enough to write it with a recursion 
+*)
+
+
+(* read a block at current pos and return it - private *)
+let read_block fd =
+  Misc.read_bytes fd 24
+  >>= function
+    | None -> return None 
+    | Some s ->
+      let _, header = M.decodeHeader s 0 in
+      (* should check command is 'block' *)
+      Misc.read_bytes fd header.length 
+      >>= function
+        | None -> raise (Failure "here2")
+        | Some payload -> return (Some payload)
+
+
+
+(* scan through blocks in the given sequence
+  - perhaps insted of passing in seq and headers should pass just pos list *)
+
+let replay_blocks fd f x =
+  let rec replay_blocks' x =
+      read_block fd
+    >>= function
+      | None -> return x 
+      | Some payload -> f x payload 
+    >>= fun x ->
+      replay_blocks' (x)
+  in
+  replay_blocks' (x)
+
+
+
+
+
 let process_file () =
     log "connecting and create db"
     >>
@@ -420,7 +459,7 @@ let process_file () =
       Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
       log "scanning blocks..."
-    >> Sc.scan_blocks fd
+(*    >> Sc.scan_blocks fd
     >>= fun headers ->
       log "done scanning blocks - getting leaves"
     >>
@@ -436,16 +475,18 @@ let process_file () =
       let seq = CL.drop seq 1 in (* we are missng the first block *)
       (*let seq = CL.take seq 50000 in *)
       (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
-
+*)
+    >>
      let x = {
         block_count = 0;
         db = db;
       } in
-      let last = seq |> L.rev |> L.hd in
+      (* let last = seq |> L.rev |> L.hd in
       log @@ "last hash " ^ M.hex_of_string last 
+      *)
 
     (* insert genesis *)
-    >> PG.begin_work db 
+    PG.begin_work db 
     >> PG.execute x.db ~name:"insert_block2" ~params:[
       Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
     ] ()
@@ -453,7 +494,8 @@ let process_file () =
 
     (* insert block data *)
     >> PG.begin_work db 
-    >> Sc.replay_blocks fd seq headers process_block x
+    >> replay_blocks fd process_block x
+    (* >> Sc.replay_blocks fd seq headers process_block x *)
     >> PG.commit db  
 
     >> PG.close db
