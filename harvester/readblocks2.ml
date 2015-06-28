@@ -37,6 +37,8 @@ module PG = PGOCaml_generic.Make (Lwt_thread)
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
 module RValues = Map.Make(struct type t = string let compare = compare end)
 
+(*  - as well as fold_m should have takeWhile ...
+*)
 let fold_m f acc lst =
   let adapt f acc e = acc >>= fun acc -> f acc e in
   L.fold_left (adapt f) (return acc) lst
@@ -98,14 +100,7 @@ let create_db db =
         - get blocks by hash
         - get tx by hash 
     *)
-    (*
-        - if we have previous, then it ought to be possible to calculate height
-        dynamically - although may be expensive.
-    *)
-  (*
-    find the last block.
-    really w
-  *)
+
   PG.(
     begin_work db
     >> fold_m (fun db query -> inject db query >> return db ) db [ 
@@ -326,8 +321,7 @@ let process_input x (index, input, hash, tx_id) =
 
 
 let process_tx x (block_id,hash,tx) =
-
-    PG.execute x.db ~name:"insert_tx"  ~params:[
+  PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_int block_id);
       Some (PG.string_of_bytea hash);
     ] ()
@@ -348,36 +342,28 @@ let process_tx x (block_id,hash,tx) =
 
 
 let process_block x payload =
-
   let x = { x with block_count = succ x.block_count } in
-  begin
-    (* todo move commits to co-incide with blocks *)
-    match x.block_count mod 10000 with
-      | 0 -> log @@ " block_count " ^ string_of_int x.block_count;
-      | _ -> return ()
-  end
+    begin
+      (* todo move commits to co-incide with blocks *)
+      match x.block_count mod 10000 with
+        | 0 -> log @@ " block_count " ^ string_of_int x.block_count;
+        | _ -> return ()
+    end
   >>
-
-  let _, block  = M.decodeBlock payload 0 in
-  let hash = M.decode_block_hash payload in
-
-(*  >>
-  PG.begin_work x.db
+    let _, block  = M.decodeBlock payload 0 in
+    let hash = M.decode_block_hash payload in
+    PG.begin_work x.db
   >>
-*)
-  (* >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
-  PG.execute x.db ~name:"insert_block" ~params:[
-    Some (PG.string_of_bytea hash );
-    Some (PG.string_of_bytea block.previous );
-    Some (PG.string_of_int block.nTime );
-    (* should previous as an id...
-       height = headers.find *)
-  ] ()
-(*
+    (* >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
+    PG.execute x.db ~name:"insert_block" ~params:[
+      Some (PG.string_of_bytea hash );
+      Some (PG.string_of_bytea block.previous );
+      Some (PG.string_of_int block.nTime );
+    ] ()
   >>= fun rows ->
     begin
     let block_id = decode_id rows in
-    let txs = decode_block_txs payload in
+    let txs = M.decode_block_txs payload in
     let txs = L.map (fun (tx : M.tx) ->
       block_id,
       M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
@@ -387,21 +373,9 @@ let process_block x payload =
     fold_m process_tx x txs
     end
   >>= fun x -> 
-
     PG.commit x.db
-*)
   >> return x
 
-(*
-let replay_tx fd seq headers process_tx x =
-  let process_block = process_block process_tx in
-  Sc.replay_blocks fd seq headers process_block x
-*)
-
-(*
-  - as well as fold_m should have takeWhile ...
-  - actually it's easy enough to write it with a recursion 
-*)
 
 
 (* read a block at current pos and return it - private *)
@@ -429,70 +403,42 @@ let replay_blocks fd f x =
       | None -> return x 
       | Some payload -> f x payload 
     >>= fun x ->
-      replay_blocks' (x)
+      replay_blocks' x
   in
-  replay_blocks' (x)
-
-
+  replay_blocks' x
 
 
 
 let process_file () =
     log "connecting and create db"
-    >>
-    PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
+    >> PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
-        create_db db
-    >>
-      Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
+      create_db db
+    >> Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
     >>= fun fd ->
       log "scanning blocks..."
-(*    >> Sc.scan_blocks fd
-    >>= fun headers ->
-      log "done scanning blocks - getting leaves"
     >>
-      let leaves = Sc.get_leaves headers in
-      log @@ "leaves " ^ (leaves |> L.length |> string_of_int)
-    >>
-      let longest = Sc.get_longest_path leaves headers in
-      log @@ "longest " ^ M.hex_of_string longest
-    >>
-      log "computed leaves work "
-    >>
-      let seq = Sc.get_sequence longest headers in
-      let seq = CL.drop seq 1 in (* we are missng the first block *)
-      (*let seq = CL.take seq 50000 in *)
-      (* let seq = [ M.string_of_hex "00000000000004ff6bc3ce1c1cb66a363760bb40889636d2c82eba201f058d79" ] in *)
-*)
-    >>
-     let x = {
+      let x = {
         block_count = 0;
         db = db;
-      } in
-      (* let last = seq |> L.rev |> L.hd in
-      log @@ "last hash " ^ M.hex_of_string last 
-      *)
-
+      } 
+      in
     (* insert genesis *)
     PG.begin_work db 
     >> PG.execute x.db ~name:"insert_block2" ~params:[
       Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
     ] ()
     >> PG.commit db  
-
     (* insert block data *)
-    >> PG.begin_work db 
+    (* >> PG.begin_work db  *)
     >> replay_blocks fd process_block x
-    (* >> Sc.replay_blocks fd seq headers process_block x *)
-    >> PG.commit db  
-
+    (* >> PG.commit db *)
     >> PG.close db
     >> log "finished "
 
 
 let () = Lwt_main.run (
   Lwt.catch (
-
     process_file
   )
   (fun exn ->
