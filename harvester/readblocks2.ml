@@ -334,6 +334,8 @@ let process_block x payload =
       Some (PG.string_of_int block.nTime );
     ] ()
   >>= fun rows ->
+      log "done insert_block"
+    >>
     begin
       let block_id = decode_id rows in
       let txs = M.decode_block_txs payload in
@@ -349,7 +351,7 @@ let process_block x payload =
     PG.commit x.db
   >> return x
 
-
+(*
 (* read a block at current pos and return it - private *)
 let read_block fd =
   Misc.read_bytes fd 24
@@ -379,7 +381,7 @@ let replay_blocks fd f x =
   replay_blocks' x
 
 
-(*
+
 let process_file () =
   log "connecting and create db"
   >> PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
