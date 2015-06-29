@@ -105,7 +105,9 @@ type my_app_state =
 
   (* tree structure  - change name tree *)
   (* change name my_headers *)
+(*
   heads : my_head SS.t ;
+*)
 
   (* set when inv request made to peer *)
   block_inv_pending  : (Lwt_unix.file_descr * float ) option ;

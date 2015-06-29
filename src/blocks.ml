@@ -28,6 +28,7 @@ let update1 e (state : Misc.my_app_state) =
           raise (Failure "uggh")
         else
       (* save index *)
+(*
 			Db.put state.db ("block/" ^ hash ^ "/pos") (M.encodeInteger64 (Int64.of_int pos))
 			>> log @@ String.concat "" [
             "saved block - ";
@@ -35,7 +36,7 @@ let update1 e (state : Misc.my_app_state) =
             " height: "; string_of_int height ;
 				    " pos: " ^ string_of_int pos;
         ]
-      >> return U.SeqJobFinished
+      >> *) return U.SeqJobFinished
     in
     { state with
       seq_jobs_pending = Myqueue.add state.seq_jobs_pending y

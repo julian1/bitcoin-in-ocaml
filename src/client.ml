@@ -1,3 +1,6 @@
+(*
+    corebuild -I src -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte 
+*)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
@@ -11,20 +14,15 @@ let run f =
   Lwt_main.run (
 
 
-	Db.open_db "mydb"
-	>>= fun db ->
-
     Chain.create ()
-    >>= fun result ->
-
-    match result with
-      Some (tree, blocks_fd) -> (
+    >>= fun blocks_fd -> 
+       (
         (* we actually need to read it as well... as write it... *)
         let state =
           ({
 			jobs = P2p.create();
             connections = [];
-			heads = tree;
+			(*heads = tree; *)
 
 			blocks_fd = blocks_fd;
 
@@ -35,8 +33,6 @@ let run f =
 
 			seq_jobs_pending = Myqueue.empty;
 			seq_job_running = false;
-
-			db = db;
 
           } : Misc.my_app_state )
         in
