@@ -72,7 +72,7 @@ let decode_id rows =
 let coinbase = M.zeros 32
 
 
-let create_db db =
+let create_prepared_stmts db =
     (* note we're already doing a lot more than with leveldb
        
         - address hashes are not normalized here. doesn't really matter
@@ -116,7 +116,8 @@ let create_db db =
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
 (*      ("insert_block", "insert into block(hash,time, previous) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
 *)
-      ("insert_block", "insert into block(hash,previous_id,time) select $1, (select b.id from block b where hash = $2) as previous_id, to_timestamp($3) at time zone 'UTC' returning id" );
+        (* this doesn't keep out, hashes that don't link to tha chain *)
+      ("insert_block", "insert into block(hash,previous_id,time) select $1, (select b.id from block b where hash = $2), to_timestamp($3) at time zone 'UTC' returning id" );
 
       ("insert_block2", "insert into block(hash) select $1" );
 
@@ -381,7 +382,7 @@ let process_file () =
   log "connecting and create db"
   >> PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
-    create_db db
+    create_prepared_stmts db
   >> Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
   >>= fun fd ->
     log "scanning blocks..."

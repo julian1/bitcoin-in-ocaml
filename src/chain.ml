@@ -252,7 +252,7 @@ let manage_chain2 (state : Misc.my_app_state) e  =
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
        
-		 jobs = state.jobs @ 
+		    jobs = state.jobs @ 
         [
           log @@ S.concat "" [
             "request addr " ; conn.addr;
@@ -263,8 +263,12 @@ let manage_chain2 (state : Misc.my_app_state) e  =
             "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
             ]
             >>
-            (* need to do a prepare and select just a leaf to begin with *)
-             Misc.PG.prepare state.db  ~query:"select pb from leaves"  ()
+            (* 
+                - what if we attempt to use the conn at the same time to store blocks?????
+                - should be ok?.
+                - need to pick a random leaf not just the first ...
+            *)
+             Misc.PG.prepare state.db  ~query:"select pb from leaves" ()
             >> Misc.PG.execute state.db  ~params:[ ] ()
             >>= fun rows -> 
               let head = 
