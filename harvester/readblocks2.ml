@@ -28,13 +28,7 @@ module M = Message
 (* module Sc = Scanner *)
 
 
-module Lwt_thread = struct
-    include Lwt
-    include Lwt_chan
-end
-
-module PG = PGOCaml_generic.Make (Lwt_thread)
-
+module PG = Misc.PG
 
 module Utxos = Map.Make(struct type t = string * int let compare = compare end)
 module RValues = Map.Make(struct type t = string let compare = compare end)
@@ -114,12 +108,20 @@ let create_prepared_stmts db =
     ]
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
-(*      ("insert_block", "insert into block(hash,time, previous) values ($1, (select to_timestamp($2) at time zone 'UTC')) returning id" );
-*)
-        (* this doesn't keep out, hashes that don't link to tha chain *)
-      ("insert_block", "insert into block(hash,previous_id,time) select $1, (select b.id from block b where hash = $2), to_timestamp($3) at time zone 'UTC' returning id" );
 
-      ("insert_block2", "insert into block(hash) select $1" );
+      ("insert_block", "
+          insert into block(hash,previous_id,time) 
+          select 
+              $1, 
+              b.id, 
+              to_timestamp($3) at time zone 'UTC'
+          from block b
+          where hash = $2 and b.id is not null
+          returning id 
+        " );
+
+      (* TODO maybe remove this *)
+      ("insert_genesis_block", "insert into block(hash) select $1" );
 
       ("insert_tx", "insert into tx(block_id,hash) values ($1, $2) returning id"  );
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
@@ -377,7 +379,7 @@ let replay_blocks fd f x =
   replay_blocks' x
 
 
-
+(*
 let process_file () =
   log "connecting and create db"
   >> PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
@@ -410,6 +412,7 @@ let process_file () =
   >> log "finished "
 
 
+
 let () = Lwt_main.run (
   Lwt.catch (
     process_file
@@ -421,4 +424,4 @@ let () = Lwt_main.run (
     >> return ()
   )
 )
-
+*)

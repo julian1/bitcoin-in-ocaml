@@ -19,6 +19,10 @@ let run f =
     >> Misc.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
 
+      Readblocks2.create_prepared_stmts db 
+    >>
+
+
       Chain.create ()
     >>= fun blocks_fd -> 
        (

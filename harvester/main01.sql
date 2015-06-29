@@ -13,7 +13,7 @@ begin;
 -- drop table if exists block;
  
 --  need pos of block in .dat file. 
-create table block(id serial primary key, hash bytea unique, previous_id integer, time timestamptz);
+create table block(id serial primary key, hash bytea unique not null, previous_id integer, time timestamptz );
 create index on block(hash);
 create index on block(previous_id); --  not sure if needed 
 
