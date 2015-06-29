@@ -63,6 +63,7 @@ let log = Lwt_io.write_line Lwt_io.stdout
 
 let decode_id rows =
   (* >>= fun rows -> *)
+  (* TODO just use function *)
   match rows with
     (Some field ::_ )::_ -> PG.int_of_string field
     | _ -> raise (Failure "previous tx not found")
@@ -73,7 +74,7 @@ let coinbase = M.zeros 32
 
 let create_db db =
     (* note we're already doing a lot more than with leveldb
-
+       
         - address hashes are not normalized here. doesn't really matter
         - likewise for der values
         - pubkey - and der.  after der, then we can start writing views.
@@ -392,6 +393,10 @@ let process_file () =
     in
   (* insert genesis *)
   PG.begin_work db
+
+  (* insert into block(hash) select E'\\x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f';
+        put in main04
+    *)
   >> PG.execute x.db ~name:"insert_block2" ~params:[
     Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
   ] ()

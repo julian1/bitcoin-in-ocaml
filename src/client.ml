@@ -8,13 +8,18 @@ let return = Lwt.return
 module M = Message
 
 
+let log s = Misc.write_stdout s
 
 let run f =
 
   Lwt_main.run (
 
+    (* we'll have to think about db transactions *) 
+    log "connecting and create db"
+    >> Misc.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+    >>= fun db ->
 
-    Chain.create ()
+      Chain.create ()
     >>= fun blocks_fd -> 
        (
         (* we actually need to read it as well... as write it... *)
@@ -24,6 +29,7 @@ let run f =
             connections = [];
 			(*heads = tree; *)
 
+            db = db; 
 			blocks_fd = blocks_fd;
 
 			(* should be hidden ?? *)

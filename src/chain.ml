@@ -177,7 +177,10 @@ let manage_chain1 (state : Misc.my_app_state) e    =
       )
     | _ -> state
 
-
+(*
+    So we need a db connecttion....
+    to see what blocks we need...
+*)
 
 let manage_chain2 (state : Misc.my_app_state) e  =
   (* issue inventory requests to advance the tips *)
@@ -243,7 +246,7 @@ let manage_chain2 (state : Misc.my_app_state) e  =
         let (conn : U.connection) = List.nth state.connections index in
 
         (* TODO fixme *)
-        let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in
+        (* let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in *)
 
         (* TODO we need to record if handshake has been performed *)
         { state with
@@ -255,16 +258,36 @@ let manage_chain2 (state : Misc.my_app_state) e  =
             "request addr " ; conn.addr;
             "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
             (* "\nheads count " ; string_of_int (L.length heads); *)
-            "\nrequested head is ";  M.hex_of_string head ;
+            (* "\nrequested head is ";  M.hex_of_string head ; *)
 
             "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
-          ];
-          (* request inv *)
+            ]
+            >>
+            (* need to do a prepare and select just a leaf to begin with *)
+             Misc.PG.prepare state.db  ~query:"select pb from leaves"  ()
+            >> Misc.PG.execute state.db  ~params:[ ] ()
+            >>= fun rows -> 
+              let head = 
+                match rows with
+                  (Some field ::_ )::_ -> Misc.PG.bytea_of_string field
+                  | _ -> raise (Failure "couldn't get leaf")
+            in 
+
+            log @@ "\nrequested head is " ^ M.hex_of_string head
+            >>
+
+            (* request inv *)
             U.send_message conn (initial_getblocks head)
           ]
 		}
       else
         state
+
+(*
+    so a lot of the job will 
+    - if we bind the fd to use, then it could get closed by something else...
+*)
+
 
 
 (*

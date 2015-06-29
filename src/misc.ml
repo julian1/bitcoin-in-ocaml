@@ -97,11 +97,25 @@ type ggg = {
 }
 
 
+
+module Lwt_thread = struct
+    include Lwt
+    include Lwt_chan
+end 
+  
+module PG = PGOCaml_generic.Make (Lwt_thread)
+
+
+
+
+
 type my_app_state =
 {
   jobs :  jobs_type  ;
 
   connections : connection list ;
+
+
 
   (* tree structure  - change name tree *)
   (* change name my_headers *)
@@ -124,6 +138,8 @@ type my_app_state =
   seq_job_running : bool ;
 
   blocks_fd : Lwt_unix.file_descr ;
+
+  db : int PG.t ; (* TODO what is this type *)
  
   (* db : LevelDB.db ;  *)
 }
