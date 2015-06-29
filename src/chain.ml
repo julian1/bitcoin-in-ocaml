@@ -158,7 +158,21 @@ let manage_chain1 (state : Misc.my_app_state) e    =
 			  jobs = state.jobs @ 
 			  [ 
                 log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
-				 " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
+				 " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
+
+          (* we will network order, but must impose processing order as well *) 
+          >>
+           let x = Readblocks2.(  
+            {
+              block_count = 0;
+              db = state.db;
+            })
+          in
+           Readblocks2.process_block x payload 
+          >> 
+          log "whoot"
+
+
 (*
 				let s = raw_header ^ payload in 
 				(*
