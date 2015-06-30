@@ -8,6 +8,45 @@ let return = Lwt.return
 
 let log s = U.write_stdout s >> return U.Nop
 
+
+(* transfer a sequence job into the jobs list 
+
+    rather than seq_job_running to false when finished we should wrap
+    it in a closure here...
+*)
+
+let (>>=) = Lwt.(>>=) 
+let return = Lwt.return
+
+
+let log s = U.write_stdout s >> return U.Nop
+
+let update2 _ (state : Misc.my_app_state) =
+  if not state.seq_job_running && state.seq_jobs_pending <> Myqueue.empty then
+    let h,t = Myqueue.take state.seq_jobs_pending in
+    { state with
+      seq_job_running = true;
+      seq_jobs_pending = t;
+      jobs = (h () 
+        (* >> U.write_stdout "here"  *)
+        >> return Misc.SeqJobFinished)
+        :: state.jobs;
+    }
+  else
+    state
+
+let update3 e (state : Misc.my_app_state) =
+  match e with 
+    | Misc.SeqJobFinished -> { state with seq_job_running = false;  (* jobs = state.jobs @  [ log @@ "seq job finished"   ] *) }
+    | _ -> state
+ 
+
+let update state e =
+  state |> update2 e |> update3 e
+
+
+
+
 (* - we allow networking to run independenly of the sequenced io actions. 
   this allows blocks to always be accepted when they are received, even if cannot process immediately
   - block is still provisional, if it fails a check we can coordinate to remove from p2p heads
@@ -51,22 +90,6 @@ let update1 e (state : Misc.my_app_state) =
    }
 	| _ -> state
 *)
-
-(* transfer a sequence job into the jobs list *)
-let update2 _ (state : Misc.my_app_state) =
-  if not state.seq_job_running && state.seq_jobs_pending <> Myqueue.empty then
-    let h,t = Myqueue.take state.seq_jobs_pending in
-    { state with
-      seq_job_running = true;
-      seq_jobs_pending = t;
-      jobs = h ()::state.jobs;
-    }
-  else
-    state
-
-let update state e =
-  state |>  update2 e
-
 
 (*
   - Important a block may arrive out of order - but we'll reject it.
