@@ -106,7 +106,7 @@ let manage_chain1 (state : Misc.my_app_state) e    =
             ( { state with
                 block_inv_pending = block_inv_pending;
                 blocks_on_request = blocks_on_request ;
-				jobs = state.jobs @  
+				      jobs = state.jobs @  
               [
                 log @@ U.format_addr conn
                   ^ " *** got inventory blocks " ^ (string_of_int @@ L.length block_hashes  )
@@ -150,47 +150,26 @@ let manage_chain1 (state : Misc.my_app_state) e    =
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
-          let y a = log "whoot" in 
-
-		  (* return state *)	
+          let y () = 
+            let x = Readblocks2.(  
+              {
+                block_count = 0;
+                db = state.db;
+              })
+            in
+              Readblocks2.process_block x payload 
+              >> log "done writing db"
+          in
           { state with
             (* heads = heads; *)
             blocks_on_request = blocks_on_request;
             last_block_received_time = last;
-(*
-              let x = Readblocks2.(  
-                {
-                  block_count = 0;
-                  db = state.db;
-                })
-              in
-                Readblocks2.process_block x payload 
-              >> 
-            log "whoot"
-            in
-*)
             seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ;
-
             jobs = state.jobs @ 
             [ 
-                    log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
-             " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
-
-            (* we will network order, but must impose processing order as well *) 
-
-
-  (*
-          let s = raw_header ^ payload in 
-          (*
-            rather than option monads everywhere, actions ought to take two functions 
-              the intital and the failure (usually log)   problem is the creation functions.
-          *)
-          if height <> -1 then
-            return @@ U.GotBlock (hash, height, raw_header, payload) 
-          else
-            return U.Nop
-  *)
-			 ]
+              log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
+              " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
+            ]
 			}
         )
         | _ -> state
@@ -241,7 +220,9 @@ let manage_chain2 (state : Misc.my_app_state) e  =
       (* if only unsolicited blocks on request, and no inv pending then make an inv request *)
       if not has_solicited 
         && state.block_inv_pending = None 
-        && state.connections <> [] then
+        && state.connections <> [] 
+        && state.seq_jobs_pending = Myqueue.empty
+        then
 
 (*
         (* create a set of all pointed-to block hashes *)
