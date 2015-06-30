@@ -65,7 +65,7 @@ type my_event =
    | GotMessageError of connection * string
 
 	(* hash, height, raw_header, payload *)
-   | GotBlock of string * int * string * string 
+  (* | GotBlock of string * int * string * string  *)
 
 	| SeqJobFinished  (* SeqJobOK , SeqJobFailed? *)
    | Nop

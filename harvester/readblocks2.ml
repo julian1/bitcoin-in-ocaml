@@ -323,7 +323,8 @@ let process_block x payload =
   >>
     let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
-    PG.begin_work x.db
+    log @@ "before insert_block" ^ M.hex_of_string hash 
+  >> PG.begin_work x.db
   >>
     (* IMPORTANT - lookup hash to test whether already have block
       and skip processing if we do. this will allow scan stop/resume *)
