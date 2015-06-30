@@ -80,7 +80,7 @@ let run f =
 let f state e =
   let state = P2p.update state e in
   let state = Chain.update state e in
-  let state = Blocks.update state e in
+  let state = Seq.update state e in
   state
 
 (*
