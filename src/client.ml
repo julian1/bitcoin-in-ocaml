@@ -77,21 +77,14 @@ let run f =
   )
 
 
-let f state e =
+let update state e =
   let state = P2p.update state e in
   let state = Chain.update state e in
   let state = Seq.update state e in
   state
 
-(*
-  { state with
-    chain = chain;
-    connections = connections;
-    jobs =  state.jobs @ jobs1 @ jobs2
-  }
-*)
 
-let () = run f
+let () = run update 
 
 
 
