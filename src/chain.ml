@@ -150,40 +150,46 @@ let manage_chain1 (state : Misc.my_app_state) e    =
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
+          let y a = log "whoot" in 
+
 		  (* return state *)	
           { state with
-              (* heads = heads; *)
-              blocks_on_request = blocks_on_request;
-              last_block_received_time = last;
-			  jobs = state.jobs @ 
-			  [ 
-                log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
-				 " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
-
-          (* we will network order, but must impose processing order as well *) 
-          >>
-           let x = Readblocks2.(  
-            {
-              block_count = 0;
-              db = state.db;
-            })
-          in
-           Readblocks2.process_block x payload 
-          >> 
-          log "whoot"
-
-
+            (* heads = heads; *)
+            blocks_on_request = blocks_on_request;
+            last_block_received_time = last;
 (*
-				let s = raw_header ^ payload in 
-				(*
-					rather than option monads everywhere, actions ought to take two functions 
-						the intital and the failure (usually log)   problem is the creation functions.
-				*)
-				if height <> -1 then
-				  return @@ U.GotBlock (hash, height, raw_header, payload) 
-				else
-				  return U.Nop
+              let x = Readblocks2.(  
+                {
+                  block_count = 0;
+                  db = state.db;
+                })
+              in
+                Readblocks2.process_block x payload 
+              >> 
+            log "whoot"
+            in
 *)
+            seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ;
+
+            jobs = state.jobs @ 
+            [ 
+                    log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
+             " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
+
+            (* we will network order, but must impose processing order as well *) 
+
+
+  (*
+          let s = raw_header ^ payload in 
+          (*
+            rather than option monads everywhere, actions ought to take two functions 
+              the intital and the failure (usually log)   problem is the creation functions.
+          *)
+          if height <> -1 then
+            return @@ U.GotBlock (hash, height, raw_header, payload) 
+          else
+            return U.Nop
+  *)
 			 ]
 			}
         )

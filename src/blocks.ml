@@ -13,6 +13,8 @@ let log s = U.write_stdout s >> return U.Nop
   - block is still provisional, if it fails a check we can coordinate to remove from p2p heads
 *) 
 
+(*
+
 let update1 e (state : Misc.my_app_state) =
 	match e with
 	| U.GotBlock (hash, height, raw_header, payload) ->
@@ -48,7 +50,7 @@ let update1 e (state : Misc.my_app_state) =
       seq_job_running = false;
    }
 	| _ -> state
-
+*)
 
 (* transfer a sequence job into the jobs list *)
 let update2 _ (state : Misc.my_app_state) =
@@ -63,7 +65,7 @@ let update2 _ (state : Misc.my_app_state) =
     state
 
 let update state e =
-  state |> update1 e |> update2 e
+  state |>  update2 e
 
 
 (*
