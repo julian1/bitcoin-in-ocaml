@@ -1,24 +1,29 @@
 (*
-  - it should be easy to stop. and resume this stuff as well, if we want.
-  - should test whether have block already and skip...
+  - think we should test whether have block already and skip before inserting 
+    rather than rely on exceptions.
+
+  - IMPORTANT moving the transaction begin and commit outside the process block
+    might be useful, to make more composible.
 
   - choices
     - avoid exceptions
     - if the block has already been in inserted return something to indiate that ...
-    - or simply rely on the db...  
+    - or simply rely on the db...
 
-  - should wrap the process_block up... only. other exceptions should kill the  
+  - should wrap the process_block up... only. other exceptions should kill the
   - the exception indicates a postgres tx exception which is good...
-
   - to catch exceptions outside the block...
+  -----------
+  OK, rather than rely on exceptions why not just test first...
 *)
-(* scan blocks and store to db
-  corebuild -I src -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.native
-  Need to get rid of leveldb ref, coming from misc.ml 126
+(*
+  scan blocks and store to db
+
+  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client2.byte
 *)
 
 let (>>=) = Lwt.(>>=)
-let (>|=) = Lwt.(>|=)  (* like bind, but second arg return type is non-monadic *)
+let (>|=) = Lwt.(>|=)
 let return = Lwt.return
 
 module M = Message
@@ -27,14 +32,17 @@ module PG = Misc.PG
 let log s = Misc.write_stdout s
 
 
+
 let process_block x payload =
   Lwt.catch (
     fun () -> Processblock.process_block x payload
   )
   (fun exn ->
-    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-    log ("@@@ whoot " ^ s )
-    >> return x 
+    PG.rollback x.db
+    >>
+      let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
+      log ("rollback " ^ s )
+    >> return x
   )
 
 
@@ -76,14 +84,12 @@ let process_file () =
   >>= fun fd ->
     log "scanning blocks..."
   >>
-    let x = 
-    Processblock.(
-      {
+    let x =
+      Processblock.({
         block_count = 0;
         db = db;
-      } )in
-      replay_blocks fd process_block x
-  
+      }) in
+    replay_blocks fd process_block x
   >> PG.close db
   >> log "finished "
 

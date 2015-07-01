@@ -308,8 +308,14 @@ let process_tx x (block_id,hash,tx) =
     let outputs = L.mapi group tx.outputs in
     fold_m process_output x outputs
 
+(*
+  - IMPORTANT should move the transaction isolation begin and commit outside the process block
+    so that if want to do other actions - like check if block has been inserted in the same
+    tx we can.
+*)
 
 let process_block x payload =
+(*
   let x = { x with block_count = succ x.block_count } in
     begin
       (* todo move commits to co-incide with blocks *)
@@ -318,14 +324,11 @@ let process_block x payload =
         | _ -> return ()
     end
   >>
-    let _, block  = M.decodeBlock payload 0 in
+*)  let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
     log @@ "before insert_block" ^ M.hex_of_string hash 
   >> PG.begin_work x.db
   >>
-    (* IMPORTANT - lookup hash to test whether already have block
-      and skip processing if we do. this will allow scan stop/resume *)
-    (* >> log @@ "first block previous " ^ M.hex_of_string block.previous  *)
     PG.execute x.db ~name:"insert_block" ~params:[
       Some (PG.string_of_bytea hash );
       Some (PG.string_of_bytea block.previous );
