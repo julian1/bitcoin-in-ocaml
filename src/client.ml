@@ -1,5 +1,5 @@
 (*
-  corebuild -I src -I harvester -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte
+  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte
 *)
 
 let (>>=) = Lwt.(>>=)
@@ -19,7 +19,7 @@ let run f =
     >> Misc.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
 
-      Readblocks2.create_prepared_stmts db 
+      Processblock.create_prepared_stmts db 
     >>
 
       Chain.create ()

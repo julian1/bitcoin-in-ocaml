@@ -1,4 +1,9 @@
 
+- should potentially make the lookup of the output transactional in the db.
+    (not really necessary)
+- also need to handle case of block  
+
+-----
 To verify tx's in a new block, we actually have to set the chainstate at the 
 parent of that new block, to verify that the utxo's have not been spent.
     - this is more complicated than it appears.  

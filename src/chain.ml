@@ -151,13 +151,13 @@ let manage_chain1 (state : Misc.my_app_state) e    =
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
           let y () = 
-            let x = Readblocks2.(  
+            let x = Processblock.(  
               {
                 block_count = 0;
                 db = state.db;
               })
             in
-              Readblocks2.process_block x payload 
+              Processblock.process_block x payload 
               >> log "done writing db"
           in
           { state with
