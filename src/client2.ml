@@ -1,12 +1,17 @@
 (*
   - it should be easy to stop. and resume this stuff as well, if we want.
   - should test whether have block already and skip...
-------
-    - very important the whole chain/heads structure could be put in db.
-    - the issue of blocks coming in fast out-of-order sequence, can be handled
-    easily by just always pushing them in the sequential processing queue.
-    - when we have block.previous_id then it should be very simple to work
-    out the heads.
+
+  - we get an exception....
+  that shouldn't be default behavior though...
+
+
+  - choices
+    - avoid exceptions
+
+    - if the block has already been in inserted return something to indiate that ...
+    - or simply rely on the db...  
+
 *)
 (* scan blocks and store to db
 
@@ -68,8 +73,7 @@ let process_file () =
       let x = {
         block_count = 0;
         db = db;
-      }
-      in
+      } in
       replay_blocks fd process_block x
   )
   >> PG.close db

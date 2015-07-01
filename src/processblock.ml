@@ -30,9 +30,6 @@ module M = Message
 
 module PG = Misc.PG
 
-module Utxos = Map.Make(struct type t = string * int let compare = compare end)
-module RValues = Map.Make(struct type t = string let compare = compare end)
-
 (*  - as well as fold_m should have takeWhile ...
 *)
 let fold_m f acc lst =
