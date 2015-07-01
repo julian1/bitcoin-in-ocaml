@@ -20,10 +20,7 @@ let (>>=) = Lwt.(>>=)
 let (>|=) = Lwt.(>|=)  (* like bind, but second arg return type is non-monadic *)
 let return = Lwt.return
 
-
 module M = Message
-
-
 module PG = Misc.PG
 
 let log s = Misc.write_stdout s
@@ -66,15 +63,15 @@ let process_file () =
   >> Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
   >>= fun fd ->
     log "scanning blocks..."
-(*  >>
-    let x = {
-      block_count = 0;
-      db = db;
-    }
-    in
-*)
-(*  >> replay_blocks fd process_block x *)
-
+  >>
+    Processblock.(
+      let x = {
+        block_count = 0;
+        db = db;
+      }
+      in
+      replay_blocks fd process_block x
+  )
   >> PG.close db
   >> log "finished "
 
