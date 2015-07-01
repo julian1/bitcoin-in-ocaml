@@ -2,23 +2,19 @@
   - it should be easy to stop. and resume this stuff as well, if we want.
   - should test whether have block already and skip...
 
-  - we get an exception....
-  that shouldn't be default behavior though...
-
-
   - choices
     - avoid exceptions
-
     - if the block has already been in inserted return something to indiate that ...
     - or simply rely on the db...  
 
+  - should wrap the process_block up... only. other exceptions should kill the  
+  - the exception indicates a postgres tx exception which is good...
+
+  - to catch exceptions outside the block...
 *)
 (* scan blocks and store to db
-
-corebuild -I src -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.native
-
+  corebuild -I src -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax harvester/readblocks2.native
   Need to get rid of leveldb ref, coming from misc.ml 126
-
 *)
 
 let (>>=) = Lwt.(>>=)
@@ -29,6 +25,17 @@ module M = Message
 module PG = Misc.PG
 
 let log s = Misc.write_stdout s
+
+
+let process_block x payload =
+  Lwt.catch (
+    fun () -> Processblock.process_block x payload
+  )
+  (fun exn ->
+    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
+    log ("@@@ whoot " ^ s )
+    >> return x 
+  )
 
 
 (* read a block at current pos and return it - private *)
@@ -69,13 +76,14 @@ let process_file () =
   >>= fun fd ->
     log "scanning blocks..."
   >>
+    let x = 
     Processblock.(
-      let x = {
+      {
         block_count = 0;
         db = db;
-      } in
+      } )in
       replay_blocks fd process_block x
-  )
+  
   >> PG.close db
   >> log "finished "
 
