@@ -1,4 +1,54 @@
 
+- should potentially make the lookup of the output transactional in the db.
+    (not really necessary)
+- also need to handle case of block  
+
+-----
+To verify tx's in a new block, we actually have to set the chainstate at the 
+parent of that new block, to verify that the utxo's have not been spent.
+    - this is more complicated than it appears.  
+
+--- 
+
+Ok, think we want to change - so it populates with the actual block
+data, without figuring out the leaves in code.
+
+----
+- it would be nice to have a consistent interface to support 
+    either replay of blocks, or actual operational node. 
+        - add_block
+        - get_leaves
+        etc.
+
+- we need to get the chain current. to see how often dups are an issue 
+- done - need height, and tips in the db.
+- fix the received to match bc.info and native client.
+    - 
+
+- there were some very large amounts. and on doge lite networks. 
+
+--
+- we don't have to do anything sophisticated for ordering just use tx_id which
+    will be correct.
+
+--
+- done get previous_id in, and we can start experimenting with sql height etc.
+
+- done want transactions organized around blocks.
+
+- done be very nice to have the previous_id. then we can compute height etc, and 
+    tips etc.
+
+    - very important the whole chain/heads structure could be put in db. 
+    - the issue of blocks coming in fast out-of-order sequence, can be handled
+    easily by just always pushing them in the sequential processing queue.
+    - when we have block.previous_id then it should be very simple to work
+    out the heads.
+
+
+
+-------------------
+
 Ok, we can now access the blocks mutex and descriptor and heads etc. 
 
 

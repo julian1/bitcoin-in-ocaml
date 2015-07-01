@@ -15,6 +15,9 @@ let return = Lwt.return
 (*
   - ok, now we need more block rules (merckle root, difficulty, time checks )
   - then we need to save...
+
+    RIGHT - the jobs are actually jobs in an array... 
+            are we sure we don't want 
 *)
 
 
@@ -67,8 +70,8 @@ let manage_chain1 (state : Misc.my_app_state) e    =
             inv
             |> L.filter (fun (inv_type,hash) ->
               inv_type = 2
-              && not (U.SS.mem hash state.heads )
-              && not ( U.SS.mem hash state.blocks_on_request)  )
+           (*   && not (U.SS.mem hash state.heads ) *)
+              && not ( U.SS.mem hash state.blocks_on_request))  (* eg. ignore if we've already requested the block *)
             |> L.map (fun (_,hash) -> hash)
           in
           (* did we ask for this inv *)
@@ -103,7 +106,7 @@ let manage_chain1 (state : Misc.my_app_state) e    =
             ( { state with
                 block_inv_pending = block_inv_pending;
                 blocks_on_request = blocks_on_request ;
-				jobs = state.jobs @  
+				      jobs = state.jobs @  
               [
                 log @@ U.format_addr conn
                   ^ " *** got inventory blocks " ^ (string_of_int @@ L.length block_hashes  )
@@ -126,6 +129,7 @@ let manage_chain1 (state : Misc.my_app_state) e    =
               ok, we are committed to writing the block to disk and including, 
               then lets do the io, first not screate another message
           *)
+(*
           let heads, height =
             if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then
                 let height = (U.SS.find header.previous state.heads).height + 1 in
@@ -136,43 +140,46 @@ let manage_chain1 (state : Misc.my_app_state) e    =
             else
               state.heads, -1 (* should be None *)
           in
+*)
           (* update the time that we got a valid block from the peer *)
           let last =
-            if height <> -1 then
               (* update the fd to indicate we got a good block, TODO tidy this *)
               let last = L.filter (fun (x : Misc.ggg) -> x.fd != conn .fd) state.last_block_received_time in
               ({ fd = conn.fd; t = now ;
               } : Misc.ggg )::last
-            else
-              state.last_block_received_time
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
-		  (* return state *)	
+          let y () = 
+            let x = Processblock.(  
+              {
+                block_count = 0;
+                db = state.db;
+              })
+            in
+              Processblock.process_block x payload 
+              >> log "done writing db"
+          in
           { state with
-              heads = heads;
-              blocks_on_request = blocks_on_request;
-              last_block_received_time = last;
-			  jobs = state.jobs @ 
-			  [ log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ " " ^ string_of_int height
-				^ " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
-
-				let s = raw_header ^ payload in 
-				(*
-					rather than option monads everywhere, actions ought to take two functions 
-						the intital and the failure (usually log)   problem is the creation functions.
-				*)
-				if height <> -1 then
-				  return @@ U.GotBlock (hash, height, raw_header, payload) 
-				else
-				  return U.Nop
-			 ]
+            (* heads = heads; *)
+            blocks_on_request = blocks_on_request;
+            last_block_received_time = last;
+            seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ;
+            jobs = state.jobs @ 
+            [ 
+              log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
+              " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
+            ]
 			}
         )
         | _ -> state
       )
     | _ -> state
 
+(*
+    So we need a db connecttion....
+    to see what blocks we need...
+*)
 
 let manage_chain2 (state : Misc.my_app_state) e  =
   (* issue inventory requests to advance the tips *)
@@ -213,8 +220,11 @@ let manage_chain2 (state : Misc.my_app_state) e  =
       (* if only unsolicited blocks on request, and no inv pending then make an inv request *)
       if not has_solicited 
         && state.block_inv_pending = None 
-        && state.connections <> [] then
+        && state.connections <> [] 
+        && state.seq_jobs_pending = Myqueue.empty
+        then
 
+(*
         (* create a set of all pointed-to block hashes *)
         (* watch out for non-tail call optimised functions here which might blow stack  *)
         let previous =
@@ -231,35 +241,65 @@ let manage_chain2 (state : Misc.my_app_state) e  =
         (* choose a tip at random *)
         let index = now |> int_of_float |> (fun x -> x mod List.length heads) in
         let head = List.nth heads index in
-
+*)
         (* choose a peer fd at random *)
         let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
         let (conn : U.connection) = List.nth state.connections index in
+
+        (* TODO fixme *)
+        (* let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in *)
 
         (* TODO we need to record if handshake has been performed *)
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
        
-		 jobs = state.jobs @ 
+		    jobs = state.jobs @ 
         [
           log @@ S.concat "" [
             "request addr " ; conn.addr;
             "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
-            "\nheads count " ; string_of_int (L.length heads);
-            "\nrequested head is ";  M.hex_of_string head ;
+            (* "\nheads count " ; string_of_int (L.length heads); *)
+            (* "\nrequested head is ";  M.hex_of_string head ; *)
 
             "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
-          ];
-          (* request inv *)
-           U.send_message conn (initial_getblocks head)
+            ]
+            >>
+            (* 
+                - what if we attempt to use the conn at the same time to store blocks?????
+                - should be ok?.
+                - need to pick a random leaf not just the first ...
+            *)
+             Misc.PG.prepare state.db  ~query:"select pb from leaves" ()
+            >> Misc.PG.execute state.db  ~params:[ ] ()
+            >>= fun rows -> 
+              let head = 
+                match rows with
+                  (Some field ::_ )::_ -> Misc.PG.bytea_of_string field
+                  | _ -> raise (Failure "couldn't get leaf")
+            in 
+
+            log @@ "\nrequested head is " ^ M.hex_of_string head
+            >>
+
+            (* request inv *)
+            U.send_message conn (initial_getblocks head)
           ]
 		}
       else
         state
 
+(*
+    so a lot of the job will 
+    - if we bind the fd to use, then it could get closed by something else...
+*)
 
 
 
+(*
+    this whole function should go. 
+    we use db state to determine what blocks we have or need.
+*)
+(*
 let readBlocks fd =
   let advance fd len =
       Lwt_unix.lseek fd len SEEK_CUR 
@@ -305,7 +345,7 @@ let readBlocks fd =
   in    
     loop fd U.SS.empty  
     >>= fun heads -> return heads
- 
+*) 
 
 
 let create () =
@@ -325,6 +365,7 @@ let create () =
   >> Lwt_unix.openfile "blocks.dat"  [O_RDWR ; O_CREAT ] 0o644 
   (*>> Lwt_unix.openfile "blocks.dat__"  [O_RDONLY (*; O_APPEND*) ; O_CREAT ] 0o644  *)
 
+(*
   >>= fun blocks_fd -> 
       match Lwt_unix.state blocks_fd with
         | Opened -> ( 
@@ -350,7 +391,7 @@ let create () =
         return (Some  ret )
         ) 
       | _ -> return None
-
+*)
 (* there's an issue that jobs are running immediately before placing in choose() ?  *)
 
 

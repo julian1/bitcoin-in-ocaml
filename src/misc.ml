@@ -65,7 +65,7 @@ type my_event =
    | GotMessageError of connection * string
 
 	(* hash, height, raw_header, payload *)
-   | GotBlock of string * int * string * string 
+  (* | GotBlock of string * int * string * string  *)
 
 	| SeqJobFinished  (* SeqJobOK , SeqJobFailed? *)
    | Nop
@@ -97,15 +97,31 @@ type ggg = {
 }
 
 
+
+module Lwt_thread = struct
+    include Lwt
+    include Lwt_chan
+end 
+  
+module PG = PGOCaml_generic.Make (Lwt_thread)
+
+
+
+
+
 type my_app_state =
 {
   jobs :  jobs_type  ;
 
   connections : connection list ;
 
+
+
   (* tree structure  - change name tree *)
   (* change name my_headers *)
+(*
   heads : my_head SS.t ;
+*)
 
   (* set when inv request made to peer *)
   block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
@@ -122,8 +138,10 @@ type my_app_state =
   seq_job_running : bool ;
 
   blocks_fd : Lwt_unix.file_descr ;
+
+  db : int PG.t ; (* TODO what is this type *)
  
-  db : LevelDB.db ; 
+  (* db : LevelDB.db ;  *)
 }
 
 

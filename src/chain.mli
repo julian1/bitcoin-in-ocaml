@@ -4,10 +4,7 @@
 *)
 
 val create : unit -> 
-  (Misc.my_head Misc.SS.t 
-  * Lwt_unix.file_descr 
-	)
-	option Lwt.t
+   Lwt_unix.file_descr Lwt.t
  
 
 val update : Misc.my_app_state -> Misc.my_event -> Misc.my_app_state 

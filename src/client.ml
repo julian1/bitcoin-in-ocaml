@@ -1,3 +1,6 @@
+(*
+  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte
+*)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
@@ -5,27 +8,31 @@ let return = Lwt.return
 module M = Message
 
 
+let log s = Misc.write_stdout s
 
 let run f =
 
   Lwt_main.run (
 
+    (* we'll have to think about db transactions *) 
+    log "connecting and create db"
+    >> Misc.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+    >>= fun db ->
 
-	Db.open_db "mydb"
-	>>= fun db ->
+      Processblock.create_prepared_stmts db 
+    >>
 
-    Chain.create ()
-    >>= fun result ->
-
-    match result with
-      Some (tree, blocks_fd) -> (
+      Chain.create ()
+    >>= fun blocks_fd -> 
+       (
         (* we actually need to read it as well... as write it... *)
         let state =
           ({
 			jobs = P2p.create();
             connections = [];
-			heads = tree;
+			(*heads = tree; *)
 
+            db = db; 
 			blocks_fd = blocks_fd;
 
 			(* should be hidden ?? *)
@@ -35,8 +42,6 @@ let run f =
 
 			seq_jobs_pending = Myqueue.empty;
 			seq_job_running = false;
-
-			db = db;
 
           } : Misc.my_app_state )
         in
@@ -72,21 +77,14 @@ let run f =
   )
 
 
-let f state e =
+let update state e =
   let state = P2p.update state e in
   let state = Chain.update state e in
-  let state = Blocks.update state e in
+  let state = Seq.update state e in
   state
 
-(*
-  { state with
-    chain = chain;
-    connections = connections;
-    jobs =  state.jobs @ jobs1 @ jobs2
-  }
-*)
 
-let () = run f
+let () = run update 
 
 
 
