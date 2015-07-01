@@ -5,6 +5,10 @@
   - IMPORTANT moving the transaction begin and commit outside the process block
     might be useful, to make more composible.
 
+  - should probably avoid exceptions if the point of this code, is allow fast load
+    from file.
+
+
   - choices
     - avoid exceptions
     - if the block has already been in inserted return something to indiate that ...
@@ -106,3 +110,11 @@ let () = Lwt_main.run (
   )
 )
 
+
+(* insert genesis 
+  PG.begin_work db
+  >> PG.execute x.db ~name:"insert_block2" ~params:[
+    Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
+  ] ()
+  >> PG.commit db
+*)
