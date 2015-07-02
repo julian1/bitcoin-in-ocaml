@@ -65,7 +65,7 @@ let coinbase = M.zeros 32
 
 let create_prepared_stmts db =
     (* note we're already doing a lot more than with leveldb
-       
+
         - address hashes are not normalized here. doesn't really matter
         - likewise for der values
         - pubkey - and der.  after der, then we can start writing views.
@@ -96,8 +96,8 @@ let create_prepared_stmts db =
         - get tx by hash
     *)
     (*
-      - ok, do we pull the db creation out??? probably should - to support migrations. 
-      - we're going to have a bunch of views etc...  
+      - ok, do we pull the db creation out??? probably should - to support migrations.
+      - we're going to have a bunch of views etc...
     *)
   PG.(
     begin_work db
@@ -107,14 +107,14 @@ let create_prepared_stmts db =
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
 
       ("insert_block", "
-          insert into block(hash,previous_id,time) 
-          select 
-              $1, 
-              b.id, 
+          insert into block(hash,previous_id,time)
+          select
+              $1,
+              b.id,
               to_timestamp($3) at time zone 'UTC'
           from block b
           where hash = $2 and b.id is not null
-          returning id 
+          returning id
         " );
 
       (* TODO maybe remove this *)
@@ -145,9 +145,34 @@ let create_prepared_stmts db =
       ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
       ("insert_coinbase", "insert into coinbase(tx_id) values ($1)"  );
       ("insert_signature", "insert into signature(input_id,r,s) values ($1,$2,$3)"  );
+
+      ("can_insert_block", "
+          -- hash, previous hash
+          select not exists(
+            select * from block where hash = $1
+          )
+          and exists(
+           select * from block where hash = $2
+          )
+      "  );
     ]
     >> commit db
   )
+
+
+(*
+let can_insert_block db (hash,previous_hash) =
+  PG.( execute db ~name:"can_insert_block" ~params:[
+    Some (string_of_bytea hash);
+    Some (string_of_bytea previous_hash)
+  ] ()
+  )
+  >>= function
+    | (Some "t" ::_ )::_ -> return true
+    | (Some "f" ::_ )::_ -> return false
+    | _ -> raise (Failure "previous tx not found")
+*)
+
 
 let format_tx hash i value script =
   " i " ^ string_of_int i
@@ -314,6 +339,17 @@ let process_tx x (block_id,hash,tx) =
     tx we can.
 *)
 
+(*
+  either locking. it can't seem to begin work ? because nested too deep. or not closing some other tx? 
+
+  begin writing db
+  insert_block 000000001fb56bef722327ef1b56442c6ee5f1989d0a8467b981a03ed6d4938e
+  23.229.45.32:8333   *** got inventory blocks 1 - on request 1
+  request addr 50.199.113.193
+  blocks on request 1
+  fds
+
+*)
 let process_block x payload =
 (*
   let x = { x with block_count = succ x.block_count } in
@@ -326,105 +362,52 @@ let process_block x payload =
   >>
 *)  let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
-    log @@ "before insert_block" ^ M.hex_of_string hash 
+    log @@ "insert_block " ^ M.hex_of_string hash
   >> PG.begin_work x.db
-  >>
-    PG.execute x.db ~name:"insert_block" ~params:[
-      Some (PG.string_of_bytea hash );
-      Some (PG.string_of_bytea block.previous );
-      Some (PG.string_of_int block.nTime );
+
+  >>  log  "after begin work " 
+  >> PG.( execute x.db ~name:"can_insert_block" ~params:[
+      Some (string_of_bytea hash);
+      Some (string_of_bytea block.previous)
     ] ()
-  >>= fun rows ->
-      log "done insert_block"
-    >>
-    begin
-      let block_id = decode_id rows in
-      let txs = M.decode_block_txs payload in
-      let txs = L.map (fun (tx : M.tx) ->
-        block_id,
-        M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
-        tx
-      ) txs
-      in
-      fold_m process_tx x txs
+    )
+    >>= begin
+      function
+      | (Some "t" ::_ )::_ ->
+        begin
+          log "can insert " 
+
+          >> PG.execute x.db ~name:"insert_block" ~params:[
+            Some (PG.string_of_bytea hash );
+            Some (PG.string_of_bytea block.previous );
+            Some (PG.string_of_int block.nTime );
+          ] ()
+          >>= fun rows ->
+            log "done insert_block"
+          >>
+            let block_id = decode_id rows in
+            let txs = M.decode_block_txs payload in
+            let txs = L.map (fun (tx : M.tx) ->
+              block_id,
+              M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
+              tx
+            ) txs
+            in
+            fold_m process_tx x txs
+          end
+
+      | (Some "f" ::_ )::_ ->
+        begin
+          log "cannot insert"
+          >> return x
+        end 
+      | _ -> begin
+          log "unknown"
+          >> return x
+        end 
     end
   >>= fun x ->
     PG.commit x.db
   >> return x
 
-(*
-(* read a block at current pos and return it - private *)
-let read_block fd =
-  Misc.read_bytes fd 24
-  >>= function
-    | None -> return None
-    | Some s ->
-      let _, header = M.decodeHeader s 0 in
-      (* should check command is 'block' *)
-      Misc.read_bytes fd header.length
-      >>= function
-        | None -> raise (Failure "here2")
-        | Some payload -> return (Some payload)
 
-
-(* scan through blocks in the given sequence
-  - perhaps insted of passing in seq and headers should pass just pos list *)
-
-let replay_blocks fd f x =
-  let rec replay_blocks' x =
-      read_block fd
-    >>= function
-      | None -> return x
-      | Some payload -> f x payload
-    >>= fun x ->
-      replay_blocks' x
-  in
-  replay_blocks' x
-
-
-
-let process_file () =
-  log "connecting and create db"
-  >> PG.connect ~host:"127.0.0.1" ~database: "meteo" ~user:"meteo" ~password:"meteo" ()
-  >>= fun db ->
-    create_prepared_stmts db
-  >> Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
-  >>= fun fd ->
-    log "scanning blocks..."
-  >>
-    let x = {
-      block_count = 0;
-      db = db;
-    }
-    in
-  (* insert genesis *)
-  PG.begin_work db
-
-  (* insert into block(hash) select E'\\x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f';
-        put in main04
-    *)
-  >> PG.execute x.db ~name:"insert_block2" ~params:[
-    Some (PG.string_of_bytea (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") );
-  ] ()
-  >> PG.commit db
-  (* insert block data *)
-  (* >> PG.begin_work db  *)
-  >> replay_blocks fd process_block x
-  (* >> PG.commit db *)
-  >> PG.close db
-  >> log "finished "
-
-
-
-let () = Lwt_main.run (
-  Lwt.catch (
-    process_file
-  )
-  (fun exn ->
-    (* must close *)
-    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-    log ("finishing - exception " ^ s )
-    >> return ()
-  )
-)
-*)
