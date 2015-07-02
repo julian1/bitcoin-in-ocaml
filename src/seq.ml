@@ -10,9 +10,14 @@ let log s = U.write_stdout s >> return U.Nop
 
 
 (* transfer a sequence job into the jobs list 
-
     rather than seq_job_running to false when finished we should wrap
     it in a closure here...
+
+
+
+    OK, i think there's an issue that when one job is complete
+    we're not immediately scheduling the next one... 
+  
 *)
 
 let (>>=) = Lwt.(>>=) 
@@ -42,7 +47,7 @@ let update3 e (state : Misc.my_app_state) =
  
 
 let update state e =
-  state |> update2 e |> update3 e
+  state |> update3 e |> update2 e
 
 
 

@@ -65,7 +65,7 @@ let coinbase = M.zeros 32
 
 let create_prepared_stmts db =
     (* note we're already doing a lot more than with leveldb
-       
+
         - address hashes are not normalized here. doesn't really matter
         - likewise for der values
         - pubkey - and der.  after der, then we can start writing views.
@@ -96,8 +96,8 @@ let create_prepared_stmts db =
         - get tx by hash
     *)
     (*
-      - ok, do we pull the db creation out??? probably should - to support migrations. 
-      - we're going to have a bunch of views etc...  
+      - ok, do we pull the db creation out??? probably should - to support migrations.
+      - we're going to have a bunch of views etc...
     *)
   PG.(
     begin_work db
@@ -107,14 +107,14 @@ let create_prepared_stmts db =
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
 
       ("insert_block", "
-          insert into block(hash,previous_id,time) 
-          select 
-              $1, 
-              b.id, 
+          insert into block(hash,previous_id,time)
+          select
+              $1,
+              b.id,
               to_timestamp($3) at time zone 'UTC'
           from block b
           where hash = $2 and b.id is not null
-          returning id 
+          returning id
         " );
 
       (* TODO maybe remove this *)
@@ -150,10 +150,10 @@ let create_prepared_stmts db =
           -- hash, previous hash
           select not exists(
             select * from block where hash = $1
-          ) 
+          )
           and exists(
            select * from block where hash = $2
-          ) 
+          )
       "  );
     ]
     >> commit db
@@ -163,12 +163,12 @@ let create_prepared_stmts db =
 (*
 let can_insert_block db (hash,previous_hash) =
   PG.( execute db ~name:"can_insert_block" ~params:[
-    Some (string_of_bytea hash); 
-    Some (string_of_bytea previous_hash) 
+    Some (string_of_bytea hash);
+    Some (string_of_bytea previous_hash)
   ] ()
-  ) 
-  >>= function  
-    | (Some "t" ::_ )::_ -> return true 
+  )
+  >>= function
+    | (Some "t" ::_ )::_ -> return true
     | (Some "f" ::_ )::_ -> return false
     | _ -> raise (Failure "previous tx not found")
 *)
@@ -351,19 +351,16 @@ let process_block x payload =
   >>
 *)  let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
-    log @@ "insert_block " ^ M.hex_of_string hash 
+    log @@ "insert_block " ^ M.hex_of_string hash
   >> PG.begin_work x.db
-
-
   >> PG.( execute x.db ~name:"can_insert_block" ~params:[
-      Some (string_of_bytea hash); 
-      Some (string_of_bytea block.previous) 
+      Some (string_of_bytea hash);
+      Some (string_of_bytea block.previous)
     ] ()
-    ) 
-    >>= 
-    begin
-      function  
-      | (Some "t" ::_ )::_ -> 
+    )
+    >>= begin
+      function
+      | (Some "t" ::_ )::_ ->
           PG.execute x.db ~name:"insert_block" ~params:[
             Some (PG.string_of_bytea hash );
             Some (PG.string_of_bytea block.previous );
@@ -382,11 +379,10 @@ let process_block x payload =
             in
             fold_m process_tx x txs
 
-      | (Some "f" ::_ )::_ -> 
-        log "cannot insert" 
-        >> return x 
+      | (Some "f" ::_ )::_ ->
+        log "cannot insert"
+        >> return x
     end
-
   >>= fun x ->
     PG.commit x.db
   >> return x
