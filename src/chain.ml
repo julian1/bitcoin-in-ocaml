@@ -246,31 +246,21 @@ let manage_chain2 (state : Misc.my_app_state) e  =
         (* choose a peer fd at random *)
         let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
         let (conn : U.connection) = List.nth state.connections index in
-
         (* TODO fixme *)
         (* let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in *)
-
         (* TODO we need to record if handshake has been performed *)
-        { state with
-          block_inv_pending = Some (conn.fd, now ) ;
-       
-		    jobs = state.jobs @ 
-        [
+
+
+        let y () = 
           log @@ S.concat "" [
             "request addr " ; conn.addr;
             "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
             (* "\nheads count " ; string_of_int (L.length heads); *)
             (* "\nrequested head is ";  M.hex_of_string head ; *)
-
             "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
             ]
-            >>
-            (* 
-                - what if we attempt to use the conn at the same time to store blocks?????
-                - should be ok?.
-                - need to pick a random leaf not just the first ...
-            *)
-             Misc.PG.prepare state.db  ~query:"select pb from leaves" ()
+            >> Misc.PG.begin_work state.db
+            >> Misc.PG.prepare state.db  ~query:"select pb from leaves" ()
             >> Misc.PG.execute state.db  ~params:[ ] ()
             >>= fun rows -> 
               let head = 
@@ -278,12 +268,20 @@ let manage_chain2 (state : Misc.my_app_state) e  =
                   (Some field ::_ )::_ -> Misc.PG.bytea_of_string field
                   | _ -> raise (Failure "couldn't get leaf")
             in 
-
-            log @@ "\nrequested head is " ^ M.hex_of_string head
+            Misc.PG.commit state.db
+            >> log @@ "\nrequested head is " ^ M.hex_of_string head
             >>
 
             (* request inv *)
             U.send_message conn (initial_getblocks head)
+          in
+
+        { state with
+          block_inv_pending = Some (conn.fd, now ) ;
+       
+		    jobs = state.jobs @ 
+        [
+            y ();
           ]
 		}
       else
