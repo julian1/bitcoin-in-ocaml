@@ -339,6 +339,17 @@ let process_tx x (block_id,hash,tx) =
     tx we can.
 *)
 
+(*
+  either locking. it can't seem to begin work ? because nested too deep. or not closing some other tx? 
+
+  begin writing db
+  insert_block 000000001fb56bef722327ef1b56442c6ee5f1989d0a8467b981a03ed6d4938e
+  23.229.45.32:8333   *** got inventory blocks 1 - on request 1
+  request addr 50.199.113.193
+  blocks on request 1
+  fds
+
+*)
 let process_block x payload =
 (*
   let x = { x with block_count = succ x.block_count } in
