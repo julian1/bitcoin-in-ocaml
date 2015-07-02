@@ -145,9 +145,34 @@ let create_prepared_stmts db =
       ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
       ("insert_coinbase", "insert into coinbase(tx_id) values ($1)"  );
       ("insert_signature", "insert into signature(input_id,r,s) values ($1,$2,$3)"  );
+
+      ("can_insert_block", "
+          -- hash, previous hash
+          select not exists(
+            select * from block where hash = $1
+          ) 
+          and exists(
+           select * from block where hash = $2
+          ) 
+      "  );
     ]
     >> commit db
   )
+
+
+(*
+let can_insert_block db (hash,previous_hash) =
+  PG.( execute db ~name:"can_insert_block" ~params:[
+    Some (string_of_bytea hash); 
+    Some (string_of_bytea previous_hash) 
+  ] ()
+  ) 
+  >>= function  
+    | (Some "t" ::_ )::_ -> return true 
+    | (Some "f" ::_ )::_ -> return false
+    | _ -> raise (Failure "previous tx not found")
+*)
+
 
 let format_tx hash i value script =
   " i " ^ string_of_int i
@@ -326,28 +351,42 @@ let process_block x payload =
   >>
 *)  let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
-    log @@ "before insert_block" ^ M.hex_of_string hash 
+    log @@ "insert_block " ^ M.hex_of_string hash 
   >> PG.begin_work x.db
-  >>
-    PG.execute x.db ~name:"insert_block" ~params:[
-      Some (PG.string_of_bytea hash );
-      Some (PG.string_of_bytea block.previous );
-      Some (PG.string_of_int block.nTime );
+
+
+  >> PG.( execute x.db ~name:"can_insert_block" ~params:[
+      Some (string_of_bytea hash); 
+      Some (string_of_bytea block.previous) 
     ] ()
-  >>= fun rows ->
-      log "done insert_block"
-    >>
+    ) 
+    >>= 
     begin
-      let block_id = decode_id rows in
-      let txs = M.decode_block_txs payload in
-      let txs = L.map (fun (tx : M.tx) ->
-        block_id,
-        M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
-        tx
-      ) txs
-      in
-      fold_m process_tx x txs
+      function  
+      | (Some "t" ::_ )::_ -> 
+          PG.execute x.db ~name:"insert_block" ~params:[
+            Some (PG.string_of_bytea hash );
+            Some (PG.string_of_bytea block.previous );
+            Some (PG.string_of_int block.nTime );
+          ] ()
+          >>= fun rows ->
+            log "done insert_block"
+          >>
+            let block_id = decode_id rows in
+            let txs = M.decode_block_txs payload in
+            let txs = L.map (fun (tx : M.tx) ->
+              block_id,
+              M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
+              tx
+            ) txs
+            in
+            fold_m process_tx x txs
+
+      | (Some "f" ::_ )::_ -> 
+        log "cannot insert" 
+        >> return x 
     end
+
   >>= fun x ->
     PG.commit x.db
   >> return x

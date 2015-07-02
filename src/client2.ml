@@ -1,14 +1,14 @@
 (*
-  - think we should test whether have block already and skip before inserting 
-    rather than rely on exceptions.
+  on block inserttion - we should check
+    - the block doesn't already exist
+    - it's previous links into the tree 
 
-  - IMPORTANT moving the transaction begin and commit outside the process block
+
+  - IMPORTANT moving the transaction begin and commit outside the process_block
     might be useful, to make more composible.
 
   - should probably avoid exceptions if the point of this code, is allow fast load
     from file.
-
-
   - choices
     - avoid exceptions
     - if the block has already been in inserted return something to indiate that ...
