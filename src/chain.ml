@@ -271,19 +271,20 @@ let manage_chain2 (state : Misc.my_app_state) e  =
             Misc.PG.commit state.db
             >> log @@ "\nrequested head is " ^ M.hex_of_string head
             >>
-
-            (* request inv *)
+            (* request inv 
+                TODO What if the conn has been closed in the meantime???k
+                we should post a message with the tip... to use a known good connection
+            *)
             U.send_message conn (initial_getblocks head)
           in
 
         { state with
           block_inv_pending = Some (conn.fd, now ) ;
        
-		    jobs = state.jobs @ 
-        [
-            y ();
-          ]
-		}
+          seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ;
+ 
+		      (* jobs = state.jobs @ [ y (); ] *)
+		  }
       else
         state
 
