@@ -26,13 +26,24 @@ let return = Lwt.return
 
 let log s = U.write_stdout s >> return U.Nop
 
+let update3 e (state : Misc.my_app_state) =
+  match e with 
+    | Misc.SeqJobFinished -> { state with seq_job_running = false;  
+      (* jobs = state.jobs @  [ log @@ "seq job finished"   ] *) }
+    | _ -> state
+  
+ 
+
 let update2 _ (state : Misc.my_app_state) =
-  if not state.seq_job_running && state.seq_jobs_pending <> Myqueue.empty then
-    let h,t = Myqueue.take state.seq_jobs_pending in
+  if not state.seq_job_running 
+    && state.seq_jobs_pending <> Myqueue.empty 
+  then
+    let job,t = Myqueue.take state.seq_jobs_pending in
     { state with
       seq_job_running = true;
       seq_jobs_pending = t;
-      jobs = (h () 
+      jobs = (
+        job () 
         (* >> U.write_stdout "here"  *)
         >> return Misc.SeqJobFinished)
         :: state.jobs;
@@ -40,11 +51,6 @@ let update2 _ (state : Misc.my_app_state) =
   else
     state
 
-let update3 e (state : Misc.my_app_state) =
-  match e with 
-    | Misc.SeqJobFinished -> { state with seq_job_running = false;  (* jobs = state.jobs @  [ log @@ "seq job finished"   ] *) }
-    | _ -> state
- 
 
 let update state e =
   state |> update3 e |> update2 e

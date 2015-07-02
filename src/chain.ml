@@ -157,7 +157,8 @@ let manage_chain1 (state : Misc.my_app_state) e    =
                 db = state.db;
               })
             in
-              Processblock.process_block x payload 
+              log "\nbegin writing db"
+              >> Processblock.process_block x payload 
               >> log "done writing db"
           in
           { state with

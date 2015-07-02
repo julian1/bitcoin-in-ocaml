@@ -353,6 +353,8 @@ let process_block x payload =
     let hash = M.decode_block_hash payload in
     log @@ "insert_block " ^ M.hex_of_string hash
   >> PG.begin_work x.db
+
+  >>  log  "after begin work " 
   >> PG.( execute x.db ~name:"can_insert_block" ~params:[
       Some (string_of_bytea hash);
       Some (string_of_bytea block.previous)
@@ -361,7 +363,10 @@ let process_block x payload =
     >>= begin
       function
       | (Some "t" ::_ )::_ ->
-          PG.execute x.db ~name:"insert_block" ~params:[
+        begin
+          log "can insert " 
+
+          >> PG.execute x.db ~name:"insert_block" ~params:[
             Some (PG.string_of_bytea hash );
             Some (PG.string_of_bytea block.previous );
             Some (PG.string_of_int block.nTime );
@@ -378,10 +383,17 @@ let process_block x payload =
             ) txs
             in
             fold_m process_tx x txs
+          end
 
       | (Some "f" ::_ )::_ ->
-        log "cannot insert"
-        >> return x
+        begin
+          log "cannot insert"
+          >> return x
+        end 
+      | _ -> begin
+          log "unknown"
+          >> return x
+        end 
     end
   >>= fun x ->
     PG.commit x.db
