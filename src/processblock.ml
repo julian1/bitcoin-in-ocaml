@@ -380,11 +380,18 @@ u
             let txs = M.decode_block_txs payload in
             let txs = L.map (fun (tx : M.tx) ->
               block_id,
+              (*M.strsub payload tx.pos tx.length, *)  (* TODO should pass raw payload and do hashing in process_tx *)
               M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
               tx
             ) txs
             in
-            fold_m process_tx x txs
+            (*let process_tx x (block_id,payload,hash,tx) =
+                log @@ "here -> " ^ M.hex_of_string hash ^ " " ^ M.hex_of_string payload
+                >> 
+                return x 
+            in *)
+            fold_m process_tx  x txs
+
           end
 
       | (Some "f" ::_ )::_ ->
