@@ -17,7 +17,7 @@ create table block(id serial primary key, hash bytea unique not null, previous_i
 create index on block(hash);
 create index on block(previous_id); --  not sure if needed 
 
-create table tx(id serial primary key, block_id integer references block(id), hash bytea);
+create table tx(id serial primary key, block_id integer references block(id), hash bytea, pos integer, len integer );
 create index on tx(block_id);
 create index on tx(hash);
 

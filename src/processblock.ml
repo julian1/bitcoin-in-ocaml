@@ -120,7 +120,8 @@ let create_prepared_stmts db =
       (* TODO maybe remove this *)
       ("insert_genesis_block", "insert into block(hash) select $1" );
 
-      ("insert_tx", "insert into tx(block_id,hash) values ($1, $2) returning id"  );
+      ("insert_tx", "insert into tx(block_id,hash, pos, len) values ($1, $2, $3, $4) returning id"  );
+
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
       ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
       ("insert_input", "insert into input(tx_id,output_id) values ($1,$2) returning id" );
@@ -161,20 +162,6 @@ let create_prepared_stmts db =
   )
 
 
-(*
-let can_insert_block db (hash,previous_hash) =
-  PG.( execute db ~name:"can_insert_block" ~params:[
-    Some (string_of_bytea hash);
-    Some (string_of_bytea previous_hash)
-  ] ()
-  )
-  >>= function
-    | (Some "t" ::_ )::_ -> return true
-    | (Some "f" ::_ )::_ -> return false
-    | _ -> raise (Failure "previous tx not found")
-*)
-
-
 let format_tx hash i value script =
   " i " ^ string_of_int i
   ^ " value " ^ string_of_float ((Int64.to_float value ) /. 100000000.)
@@ -211,7 +198,7 @@ let process_output x (index,output,tx_hash,tx_id) =
       | OP_RETURN :: BYTES _ :: [] -> None
       (* seems common for embedding raw data, prior to op_return *)
       | BYTES _ :: [] -> None
-      (* N K1 K2 K3 M CHECKMULTISIGVERIFY, addresses? TODO make generic *)
+      (* N K1 K2 K3 M CHECKMULTISIGVERIFY, addresses? TODO should record all these make generic  *)
       | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
       | _ -> Strange
     in
@@ -234,34 +221,11 @@ let process_output x (index,output,tx_hash,tx_id) =
       | P2PKH hash160 -> insert hash160 "p2pkh" >> return x
       | P2SH hash160 -> insert hash160 "p2sh" >> return x
       | Strange ->
+        (* why don't we record strange... because it's not an address should be in another table *)
         log @@ "strange " ^ format_tx tx_hash index output.value script
           >> return x
       | None ->
         return x
-
-(* Important - in fact we don't have to return the value, but could just
-    select the correct output id and insert at the same time.
-    -
-  - need an index on tx.hash at least.
-  - but should do timing.
-  - and avoid preparing the statement each time. should do it in createdb
-  2m 5 - to 50k with no index
-  1m 19 with index on tx(hash)
-  1m 40 with index on tx(hash) and output(index)
-
-now,
-    43,50 secs to 50k.
-    30 sec best with separated prepare. but it varys.
-        seems to use bitmap scan initially - which is slower.
-
-important - we're also doing a lot more
-
-  we should create another table for addresses (for more than one)
-    - since not every output is associated with an address and there
-    maybe more than one.
-    - likewise for pubkeys - to avoid nulls
-  and der sigs...
-*)
 
 
 
@@ -322,9 +286,12 @@ let process_input x (index, input, hash, tx_id) =
 
 
 let process_tx x (block_id,hash,tx) =
+  let (tx : M.tx) = tx in
   PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_int block_id);
       Some (PG.string_of_bytea hash);
+      Some (PG.string_of_int tx.pos);
+      Some (PG.string_of_int tx.length);
     ] ()
   >>= fun rows ->
     let tx_id = decode_id rows in
@@ -380,7 +347,6 @@ let process_block x payload =
       | (Some "t" ::_ )::_ ->
         begin
           log "can insert " 
-
           >> PG.execute x.db ~name:"insert_block" ~params:[
             Some (PG.string_of_bytea hash );
             Some (PG.string_of_bytea block.previous );
