@@ -203,7 +203,7 @@ let process_output x (index,output,tx_hash,tx_id) =
     let output_id = decode_id rows in
     let script = M.decode_script output.script in
     let decoded_script = match script with
-      | BYTES s :: OP_CHECKSIG :: [] -> P2PK (s |> M.sha256 |> M.ripemd160)  (* could do the hashing later *)
+      | BYTES s :: OP_CHECKSIG :: [] -> P2PK s  (* could do the hashing later *)
       | OP_DUP :: OP_HASH160 :: BYTES s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> P2PKH s
       | OP_HASH160 :: BYTES s :: OP_EQUAL :: [] -> P2SH s
       (* null data *)
@@ -214,14 +214,12 @@ let process_output x (index,output,tx_hash,tx_id) =
       | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
       | _ -> Strange
     in
-
     let insert hash160 =
-      PG.( execute x.db ~name:"insert_address" ~params:[
+      PG.( 
+      execute x.db ~name:"insert_address" ~params:[
         Some (string_of_bytea hash160 ) ] ()
-      
       >>= fun rows ->
       let address_id = decode_id rows in
-
       execute x.db ~name:"insert_output_address" ~params:[
         Some (string_of_int output_id);
         Some (string_of_int address_id);
@@ -229,12 +227,11 @@ let process_output x (index,output,tx_hash,tx_id) =
       )
     in
     match decoded_script with
-      | P2PK hash160 -> insert hash160 >> return x
+      | P2PK pk -> insert (pk |> M.sha256 |> M.ripemd160) >> return x
       | P2PKH hash160 -> insert hash160 >> return x
       | P2SH hash160 -> insert hash160 >> return x
-
       | Strange ->
-          log @@ "strange " ^ format_tx tx_hash index output.value script
+        log @@ "strange " ^ format_tx tx_hash index output.value script
           >> return x
       | None ->
         return x
