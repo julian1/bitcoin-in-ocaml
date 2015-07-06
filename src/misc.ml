@@ -67,7 +67,7 @@ type my_event =
 	(* hash, height, raw_header, payload *)
   (* | GotBlock of string * int * string * string  *)
 
-	| SeqJobFinished  (* SeqJobOK , SeqJobFailed? *)
+	| SeqJobFinished  (* of state *) 
    | Nop
 
 

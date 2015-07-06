@@ -48,6 +48,35 @@ let initial_getdata hashes =
 
 let log s = U.write_stdout s >> return U.Nop
 
+(*
+  - ok, the inventory stuff wants to be sequenced as well... so it uses the db connection only once.
+  - we have to lookup blocks in db, to ensure we don't already have them... before requesting
+
+  - the problem is the state updating...
+  - we don't have access to it. 
+  - VERY IMPORTANT could we have a set of variables that get altered only in the context of synch
+  - process???   then we could bind the state in and return the new state on the output? 
+
+  - in fact why not sequence all events on the same queue??? because it would make everything
+    io orientated...
+
+  - we could immediately create the a GotInveinve
+
+   - so we can do whatever the hell io operations we like. 
+    rather than have io operations in the state.jobs   
+
+  - before the sequence job is run, the state should be injected into it.
+  ------------
+  this also means that we don't actually need to put the blocks on request as complete
+  things in the sequence job queue, 
+
+
+  a job that's complete, get's it's result put in the queue, except if it's a nop or finish seq job. 
+
+  so there's an issue - that a queue will lag, and resources like fd may have closed ...
+                        won't get reflected.
+                      - we could insert at the front of the queue.
+*)
 
 let manage_chain1 (state : Misc.my_app_state) e    =
   match e with
@@ -183,7 +212,7 @@ let manage_chain1 (state : Misc.my_app_state) e    =
 *)
 
 let manage_chain2 (state : Misc.my_app_state) e  =
-  (* issue inventory requests to advance the tips *)
+  (* issue inventory requests for blocks based on current chainstate leaves *)
   match e with
     | U.Nop -> state
     | _ ->
@@ -251,7 +280,7 @@ let manage_chain2 (state : Misc.my_app_state) e  =
         (* TODO we need to record if handshake has been performed *)
 
 
-        let y () = 
+        let job () = 
           log @@ S.concat "" [
             "request addr " ; conn.addr;
             "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
@@ -260,7 +289,8 @@ let manage_chain2 (state : Misc.my_app_state) e  =
             "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
             ]
             >> Misc.PG.begin_work state.db
-            >> Misc.PG.prepare state.db  ~query:"select pb from leaves" ()
+
+            >> Misc.PG.prepare state.db  ~query:"select pb from leaves order by random() limit 1" ()
             >> Misc.PG.execute state.db  ~params:[ ] ()
             >>= fun rows -> 
               let head = 
@@ -276,15 +306,12 @@ let manage_chain2 (state : Misc.my_app_state) e  =
                 we should post a message with the tip... to use a known good connection
             *)
             U.send_message conn (initial_getblocks head)
-          in
-
-        { state with
+          in 
+          { state with
           block_inv_pending = Some (conn.fd, now ) ;
-       
-          seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ;
- 
-		      (* jobs = state.jobs @ [ y (); ] *)
-		  }
+          seq_jobs_pending = Myqueue.add state.seq_jobs_pending job ;
+		  (* jobs = state.jobs @ [ y (); ] *)
+		      }
       else
         state
 
