@@ -28,7 +28,7 @@ create table input(id serial primary key, tx_id integer references tx(id), outpu
 create index on input(tx_id);
 create index on input(output_id);
 
-create table address(id serial primary key, hash bytea unique);
+create table address(id serial primary key, hash bytea unique, script text);
   --  "create index on address(output_id)" 
 create index on address(hash);
 

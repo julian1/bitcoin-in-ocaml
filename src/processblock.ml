@@ -127,19 +127,20 @@ let create_prepared_stmts db =
 
       ("insert_address", "
           with s as (
-              select id, hash
+              select id, hash, script
               from address
               where hash = $1
+              and script = $2
           ), i as (
-              insert into address (hash)
-              select $1
+              insert into address (hash, script)
+              select $1, $2
               where not exists (select 1 from s)
-              returning id, hash
+              returning id, hash, script
           )
-          select id, hash
+          select id, hash, script
           from i
           union all
-          select id, hash
+          select id, hash, script
           from s
         "  );
       ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
@@ -214,22 +215,24 @@ let process_output x (index,output,tx_hash,tx_id) =
       | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
       | _ -> Strange
     in
-    let insert hash160 =
+    let insert hash160 script =
       PG.( 
-      execute x.db ~name:"insert_address" ~params:[
-        Some (string_of_bytea hash160 ) ] ()
+        execute x.db ~name:"insert_address" ~params:[
+          Some (string_of_bytea hash160);
+          Some script
+        ] ()
       >>= fun rows ->
-      let address_id = decode_id rows in
-      execute x.db ~name:"insert_output_address" ~params:[
-        Some (string_of_int output_id);
-        Some (string_of_int address_id);
-      ] ()
+        let address_id = decode_id rows in
+        execute x.db ~name:"insert_output_address" ~params:[
+          Some (string_of_int output_id);
+          Some (string_of_int address_id);
+        ] ()
       )
     in
     match decoded_script with
-      | P2PK pk -> insert (pk |> M.sha256 |> M.ripemd160) >> return x
-      | P2PKH hash160 -> insert hash160 >> return x
-      | P2SH hash160 -> insert hash160 >> return x
+      | P2PK pk -> insert (pk |> M.sha256 |> M.ripemd160) "p2pk" >> return x
+      | P2PKH hash160 -> insert hash160 "p2pkh" >> return x
+      | P2SH hash160 -> insert hash160 "p2sh" >> return x
       | Strange ->
         log @@ "strange " ^ format_tx tx_hash index output.value script
           >> return x
