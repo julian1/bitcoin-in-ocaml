@@ -15,7 +15,7 @@ begin;
 --  need pos of block in .dat file. 
 
 
-create table blockdata(id serial primary key, data bytea unique not null );
+create table blockdata(id serial primary key, data bytea not null );
 
 create table block(id serial primary key, hash bytea unique not null, previous_id integer, time timestamptz, blockdata_id integer references blockdata(id) );
 create index on block(hash);
@@ -33,7 +33,7 @@ create table input(id serial primary key, tx_id integer references tx(id), outpu
 create index on input(tx_id);
 create index on input(output_id);
 
-create table address(id serial primary key, hash bytea unique, script text);
+create table address(id serial primary key, hash bytea , script text); -- the tuple(bytea,script) is unique
   --  "create index on address(output_id)" 
 create index on address(hash);
 
