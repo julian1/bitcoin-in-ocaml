@@ -16,7 +16,7 @@ let run f =
 
     (* we'll have to think about db transactions *) 
     log "connecting and create db"
-    >> Misc.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+    >> Misc.PG.connect ~host:"127.0.0.1" ~database: "test" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
 
       Processblock.create_prepared_stmts db 

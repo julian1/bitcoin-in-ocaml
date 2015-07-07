@@ -76,6 +76,50 @@ let log s = U.write_stdout s >> return U.Nop
   so there's an issue - that a queue will lag, and resources like fd may have closed ...
                         won't get reflected.
                       - we could insert at the front of the queue.
+
+  - need to filter blocks. most stuff can done in memory. would it be easier to structure...
+  - there's only one db conn, so 
+
+  - Continuation f 
+  - so an Continuation f, can just have it's action f called with state... 
+    - but this doesn't solve block lookup, which has to go through the sequencer... 
+
+  ------------------------------------- 
+  - two ways to solve
+    - make everything io based, around a queue. pushing computations back and front.
+        adv - we want to do io everywhere - eg. lookup old connections etc.
+            - might be simpler. 
+    - make everything pure, with sequence points for state, and queues.  
+   
+  - it's getting complicated... with the jobs in the state and the queue.   
+
+  - with the serializer queue, we can actually hold state object through the action...
+  ----
+
+    does it need to be so complicated. 
+      - compute as is.
+      - schedule an io job in jobs
+      - schedule to run in seq jobs if uses the db resource.
+
+    Ughhh. this is messy. even though we need a sequence for db, we have to update the record blocks on request which
+      means changing the state. which we can't do inside the sequence...
+
+    FUCK... there's memory state and db state that need to be changed. 
+  -----
+    Very important
+    If all i/o gets pushed through the serializer (back or front), then queued items can own state through 
+      the computation and return new state or db.  we don't have to add it through various points
+
+    - a ordinate job that completes cannot alter state, but can only queue. because the new state
+      is a result of the serializer job. 
+       
+    - an advantage - we don't have to have partial jobs ...  that call a continuation Action f
+
+    - we can still do partial stuff, if wanted by pushing another message on back of queue. 
+
+    BUT - must keep queue out of state. because parallel jobs that run. will compete.
+      - think this is good anyway.
+    
 *)
 
 let manage_chain1 (state : Misc.my_app_state) e    =
