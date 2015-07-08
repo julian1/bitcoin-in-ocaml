@@ -6,9 +6,10 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 module M = Message
+module U = Misc
 
 
-let log s = Misc.write_stdout s
+let log s = U.write_stdout s
 
 let run () =
 
@@ -16,7 +17,7 @@ let run () =
 
     (* we'll have to think about db transactions *) 
     log "connecting and create db"
-    >> Misc.PG.connect ~host:"127.0.0.1" ~database: "test" ~user:"meteo" ~password:"meteo" ()
+    >> U.PG.connect ~host:"127.0.0.1" ~database: "test" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
 
       Processblock.create_prepared_stmts db 
@@ -37,16 +38,16 @@ let run () =
 
 			(* should be hidden ?? *)
 			block_inv_pending  = None;
-			blocks_on_request = Misc.SS.empty;
+			blocks_on_request = U.SS.empty;
 			last_block_received_time = [];
 
 			seq_jobs_pending = Myqueue.empty;
 			seq_job_running = false;
 
-          } : Misc.my_app_state )
+          } : U.my_app_state )
         in
 
-        let rec loop (state : Misc.my_app_state ) =
+        let rec loop (state : U.my_app_state ) =
           Lwt.catch (
           fun () -> Lwt.nchoose_split state.jobs
 
@@ -75,8 +76,11 @@ let run () =
         *)
               let state = { state with jobs = incomplete } in
 
-              let f state e = state in
-
+              let f state e = 
+                match e with 
+                  | U.Nop -> state 
+                  | _ -> state 
+              in
               let state = List.fold_left f state  complete in
               if List.length state.jobs > 0 then
                 loop state
