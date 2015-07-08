@@ -78,7 +78,7 @@ let run () =
               *)
               let state = { state with jobs = incomplete } in
 
-              (* actually we don't even need to push the state through here *) 
+              (* add events to the queue *) 
               let f queue e = 
                 match e with 
                   | U.Nop -> queue
@@ -87,15 +87,20 @@ let run () =
               in
               let queue = List.fold_left f queue complete in
 
+              log @@ " here !! jobs " 
+                ^ (string_of_int (List.length state.jobs)) 
+                ^ " queue " 
+                ^ (string_of_int (Myqueue.length queue )) 
+ 
+
+              >>   
               let queue = if queue <> Myqueue.empty then 
                  queue 
               else
                  queue 
               in
 
-              log " here !!"
-             
-              >>   
+            
               if List.length state.jobs > 0 then
                 loop state queue
               else
