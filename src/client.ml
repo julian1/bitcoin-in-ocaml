@@ -57,6 +57,22 @@ let run f =
                 ^ ", connections " ^ (string_of_int @@ List.length state.connections )
             >>
           *)
+        (*
+          - so rather than fold_left we should just push the event onto the queue... 
+          - we want a queue, and we'll just push events onto the queue... 
+          - and the sequencer will pull jobs from the queue 
+          - hang on. a kkk
+            GotMessage is not a job...
+            we should process jobs. (that might be actions)
+
+          - actually i think it would be nice if it was almost the same interface
+
+          - the sequencer should take the state and the event and run an io action.
+          - issue about how to start 
+
+          - a seq job that cmpletes should return NOP .  since it has state it can 
+            set that the job is complete. 
+        *)
               let state = List.fold_left f { state with jobs = incomplete } complete in
               if List.length state.jobs > 0 then
                 loop state
