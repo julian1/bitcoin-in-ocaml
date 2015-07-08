@@ -47,11 +47,9 @@ let run () =
           } : U.my_app_state )
         in
 
-        let queue = Myqueue.empty 
-        in
- 
 
-        let rec loop (state : U.my_app_state ) =
+
+        let rec loop (state : U.my_app_state ) queue  =
           Lwt.catch (
           fun () -> Lwt.nchoose_split state.jobs
 
@@ -60,28 +58,27 @@ let run () =
                 "complete " ^ (string_of_int @@ List.length complete )
                 ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
                 ^ ", connections " ^ (string_of_int @@ List.length state.connections )
-            >>
-          *)
-        (*
-          - so rather than fold_left we should just push the event onto the queue... 
-          - we want a queue, and we'll just push events onto the queue... 
-          - and the sequencer will pull jobs from the queue 
-          - hang on. a kkk
-            GotMessage is not a job...
-            we should process jobs. (that might be actions)
+              >>
+              *)
+              (*
+                - so rather than fold_left we should just push the event onto the queue... 
+                - we want a queue, and we'll just push events onto the queue... 
+                - and the sequencer will pull jobs from the queue 
+                - hang on. a kkk
+                  GotMessage is not a job...
+                  we should process jobs. (that might be actions)
 
-          - actually i think it would be nice if it was almost the same interface
+                - actually i think it would be nice if it was almost the same interface
 
-          - the sequencer should take the state and the event and run an io action.
-          - issue about how to start 
+                - the sequencer should take the state and the event and run an io action.
+                - issue about how to start 
 
-          - a seq job that cmpletes should return NOP .  since it has state it can 
-            set that the job is complete. 
-        *)
+                - a seq job that cmpletes should return NOP .  since it has state it can 
+                  set that the job is complete. 
+              *)
               let state = { state with jobs = incomplete } in
 
               (* actually we don't even need to push the state through here *) 
-
               let f queue e = 
                 match e with 
                   | U.Nop -> queue
@@ -90,21 +87,31 @@ let run () =
               in
               let queue = List.fold_left f queue complete in
 
-              if List.length state.jobs > 0 then
-                loop state
+              let queue = if queue <> Myqueue.empty then 
+                 queue 
               else
-                Lwt_io.write_line Lwt_io.stdout "finishing - no more jobs to run!!"
+                 queue 
+              in
+
+              log " here !!"
+             
+              >>   
+              if List.length state.jobs > 0 then
+                loop state queue
+              else
+                log "finishing - no more jobs to run!!"
                 >> return ()
           )
             (fun exn ->
               (* must close *)
               let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-              Lwt_io.write_line Lwt_io.stdout ("finishing - exception " ^ s )
+              log ("finishing - exception " ^ s )
               >> (* just exist cleanly *)
                 return ()
             )
-        in
-          loop state
+          in
+          let queue = Myqueue.empty in 
+          loop state queue
         )
   )
 

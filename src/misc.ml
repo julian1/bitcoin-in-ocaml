@@ -59,16 +59,16 @@ let format_addr conn =
 
 
 type my_event =
-   | GotConnection of connection
-   | GotConnectionError of string
-   | GotMessage of connection * Message.header * string * string
-   | GotMessageError of connection * string
+  | GotConnection of connection
+  | GotConnectionError of string
+  | GotMessage of connection * Message.header * string * string
+  | GotMessageError of connection * string
 
 	(* hash, height, raw_header, payload *)
   (* | GotBlock of string * int * string * string  *)
 
-	| SeqJobFinished  (* of state *) 
-   | Nop
+  | SeqJobFinished  (* of state *) 
+  | Nop
 
 
 type jobs_type =  my_event Lwt.t list 
