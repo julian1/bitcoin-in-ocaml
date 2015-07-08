@@ -76,6 +76,13 @@ let run () =
                 - a seq job that cmpletes should return NOP .  since it has state it can 
                   set that the job is complete. 
               *)
+              (*
+                if we only process one element in the queue at a time, 
+                - then to keep the queue ticking over we should bind completion the io jobs 
+                even if they don't run an io action...
+                - or 
+              *)
+
               let state = { state with jobs = incomplete } in
 
               (* add events to the queue *) 
@@ -91,13 +98,17 @@ let run () =
                 ^ (string_of_int (List.length state.jobs)) 
                 ^ " queue " 
                 ^ (string_of_int (Myqueue.length queue )) 
- 
 
               >>   
-              let queue = if queue <> Myqueue.empty then 
-                 queue 
+              let state,queue = 
+              if queue <> Myqueue.empty then 
+                let job,queue = Myqueue.take queue in
+ 
+ 
+                (* take one job off the queue, only if one isn't already running ? *)
+                state,queue 
               else
-                 queue 
+                state,queue 
               in
 
             
