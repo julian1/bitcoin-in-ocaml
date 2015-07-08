@@ -10,7 +10,7 @@ module M = Message
 
 let log s = Misc.write_stdout s
 
-let run f =
+let run () =
 
   Lwt_main.run (
 
@@ -73,7 +73,11 @@ let run f =
           - a seq job that cmpletes should return NOP .  since it has state it can 
             set that the job is complete. 
         *)
-              let state = List.fold_left f { state with jobs = incomplete } complete in
+              let state = { state with jobs = incomplete } in
+
+              let f state e = state in
+
+              let state = List.fold_left f state  complete in
               if List.length state.jobs > 0 then
                 loop state
               else
@@ -92,15 +96,15 @@ let run f =
         )
   )
 
-
+(*
 let update state e =
   let state = P2p.update state e in
   let state = Chain.update state e in
   let state = Seq.update state e in
   state
+*)
 
-
-let () = run update 
+let () = run () 
 
 
 
