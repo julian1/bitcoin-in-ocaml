@@ -47,6 +47,10 @@ let run () =
           } : U.my_app_state )
         in
 
+        let queue = Myqueue.empty 
+        in
+ 
+
         let rec loop (state : U.my_app_state ) =
           Lwt.catch (
           fun () -> Lwt.nchoose_split state.jobs
@@ -76,12 +80,16 @@ let run () =
         *)
               let state = { state with jobs = incomplete } in
 
-              let f state e = 
+              (* actually we don't even need to push the state through here *) 
+
+              let f queue e = 
                 match e with 
-                  | U.Nop -> state 
-                  | _ -> state 
+                  | U.Nop -> queue
+                  | SeqJobFinished -> queue
+                  | _ -> Myqueue.add queue e  
               in
-              let state = List.fold_left f state  complete in
+              let queue = List.fold_left f queue complete in
+
               if List.length state.jobs > 0 then
                 loop state
               else
