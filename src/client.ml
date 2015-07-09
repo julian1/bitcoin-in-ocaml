@@ -23,11 +23,11 @@ type whoot_t =
 let log s = U.write_stdout s
 
 
-
+(*
 let myupdate state e = 
 log "running myupdate"
 >> return (Misc.SeqJobFinished state)
-
+*)
 
 
 (*
@@ -99,14 +99,13 @@ let run () =
                   {  whoot with  
                     queue = queue;
                     jobs = (
-                      (* (* state is injected into the seq job, and nulled *)
+                      (* state is injected into the seq job, and nulled *)
                       let Some state = whoot.state in
-                      let state = P2p.update state e
+                      P2p.update state e
                       (* rather than trying to process this here why not change the return function *) 
-                      in return (U.SeqJobFinished state) 
-                      *)
-                       let Some state = whoot.state in
-                      myupdate state e 
+                      
+                      (* let Some state = whoot.state in
+                      myupdate state e  *)
                     ) :: whoot.jobs;
                     state = None;
                   }
