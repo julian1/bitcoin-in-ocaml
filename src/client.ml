@@ -26,13 +26,13 @@ let log s = U.write_stdout s
 
 let myupdate state e = 
 log "running myupdate"
->> return (Misc.SeqJobFinished (state))
+>> return (Misc.SeqJobFinished state)
 
 
 
 (*
-                      let state = P2p.update state e
-                      in return Misc.SeqJobFinished
+  let state = P2p.update state e
+  in return Misc.SeqJobFinished
 *) 
 
 
@@ -142,8 +142,7 @@ let run () =
             last_block_received_time = [];
           } : U.my_app_state )
           ; 
-          (* let jobs = P2p.create() in *)
-          jobs = []; 
+          jobs = P2p.create(); 
           queue = Myqueue.empty ;
         } in
         loop whoot 

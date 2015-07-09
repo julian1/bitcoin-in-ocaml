@@ -121,6 +121,8 @@ let get_message (conn : U.connection ) =
 *)
 
 (* let update connections e = *)
+
+(*
 let update (state : Misc.my_app_state) e =
   match e with
     | U.GotConnection conn ->
@@ -220,7 +222,7 @@ let update (state : Misc.my_app_state) e =
         )
 
     | _ -> state 
-
+*)
 
 (* initial jobs *)
 let create () = [
