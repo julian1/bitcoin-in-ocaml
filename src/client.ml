@@ -94,7 +94,7 @@ let run () =
 
               (* take one event off the queue, add to incomplete jobs *)
               let whoot = 
-                if whoot.queue <> Myqueue.empty then 
+                if whoot.queue <> Myqueue.empty && whoot.state <> None then 
                   let e,queue = Myqueue.take whoot.queue in
                   {  whoot with  
                     queue = queue;
