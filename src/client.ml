@@ -38,7 +38,6 @@ let run () =
     >>= fun blocks_fd -> 
        (
 
-
         let rec loop whoot =
 
           Lwt.catch (
@@ -46,10 +45,11 @@ let run () =
             (* select completed jobs *)            
             fun () -> Lwt.nchoose_split whoot.jobs
             >>= fun (complete, incomplete) ->
+        
+              (* update incoplete jobs *)
+              let whoot = { whoot with jobs = incomplete } in 
 
-              let whoot = { whoot with jobs = incomplete  } in 
-
-              (* process io events *) 
+              (* process complete io events, by pushing on queue *) 
               let f whoot e = 
                 match e with 
                   (* nop *)
@@ -68,11 +68,12 @@ let run () =
 
               >>   
 
-              (* take one event off the queue, wrap it as a job *)
+              (* take one event off the queue, add to incomplete jobs *)
               let whoot = 
                 if whoot.queue <> Myqueue.empty then 
                   let e,queue = Myqueue.take whoot.queue in
                   {  whoot with  
+                    queue = queue;
                     jobs = (
                     (* state is injected into the seq job *)
                     let state = P2p.update whoot.state e
@@ -83,6 +84,7 @@ let run () =
                   whoot
               in
             
+              (* anything more to process *) 
               if List.length whoot.jobs > 0 then
                 loop whoot 
               else
