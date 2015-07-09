@@ -15,7 +15,7 @@ type whoot_t =
 
   jobs : U.jobs_type; (* it's not a job it's a job completion code, or result or event *)
 
-  queue : U.jobs_type Myqueue.t;
+  queue : U.my_event Myqueue.t;
 
 }
 
@@ -39,50 +39,52 @@ let run () =
        (
 
 
-        let rec loop state queue jobs  =
+        let rec loop whoot =
 
           Lwt.catch (
 
             (* select completed jobs *)            
-            fun () -> Lwt.nchoose_split jobs
+            fun () -> Lwt.nchoose_split whoot.jobs
             >>= fun (complete, incomplete) ->
+
+              let whoot = { whoot with jobs = incomplete  } in 
+
               (* process io events *) 
-              let f (state,queue) e = 
+              let f whoot e = 
                 match e with 
                   (* nop *)
-                  | U.Nop -> state,queue
+                  | U.Nop -> whoot 
                   (* a seq job finished then take the new state *) 
-                  | SeqJobFinished -> state,queue
+                  | SeqJobFinished -> whoot 
                   (* any other event gets added to queue *)
-                  | _ -> state, Myqueue.add queue e 
+                  | _ -> { whoot with queue = Myqueue.add whoot.queue e }  
               in
-              let state,queue = List.fold_left f (state,queue) complete in
+              let whoot = List.fold_left f whoot complete in
 
               log @@ " here !! jobs " 
-                ^ (string_of_int (List.length jobs)) 
+                ^ (string_of_int (List.length whoot.jobs)) 
                 ^ " queue " 
-                ^ (string_of_int (Myqueue.length queue )) 
+                ^ (string_of_int (Myqueue.length whoot.queue )) 
 
               >>   
-              (* take one event off the queue, wrap it as a job *)
-              let jobs = incomplete in
 
-              let queue,jobs = 
-                if queue <> Myqueue.empty then 
-                  let e,queue = Myqueue.take queue in
-                  let jobs = (
+              (* take one event off the queue, wrap it as a job *)
+              let whoot = 
+                if whoot.queue <> Myqueue.empty then 
+                  let e,queue = Myqueue.take whoot.queue in
+                  {  whoot with  
+                    jobs = (
                     (* state is injected into the seq job *)
-                    let state = P2p.update state e
+                    let state = P2p.update whoot.state e
                     in return Misc.SeqJobFinished
-                  ) :: jobs;
-                  in
-                  queue,jobs 
+                  ) :: whoot.jobs;
+                  }
                 else
-                  queue,jobs 
+                  whoot
               in
             
-              if List.length jobs > 0 then
-                loop state queue jobs
+              if List.length whoot.jobs > 0 then
+                loop whoot 
               else
                 log "finishing - no more jobs to run!!"
                 >> return ()
@@ -100,10 +102,10 @@ let run () =
         let state =
           ({
             jobs = P2p.create();
-                  connections = [];
+            connections = [];
             (*heads = tree; *)
 
-                  db = db; 
+            db = db; 
             blocks_fd = blocks_fd;
 
             (* should be hidden ?? *)
@@ -123,7 +125,7 @@ let run () =
             jobs = jobs; 
             queue = queue;
           } in
-          loop state queue jobs
+          loop whoot 
         )
   )
 
