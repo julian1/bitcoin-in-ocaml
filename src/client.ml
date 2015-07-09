@@ -22,6 +22,20 @@ type whoot_t =
 
 let log s = U.write_stdout s
 
+
+
+let myupdate state e = 
+log "running myupdate"
+>> return (Misc.SeqJobFinished (state))
+
+
+
+(*
+                      let state = P2p.update state e
+                      in return Misc.SeqJobFinished
+*) 
+
+
 let run () =
 
   Lwt_main.run (
@@ -46,7 +60,7 @@ let run () =
 
     - get rid of jobs in state.
 
-    - boolean as to whether a seq job is running...  or use option state ?
+    - done - boolean as to whether a seq job is running...  or use option state ?
 *)
         let rec loop whoot =
 
@@ -65,7 +79,7 @@ let run () =
                   (* nop *)
                   | U.Nop -> whoot 
                   (* a seq job finished then take the new state *) 
-                  | SeqJobFinished -> whoot 
+                  | SeqJobFinished state -> { whoot with state = Some state } 
                   (* any other event gets added to queue *)
                   | _ -> { whoot with queue = Myqueue.add whoot.queue e }  
               in
@@ -85,10 +99,14 @@ let run () =
                   {  whoot with  
                     queue = queue;
                     jobs = (
-                      (* state is injected into the seq job *)
-                      let Some state = whoot.state  in
+                      (* (* state is injected into the seq job, and nulled *)
+                      let Some state = whoot.state in
                       let state = P2p.update state e
-                      in return Misc.SeqJobFinished
+                      (* rather than trying to process this here why not change the return function *) 
+                      in return (U.SeqJobFinished state) 
+                      *)
+                       let Some state = whoot.state in
+                      myupdate state e 
                     ) :: whoot.jobs;
                     state = None;
                   }
@@ -113,9 +131,9 @@ let run () =
           in
 
         (* we actually need to read it as well... as write it... *)
-        let state =
-          ({
-            jobs = P2p.create();
+
+        let whoot = {
+          state = Some ({
             connections = [];
             db = db; 
             (* should be hidden ?? *)
@@ -123,13 +141,10 @@ let run () =
             blocks_on_request = U.SS.empty;
             last_block_received_time = [];
           } : U.my_app_state )
-        in let queue = Myqueue.empty in 
-        let jobs = P2p.create() in
-
-        let whoot = {
-          state = Some state; 
-          jobs = jobs; 
-          queue = queue;
+          ; 
+          (* let jobs = P2p.create() in *)
+          jobs = []; 
+          queue = Myqueue.empty ;
         } in
         loop whoot 
         )
