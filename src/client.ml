@@ -33,11 +33,19 @@ let run () =
 
       Processblock.create_prepared_stmts db 
     >>
-
-      Chain.create ()
+(*
+      Chain.create () 
     >>= fun blocks_fd -> 
+    *)
        (
+(*
+    ok, what do we have to do now???
 
+    - make seqjobfinished return new state and any additional jobs
+    - this is a bit hard...
+
+    - get rid of jobs in state.
+*)
         let rec loop whoot =
 
           Lwt.catch (
@@ -108,15 +116,15 @@ let run () =
             (*heads = tree; *)
 
             db = db; 
-            blocks_fd = blocks_fd;
+            (* blocks_fd = blocks_fd; *)
 
             (* should be hidden ?? *)
             block_inv_pending  = None;
             blocks_on_request = U.SS.empty;
             last_block_received_time = [];
 
-            seq_jobs_pending = Myqueue.empty;
-            seq_job_running = false;
+            (* seq_jobs_pending = Myqueue.empty;
+            seq_job_running = false; *)
 
           } : U.my_app_state )
           in let queue = Myqueue.empty in 
