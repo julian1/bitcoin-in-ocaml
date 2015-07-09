@@ -117,6 +117,12 @@ let run () =
           } : U.my_app_state )
           in let queue = Myqueue.empty in 
           let jobs = P2p.create() in
+
+          let whoot = {
+            state = state; 
+            jobs = jobs; 
+            queue = queue;
+          } in
           loop state queue jobs
         )
   )
