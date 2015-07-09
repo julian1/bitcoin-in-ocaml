@@ -11,7 +11,7 @@ module U = Misc
 
 type whoot_t =
 {
-  state : U.my_app_state ;
+  state : U.my_app_state option;
 
   jobs : U.jobs_type; (* it's not a job it's a job completion code, or result or event *)
 
@@ -45,6 +45,8 @@ let run () =
     - this is a bit hard...
 
     - get rid of jobs in state.
+
+    - boolean as to whether a seq job is running...  or use option state ?
 *)
         let rec loop whoot =
 
@@ -83,10 +85,12 @@ let run () =
                   {  whoot with  
                     queue = queue;
                     jobs = (
-                    (* state is injected into the seq job *)
-                    let state = P2p.update whoot.state e
-                    in return Misc.SeqJobFinished
-                  ) :: whoot.jobs;
+                      (* state is injected into the seq job *)
+                      let Some state = whoot.state  in
+                      let state = P2p.update state e
+                      in return Misc.SeqJobFinished
+                    ) :: whoot.jobs;
+                    state = None;
                   }
                 else
                   whoot
@@ -113,29 +117,21 @@ let run () =
           ({
             jobs = P2p.create();
             connections = [];
-            (*heads = tree; *)
-
             db = db; 
-            (* blocks_fd = blocks_fd; *)
-
             (* should be hidden ?? *)
             block_inv_pending  = None;
             blocks_on_request = U.SS.empty;
             last_block_received_time = [];
-
-            (* seq_jobs_pending = Myqueue.empty;
-            seq_job_running = false; *)
-
           } : U.my_app_state )
-          in let queue = Myqueue.empty in 
-          let jobs = P2p.create() in
+        in let queue = Myqueue.empty in 
+        let jobs = P2p.create() in
 
-          let whoot = {
-            state = state; 
-            jobs = jobs; 
-            queue = queue;
-          } in
-          loop whoot 
+        let whoot = {
+          state = Some state; 
+          jobs = jobs; 
+          queue = queue;
+        } in
+        loop whoot 
         )
   )
 
