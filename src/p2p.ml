@@ -122,6 +122,12 @@ let get_message (conn : U.connection ) =
 
 (* let update connections e = *)
 
+
+let update state e = return (Misc.SeqJobFinished state)
+
+(* ok, this is interesting because we can actually log sequentially *)
+
+
 (*
 let update (state : Misc.my_app_state) e =
   match e with
