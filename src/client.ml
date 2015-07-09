@@ -9,6 +9,17 @@ module M = Message
 module U = Misc
 
 
+type whoot_t =
+{
+  state : U.my_app_state ;
+
+  jobs : U.jobs_type; (* it's not a job it's a job completion code, or result or event *)
+
+  queue : U.jobs_type Myqueue.t;
+
+}
+
+
 let log s = U.write_stdout s
 
 let run () =
@@ -54,6 +65,8 @@ let run () =
 
               >>   
               (* take one event off the queue, wrap it as a job *)
+              let jobs = incomplete in
+
               let queue,jobs = 
                 if queue <> Myqueue.empty then 
                   let e,queue = Myqueue.take queue in
@@ -61,7 +74,7 @@ let run () =
                     (* state is injected into the seq job *)
                     let state = P2p.update state e
                     in return Misc.SeqJobFinished
-                  ) :: incomplete ;
+                  ) :: jobs;
                   in
                   queue,jobs 
                 else
