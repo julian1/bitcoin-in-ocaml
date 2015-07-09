@@ -124,11 +124,12 @@ let get_message (conn : U.connection ) =
 
 
 let update state e = 
+  (
   match e with
     | U.GotConnection conn ->
     log "whoot got connection"
-    | _  -> return ()
-
+    | _  -> return U.Nop
+  )
   >>
   return (Misc.SeqJobFinished state)
 
