@@ -29,20 +29,20 @@ let run () =
 
 
         let rec loop state queue jobs  =
+
           Lwt.catch (
-          fun () -> Lwt.nchoose_split jobs
 
+            (* select completed jobs *)            
+            fun () -> Lwt.nchoose_split jobs
             >>= fun (complete, incomplete) ->
-
-              (* let state = { state with jobs = incomplete } in *)
-
               (* process io events *) 
               let f (state,queue) e = 
                 match e with 
+                  (* nop *)
                   | U.Nop -> state,queue
-                    (* a seq job finished then take the new state *) 
+                  (* a seq job finished then take the new state *) 
                   | SeqJobFinished -> state,queue
-                    (* any other event gets added to queue *)
+                  (* any other event gets added to queue *)
                   | _ -> state, Myqueue.add queue e 
               in
               let state,queue = List.fold_left f (state,queue) complete in
@@ -53,23 +53,22 @@ let run () =
                 ^ (string_of_int (Myqueue.length queue )) 
 
               >>   
-              (* take one event off the queue, only if one isn't already running ? *)
-              let state,queue,jobs = 
+              (* take one event off the queue, wrap it as a job *)
+              let queue,jobs = 
                 if queue <> Myqueue.empty then 
                   let e,queue = Myqueue.take queue in
                   let jobs = (
                     (* state is injected into the seq job *)
                     let state = P2p.update state e
                     in return Misc.SeqJobFinished
-                  ) :: jobs;
+                  ) :: incomplete ;
                   in
-                  state,queue,jobs 
+                  queue,jobs 
                 else
-                  state,queue,jobs 
+                  queue,jobs 
               in
-
             
-              if List.length state.jobs > 0 then
+              if List.length jobs > 0 then
                 loop state queue jobs
               else
                 log "finishing - no more jobs to run!!"
