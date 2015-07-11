@@ -57,16 +57,7 @@ let run () =
     >>= fun blocks_fd -> 
     *)
        (
-(*
-    ok, what do we have to do now???
 
-    - make seqjobfinished return new state and any additional jobs
-    - this is a bit hard...
-
-    - get rid of jobs in state.
-
-    - done - boolean as to whether a seq job is running...  or use option state ?
-*)
         let rec loop whoot =
 
           Lwt.catch (
@@ -78,17 +69,17 @@ let run () =
               (* update incoplete jobs *)
               let whoot = { whoot with jobs = incomplete } in 
 
-              (* process complete io events, by pushing on queue *) 
+              (* process complete io jobs *) 
               let f whoot e = 
                 match e with 
                   (* nop *)
                   | U.Nop -> whoot 
-                  (* a seq job finished then take the new state *) 
+                  (* a seq job finished, so take take the new state and add any new jobs*) 
                   | SeqJobFinished (newstate, newjobs) -> { 
                     whoot with state = Some newstate; 
                     jobs =  newjobs @ whoot.jobs ;
                   } 
-                  (* any other event gets added to queue *)
+                  (* any other normal event gets added to queue for processing *)
                   | _ -> { whoot with queue = Myqueue.add whoot.queue e }  
               in
               let whoot = List.fold_left f whoot complete in
@@ -97,10 +88,9 @@ let run () =
                 ^ (string_of_int (List.length whoot.jobs)) 
                 ^ " queue " 
                 ^ (string_of_int (Myqueue.length whoot.queue )) 
-
               >>   
 
-              (* take one event off the queue, add to incomplete jobs *)
+              (* process a queue item if we can *)
               let whoot = 
                 if whoot.queue <> Myqueue.empty && whoot.state <> None then 
                   let e,queue = Myqueue.take whoot.queue in
@@ -120,7 +110,7 @@ let run () =
                   whoot
               in
             
-              (* anything more to process *) 
+              (* more jobs to process? *) 
               if List.length whoot.jobs > 0 then
                 loop whoot 
               else
