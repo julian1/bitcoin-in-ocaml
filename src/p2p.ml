@@ -128,14 +128,30 @@ let get_message (conn : U.connection ) =
 
 
 let update state e = 
-  (
+  let state = (state : Misc.my_app_state) in 
   match e with
     | U.GotConnection conn ->
-    log "whoot got connection"
-    | _  -> return U.Nop
-  )
-  >>
-  return (Misc.SeqJobFinished (state, [ log "log here" ]))
+      log "whoot got connection"
+      >> 
+      let state = { state with
+        connections = conn :: state.connections; 
+      } in
+      let jobs = 
+        [
+          log @@ U.format_addr conn ^  " got connection "  ^
+            ", connections now " ^ ( string_of_int @@ List.length state.connections )
+          >> U.send_message conn initial_version
+          >> log @@ "*** sent our version " ^ U.format_addr conn;
+          get_message conn
+        ]
+      in
+      return (Misc.SeqJobFinished (state, jobs))
+
+    | _  -> 
+      return (Misc.SeqJobFinished (state, []))
+
+
+  (* we have to always return Misc.SeqJobFinished *)
 
 (* VERY IMPORTANT - we can now log sequentially if we want, but we have to be a able to return another job 
   uggh... it's gone astray...
