@@ -135,7 +135,7 @@ let update state e =
     | _  -> return U.Nop
   )
   >>
-  return (Misc.SeqJobFinished state)
+  return (Misc.SeqJobFinished (state, [ log "log here" ]))
 
 (* VERY IMPORTANT - we can now log sequentially if we want, but we have to be a able to return another job 
   uggh... it's gone astray...

@@ -16,7 +16,9 @@ type whoot_t =
 {
   state : U.my_app_state option;
 
-  jobs : U.jobs_type; (* it's not a job it's a job completion code, or result or event *)
+  (* jobs : U.jobs_type; *) (* it's not a job it's a job completion code, or result or event *)
+ jobs :  U.my_event Lwt.t list; 
+
 
   queue : U.my_event Myqueue.t;
 
@@ -82,7 +84,10 @@ let run () =
                   (* nop *)
                   | U.Nop -> whoot 
                   (* a seq job finished then take the new state *) 
-                  | SeqJobFinished s -> { whoot with state = Some s } 
+                  | SeqJobFinished (newstate, newjobs) -> { 
+                    whoot with state = Some newstate; 
+                    jobs =  newjobs @ whoot.jobs ;
+                  } 
                   (* any other event gets added to queue *)
                   | _ -> { whoot with queue = Myqueue.add whoot.queue e }  
               in

@@ -124,7 +124,7 @@ type my_event =
 	(* hash, height, raw_header, payload *)
   (* | GotBlock of string * int * string * string  *)
 
-  | SeqJobFinished of my_app_state 
+  | SeqJobFinished of my_app_state * my_event Lwt.t list
   | Nop
   | JJ of my_event
 
