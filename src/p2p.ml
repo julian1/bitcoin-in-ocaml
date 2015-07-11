@@ -123,6 +123,10 @@ let get_message (conn : U.connection ) =
 (* let update connections e = *)
 
 
+
+
+
+
 let update state e = 
   (
   match e with
@@ -133,7 +137,14 @@ let update state e =
   >>
   return (Misc.SeqJobFinished state)
 
-(* ok, this is interesting because we can actually log sequentially *)
+(* VERY IMPORTANT - we can now log sequentially if we want, but we have to be a able to return another job 
+  uggh... it's gone astray...
+
+  - io completion might be,
+    - events
+    - seqjobcomplete state [events] 
+
+*)
 
 
 (*

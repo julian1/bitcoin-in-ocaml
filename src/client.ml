@@ -1,5 +1,8 @@
 (*
   corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte
+
+  we don't need the syntax, but do need the package.
+  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax  src/client.byte
 *)
 
 let (>>=) = Lwt.(>>=)
@@ -23,11 +26,11 @@ type whoot_t =
 let log s = U.write_stdout s
 
 
-
+(*
 let myupdate state e = 
 log "running myupdate"
 >> return (Misc.SeqJobFinished state)
-
+*)
 
 
 (*
@@ -96,7 +99,7 @@ let run () =
               let whoot = 
                 if whoot.queue <> Myqueue.empty && whoot.state <> None then 
                   let e,queue = Myqueue.take whoot.queue in
-                  {  whoot with  
+                  {  (* whoot with *) 
                     queue = queue;
                     jobs = (
                       (* state is injected into the seq job, and nulled *)

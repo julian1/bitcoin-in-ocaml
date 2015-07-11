@@ -126,6 +126,7 @@ type my_event =
 
   | SeqJobFinished of my_app_state 
   | Nop
+  | JJ of my_event
 
 
 type jobs_type =  my_event Lwt.t list 
