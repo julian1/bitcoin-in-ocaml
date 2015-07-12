@@ -31,9 +31,13 @@ let (>|=) = Lwt.(>|=)
 let return = Lwt.return
 
 module M = Message
-module PG = Misc.PG
 
-let log s = Misc.write_stdout s
+module U = Util
+module PG = U.PG
+
+
+
+let log s = U.write_stdout s
 
 
 
@@ -52,13 +56,13 @@ let process_block x payload =
 
 (* read a block at current pos and return it - private *)
 let read_block fd =
-  Misc.read_bytes fd 24
+  U.read_bytes fd 24
   >>= function
     | None -> return None
     | Some s ->
       let _, header = M.decodeHeader s 0 in
       (* should check command is 'block' *)
-      Misc.read_bytes fd header.length
+      U.read_bytes fd header.length
       >>= function
         | None -> raise (Failure "here2")
         | Some payload -> return (Some payload)

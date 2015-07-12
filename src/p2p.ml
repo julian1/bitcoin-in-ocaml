@@ -3,7 +3,7 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 module M = Message
-module U = Misc
+module U = Util
 module S = String 
 module L = List
 
