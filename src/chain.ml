@@ -295,9 +295,7 @@ let manage_chain2 (state : U.my_app_state) e  =
         let jobs = [
           U.send_message conn (initial_getblocks head)
         ] in
-
-
-        return (U.SeqJobFinished (state, []))
+        return (U.SeqJobFinished (state, jobs))
 
       else
         return (U.SeqJobFinished (state, []))
@@ -305,9 +303,12 @@ let manage_chain2 (state : U.my_app_state) e  =
 
 
 let update state e = 
-  let state = (state : U.my_app_state) in 
-  return ( U.SeqJobFinished (state,[]))
-
+  manage_chain1 state e 
+  >>= fun (U.SeqJobFinished (state, jobs1)) ->
+    manage_chain2 state e
+  >>= fun (U.SeqJobFinished (state, jobs2)) ->
+    return (U.SeqJobFinished (state, jobs1 @ jobs2))
+ 
 
 
 (*
