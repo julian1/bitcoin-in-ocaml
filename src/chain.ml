@@ -299,8 +299,14 @@ let manage_chain2 (state : U.my_app_state) e  =
 
       else
         return (U.SeqJobFinished (state, []))
- 
 
+(* 
+  VERY IMPORTANT 
+  the queue doesn't go deep. 
+
+  - Because we don't try to read the next readMessage until the GotMessage has processed...
+  - Perhaps we should change - so that we rebind the read handler as soon as we read something. 
+*)
 
 let update state e = 
   manage_chain1 state e 
