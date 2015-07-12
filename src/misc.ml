@@ -61,7 +61,10 @@ let format_addr conn =
 
 
 (* module SS = Map.Make(struct type t = string let compare = compare end) *)
+
 module SS = Map.Make( String ) 
+
+(*
 
 module SSS = Set.Make(String);;
 
@@ -73,6 +76,7 @@ type my_head =
     height : int;   (* if known? *)
    (*  difficulty : int ; *) (* aggregated *)
 }
+*)
 
 
 (* revert this back to a tuple instead *)
