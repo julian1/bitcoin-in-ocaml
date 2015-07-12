@@ -99,10 +99,12 @@ let run () =
                     jobs = (
                       (* state is injected into the seq job, and nulled *)
                       let Some state = whoot.state in
-                      P2p.update state e 
-                      
-                      (* let Some state = whoot.state in
-                      myupdate state e  *)
+                        P2p.update state e 
+                     >>= fun (U.SeqJobFinished (state, jobs1)) ->
+                        Chain.update state e 
+                     >>= fun (U.SeqJobFinished (state, jobs2)) ->
+                      return ( U.SeqJobFinished (state,jobs1 @ jobs2))
+
                     ) :: whoot.jobs;
                     state = None;
                   }
