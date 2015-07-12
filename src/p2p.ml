@@ -130,22 +130,65 @@ let get_message (conn : U.connection ) =
 let update state e = 
   let state = (state : Misc.my_app_state) in 
   match e with
+
     | U.GotConnection conn ->
       log "whoot got connection"
       >> 
       let state = { state with
         connections = conn :: state.connections; 
       } in
-      let jobs = 
-        [
-          log @@ U.format_addr conn ^  " got connection "  ^
-            ", connections now " ^ ( string_of_int @@ List.length state.connections )
-          >> U.send_message conn initial_version
-          >> log @@ "*** sent our version " ^ U.format_addr conn;
-          get_message conn
-        ]
+      let jobs = [
+        log @@ U.format_addr conn ^  " got connection "  ^
+          ", connections now " ^ ( string_of_int @@ List.length state.connections )
+        >> U.send_message conn initial_version
+        >> log @@ "*** sent our version " ^ U.format_addr conn;
+        get_message conn
+      ]
       in
       return (Misc.SeqJobFinished (state, jobs))
+
+    | U.GotConnectionError msg ->
+      let jobs = [ log @@ "connection error " ^ msg ] in
+      return (Misc.SeqJobFinished (state, jobs))
+
+    | U.GotMessageError (conn , msg) ->
+      (* fd test is physical equality *)
+      let state = { state with 
+        connections = List.filter (fun (c : U.connection) -> c.fd != conn.fd) state.connections;
+      } in
+      let jobs = [
+        log @@ U.format_addr conn ^ "msg error " ^ msg;
+        (* TODO move this outside jobs ??? *)
+        match Lwt_unix.state conn.fd with
+          Opened -> ( Lwt_unix.close conn.fd ) >> return U.Nop
+          | _ -> return U.Nop
+      ] in
+      return @@ Misc.SeqJobFinished (state, jobs)
+
+
+    | U.GotMessage (conn, header, raw_header, payload) ->
+      match header.command with
+
+        | "version" ->
+          let jobs = [
+            log @@ U.format_addr conn ^ " got version message"
+            >> U.send_message conn initial_verack
+            >> log @@ "*** sent verack " ^ U.format_addr conn
+            ;
+            get_message conn
+          ] in
+          return @@ Misc.SeqJobFinished (state, jobs)
+
+        | "verack" ->
+          let jobs = [
+            (* should be 3 separate jobs? *)
+            log @@ U.format_addr conn ^ " got verack";
+            (* >> send_message conn initial_getaddr *)
+            get_message conn
+          ] in 
+          return @@ Misc.SeqJobFinished (state, jobs)
+
+
 
     | _  -> 
       return (Misc.SeqJobFinished (state, []))
