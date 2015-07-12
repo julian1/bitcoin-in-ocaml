@@ -188,8 +188,45 @@ let update state e =
           ] in 
           return @@ Misc.SeqJobFinished (state, jobs)
 
+        | "addr" ->
+            let pos, count = M.decodeVarInt payload 0 in
+            (* should take more than the first *)
+            let pos, _ = M.decodeInteger32 payload pos in (* timeStamp  *)
+            let _, addr = M.decodeAddress payload pos in
+            let formatAddress (h : M.ip_address ) =
+              let soi = string_of_int in
+              let a,b,c,d = h.address  in
+              String.concat "." [
+              soi a; soi b; soi c; soi d
+              ] (* ^ ":" ^ soi h.port *)
+            in
+            let a = formatAddress addr in
+            (* ignore, same addr instances on different ports *)
+            let already_got = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            in
+            if already_got || List.length state.connections >= 8 then
+              let jobs = [
+                  log @@ U.format_addr conn ^ " addr - already got or ignore "
+                    ^ a ^ ":" ^ string_of_int addr.port ;
+                  get_message conn
+              ] in 
+              return @@ Misc.SeqJobFinished (state, jobs)
+            else
+              let jobs = [ 
+                 log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count )
+                    ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
+                  get_connection (formatAddress addr) addr.port ;
+                  get_message conn
+                ] in 
+              return @@ Misc.SeqJobFinished (state, jobs)
 
-
+        | s -> 
+          let jobs = [
+            (* *) log @@ U.format_addr conn ^ " message " ^ s; 
+            get_message conn
+          ] in 
+          return @@ Misc.SeqJobFinished (state, jobs)
+ 
     | _  -> 
       return (Misc.SeqJobFinished (state, []))
 
