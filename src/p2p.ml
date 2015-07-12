@@ -128,7 +128,7 @@ let get_message (conn : U.connection ) =
 
 
 let update state e = 
-  let state = (state : Misc.my_app_state) in 
+  let state = (state : U.my_app_state) in 
   match e with
 
     | U.GotConnection conn ->
@@ -145,11 +145,11 @@ let update state e =
         get_message conn
       ]
       in
-      return (Misc.SeqJobFinished (state, jobs))
+      return (U.SeqJobFinished (state, jobs))
 
     | U.GotConnectionError msg ->
       let jobs = [ log @@ "connection error " ^ msg ] in
-      return (Misc.SeqJobFinished (state, jobs))
+      return (U.SeqJobFinished (state, jobs))
 
     | U.GotMessageError (conn , msg) ->
       (* fd test is physical equality *)
@@ -163,7 +163,7 @@ let update state e =
           Opened -> ( Lwt_unix.close conn.fd ) >> return U.Nop
           | _ -> return U.Nop
       ] in
-      return @@ Misc.SeqJobFinished (state, jobs)
+      return @@ U.SeqJobFinished (state, jobs)
 
 
     | U.GotMessage (conn, header, raw_header, payload) ->
@@ -177,7 +177,7 @@ let update state e =
             ;
             get_message conn
           ] in
-          return @@ Misc.SeqJobFinished (state, jobs)
+          return @@ U.SeqJobFinished (state, jobs)
 
         | "verack" ->
           let jobs = [
@@ -186,7 +186,7 @@ let update state e =
             (* >> send_message conn initial_getaddr *)
             get_message conn
           ] in 
-          return @@ Misc.SeqJobFinished (state, jobs)
+          return @@ U.SeqJobFinished (state, jobs)
 
         | "addr" ->
             let pos, count = M.decodeVarInt payload 0 in
@@ -202,15 +202,15 @@ let update state e =
             in
             let a = formatAddress addr in
             (* ignore, same addr instances on different ports *)
-            let already_got = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            let already_have = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
-            if already_got || List.length state.connections >= 8 then
+            if already_have || List.length state.connections >= 8 then
               let jobs = [
                   log @@ U.format_addr conn ^ " addr - already got or ignore "
                     ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
               ] in 
-              return @@ Misc.SeqJobFinished (state, jobs)
+              return @@ U.SeqJobFinished (state, jobs)
             else
               let jobs = [ 
                  log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count )
@@ -218,20 +218,20 @@ let update state e =
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
                 ] in 
-              return @@ Misc.SeqJobFinished (state, jobs)
+              return @@ U.SeqJobFinished (state, jobs)
 
         | s -> 
           let jobs = [
             (* *) log @@ U.format_addr conn ^ " message " ^ s; 
             get_message conn
           ] in 
-          return @@ Misc.SeqJobFinished (state, jobs)
+          return @@ U.SeqJobFinished (state, jobs)
  
     | _  -> 
-      return (Misc.SeqJobFinished (state, []))
+      return (U.SeqJobFinished (state, []))
 
 
-  (* we have to always return Misc.SeqJobFinished *)
+  (* we have to always return U.SeqJobFinished *)
 
 (* VERY IMPORTANT - we can now log sequentially if we want, but we have to be a able to return another job 
   uggh... it's gone astray...
@@ -244,7 +244,7 @@ let update state e =
 
 
 (*
-let update (state : Misc.my_app_state) e =
+let update (state : U.my_app_state) e =
   match e with
     | U.GotConnection conn ->
 		let connections = conn :: state.connections in
@@ -314,9 +314,9 @@ let update (state : Misc.my_app_state) e =
             in
             let a = formatAddress addr in
             (* ignore, same addr instances on different ports *)
-            let already_got = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            let already_have = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
-            if already_got || List.length state.connections >= 8 then
+            if already_have || List.length state.connections >= 8 then
 				{ state with 
                  jobs = state.jobs @ [
                   log @@ U.format_addr conn ^ " addr - already got or ignore "
