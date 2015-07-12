@@ -205,7 +205,6 @@ let manage_chain1 (state : U.my_app_state) e    =
 let manage_chain2 (state : U.my_app_state) e  =
   (* issue inventory requests for blocks based on current chainstate leaves *)
   match e with
-    | U.Nop -> state
     | _ ->
       (* we need to check we have completed handshake *)
       (* shouldn't we always issue a request when blocks_on_request *)
@@ -242,7 +241,7 @@ let manage_chain2 (state : U.my_app_state) e  =
       if not has_solicited 
         && state.block_inv_pending = None 
         && state.connections <> [] 
-        && state.seq_jobs_pending = Myqueue.empty
+        (* && state.seq_jobs_pending = Myqueue.empty *)
         then
 
 (*
@@ -266,45 +265,43 @@ let manage_chain2 (state : U.my_app_state) e  =
         (* choose a peer fd at random *)
         let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
         let (conn : U.connection) = List.nth state.connections index in
+
         (* TODO fixme *)
         (* let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in *)
         (* TODO we need to record if handshake has been performed *)
 
+        log @@ S.concat "" [
+          "request addr " ; conn.addr;
+          "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
+          (* "\nheads count " ; string_of_int (L.length heads); *)
+          (* "\nrequested head is ";  M.hex_of_string head ; *)
+          "\n fds\n" ; S.concat "\n" ( L.map (fun (x : U.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
+          ]
+        >> U.PG.begin_work state.db
+        >> U.PG.prepare state.db ~query:"select pb from leaves order by random() limit 1" ()
+        >> U.PG.execute state.db ~params:[ ] ()
+        >>= fun rows -> 
+          let head = 
+            match rows with
+              (Some field ::_ )::_ -> U.PG.bytea_of_string field
+              | _ -> raise (Failure "couldn't get leaf")
+        in 
+        U.PG.commit state.db
+        >> log @@ "\nrequested head is " ^ M.hex_of_string head
+        >> 
+        let state = { state with
+            block_inv_pending = Some (conn.fd, now ) ;
+        } in
+        let jobs = [
+          U.send_message conn (initial_getblocks head)
+        ] in
 
-        let job () = 
-          log @@ S.concat "" [
-            "request addr " ; conn.addr;
-            "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
-            (* "\nheads count " ; string_of_int (L.length heads); *)
-            (* "\nrequested head is ";  M.hex_of_string head ; *)
-            "\n fds\n" ; S.concat "\n" ( L.map (fun (x : U.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
-            ]
-            >> U.PG.begin_work state.db
 
-            >> U.PG.prepare state.db  ~query:"select pb from leaves order by random() limit 1" ()
-            >> U.PG.execute state.db  ~params:[ ] ()
-            >>= fun rows -> 
-              let head = 
-                match rows with
-                  (Some field ::_ )::_ -> U.PG.bytea_of_string field
-                  | _ -> raise (Failure "couldn't get leaf")
-            in 
-            U.PG.commit state.db
-            >> log @@ "\nrequested head is " ^ M.hex_of_string head
-            >>
-            (* request inv 
-                TODO What if the conn has been closed in the meantime???k
-                we should post a message with the tip... to use a known good connection
-            *)
-            U.send_message conn (initial_getblocks head)
-          in 
-          { state with
-          block_inv_pending = Some (conn.fd, now ) ;
-          seq_jobs_pending = Myqueue.add state.seq_jobs_pending job ;
-		  (* jobs = state.jobs @ [ y (); ] *)
-		      }
+        return (U.SeqJobFinished (state, []))
+
       else
-        state
+        return (U.SeqJobFinished (state, []))
+ 
 
 
 let update state e = 
