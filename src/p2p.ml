@@ -4,6 +4,10 @@ let return = Lwt.return
 
 module M = Message
 module U = Misc
+module S = String 
+module L = List
+
+
 
 
 let log s = U.write_stdout s >> return U.Nop
@@ -196,15 +200,15 @@ let update state e =
             let formatAddress (h : M.ip_address ) =
               let soi = string_of_int in
               let a,b,c,d = h.address  in
-              String.concat "." [
+              S.concat "." [
               soi a; soi b; soi c; soi d
               ] (* ^ ":" ^ soi h.port *)
             in
             let a = formatAddress addr in
             (* ignore, same addr instances on different ports *)
-            let already_have = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            let already_have = L.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
-            if already_have || List.length state.connections >= 8 then
+            if already_have || L.length state.connections >= 8 then
               let jobs = [
                   log @@ U.format_addr conn ^ " addr - already got or ignore "
                     ^ a ^ ":" ^ string_of_int addr.port ;

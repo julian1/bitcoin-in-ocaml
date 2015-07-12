@@ -40,7 +40,7 @@ let initial_getdata hashes =
     let encodeInvItem hash = M.encodeInteger32 2 ^ M.encodeHash32 hash in
       (* encodeInv - move to Message  - and need to zip *)
       M.encodeVarInt (L.length hashes )
-      ^ String.concat "" @@ L.map encodeInvItem hashes
+      ^ S.concat "" @@ L.map encodeInvItem hashes
   in
   let payload = encodeInventory hashes in
   U.encodeMessage "getdata" payload
