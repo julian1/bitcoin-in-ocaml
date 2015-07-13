@@ -1,27 +1,111 @@
 
+open OUnit2;;
+
 module M = Message
 
-(* ok, it's correctly got the  
-0496b538e853519c726a2c91e61ec11600ae1390813a627c66fb8be7947be63c52da7589379515d4e0a604f8141781e62294721166bf621e73a82cbf2342c858ee
-  and coinbase
-04ffff001
 
-  here -> 0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098 01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d0104ffffffff0100f2052a0100000043410496b538e853519c726a2c91e61ec11600ae1390813a627c66fb8be7947be63c52da7589379515d4e0a604f8141781e62294721166bf621e73a82cbf2342c858eeac00000000
 
-ok, so the pos needs to be +1 which is odd
+(* corebuild  -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax test10.byte
+  do we need to tell it the curve? 
 
+	 corebuild -install-bin-dir   tests -no-links  -package microecc,cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax tests/test10.byte
+
+ *) 
+
+
+
+
+let read_from_file filename =
+  let in_channel = open_in filename in
+  let s = Core.In_channel.input_all in_channel in
+  let () = close_in in_channel in
+  s
+
+
+let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
+let _,tx = M.decodeTx tx_s 0 
+
+(*
+let () = Printf.printf "org %s\n" @@ M.hex_of_string tx_s
+let () = Printf.printf "hash %s\n" ( tx_s |> M.sha256d |> M.strrev |> M.hex_of_string) 
 *)
 
-let s = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d0104ffffffff0100f2052a0100000043410496b538e853519c726a2c91e61ec11600ae1390813a627c66fb8be7947be63c52da7589379515d4e0a604f8141781e62294721166bf621e73a82cbf2342c858eeac00000000"  in 
-
-let s = M.string_of_hex s in 
-
-let () = print_endline (string_of_int (String.length s ) ) in
 
 
-let s = s |> M.sha256d |> M.strrev in
- 
-let () = print_endline (M.hex_of_string s ) in
+let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" 
+let _, txprev = M.decodeTx txprev_s 0 
+
+
+
+(* let () = Printf.printf "%s\n" @@ M.formatTx tx *)
+
+(* must be an easier way to drill down into the scripts that we want *)
+let subscript = M.decode_script @@ (List.hd txprev.outputs).script 
+
+let tx_input_script = M.decode_script @@ (List.hd tx.inputs).script 
+
+(* do these need to be reversed ?? 
+	eg. reverse sig and then 
+	Not according to blockchain info
+*)
+
+let signature = match List.hd tx_input_script with BYTES s -> s 
+let pubkey    = match List.nth tx_input_script 1 with BYTES s -> s
+
+let pubkey = Microecc.decompress pubkey 
+
+
+(*
+let () = Printf.printf "sig %s\n" @@ M.hex_of_string signature
+let () = Printf.printf "key %s\n" @@ M.hex_of_string pubkey 
+let () = Printf.printf "subscript %s\n" @@ M.format_script subscript
+*)
+
+
+(* set input scripts to empty *)
+let tx_clear_inputs (tx: M.tx ) = 
+	let clear_input_script (input : M.tx_in) = 
+	{ input  with
+		script = M.encode_script []	
+	} in
+	{ tx with inputs = List.map clear_input_script tx.inputs }
+
+
+(* should be able to use mapi if we have it *)
+
+let tx = tx_clear_inputs tx
+
+
+(* substitute input script, and clear others *)
+let tx = 
+	let f index (input: M.tx_in ) = 
+		if index == 0 then { input with script = M.encode_script subscript; }  
+		else { input with script = M.encode_script [] } 
+	in
+	{ tx with inputs = List.mapi f tx.inputs }  
+
+
+(*
+let () = Printf.printf "%s\n" @@ M.formatTx (tx )
+*)
+
+(* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
+let s = M.encodeTx tx
+let s = s ^ M.encodeInteger32 1 (* "\x01" *)  (* should be single byte not string - adding hash type *)
+
+let hash = M.sha256d  s 
+
+
+
+let Some (r,s) = M.decode_der_signature signature in
+let decoded_sig = r ^ s in
+let x = Microecc.verify pubkey hash decoded_sig in
+let () = Printf.printf "sig result %b\n" x in
 ()
+
+
+
+
+
 
 
