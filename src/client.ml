@@ -10,6 +10,9 @@ let return = Lwt.return
 
 module M = Message
 module U = Util
+module L = List
+
+
 
 
 type whoot_t =
@@ -43,11 +46,11 @@ log "running myupdate"
 
 let run () =
 
-  Lwt_main.run (
+  Lwt_main.run U.(
 
     (* we'll have to think about db transactions *) 
     log "connecting and create db"
-    >> U.PG.connect ~host:"127.0.0.1" ~database: "test" ~user:"meteo" ~password:"meteo" ()
+    >> U.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
 
       Processblock.create_prepared_stmts db 
@@ -82,12 +85,14 @@ let run () =
                   (* any other normal event gets added to queue for processing *)
                   | _ -> { whoot with queue = Myqueue.add whoot.queue e }  
               in
-              let whoot = List.fold_left f whoot complete in
+              let whoot = L.fold_left f whoot complete in
 
-              log @@ " here !! jobs " 
-                ^ (string_of_int (List.length whoot.jobs)) 
-                ^ " queue " 
-                ^ (string_of_int (Myqueue.length whoot.queue )) 
+              log @@ " here !! jobs " ^ (string_of_int (L.length whoot.jobs)) 
+                ^ " queue " ^ (string_of_int (Myqueue.length whoot.queue )) 
+                ^ " conns " ^ (match whoot.state with 
+                    | Some state -> (string_of_int (L.length state.connections )) 
+                    | None -> "unknown"  
+                )
               >>   
 
               (* process a queue item if we can *)
@@ -113,7 +118,7 @@ let run () =
               in
             
               (* more jobs to process? *) 
-              if List.length whoot.jobs > 0 then
+              if L.length whoot.jobs > 0 then
                 loop whoot 
               else
                 log "finishing - no more jobs to run!!"

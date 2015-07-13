@@ -306,6 +306,7 @@ let manage_chain2 (state : U.my_app_state) e  =
 
   - Because we don't try to read the next readMessage until the GotMessage has processed...
   - Perhaps we should change - so that we rebind the read handler as soon as we read something. 
+  - this would be nice, in that we wouldn't need to always rebind the handler in the p2p loop ..
 *)
 
 let update state e = 
