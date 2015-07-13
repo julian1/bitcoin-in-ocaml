@@ -3,8 +3,6 @@
  *) 
 
 
-open OUnit2;;
-
 module M = Message
 
 open M
@@ -19,12 +17,6 @@ let read_from_file filename =
   s
 
 let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
-
-(*
-let () = Printf.printf "org %s\n" @@ M.hex_of_string tx_s
-let () = Printf.printf "hash %s\n" ( tx_s |> M.sha256d |> M.strrev |> M.hex_of_string) 
-*)
-
 let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" 
 
 
@@ -48,10 +40,12 @@ let encode_and_hash tx =
 (* must be an easier way to drill down into the scripts that we want *)
 
 let _, txprev = M.decodeTx txprev_s 0 
-let output_script = M.decode_script (List.nth txprev.outputs 0).script 
+let output = List.nth txprev.outputs 0
+let output_script = M.decode_script output.script 
 
 let _,tx = M.decodeTx tx_s 0 
-let input_script = M.decode_script @@ (List.nth tx.inputs 0).script 
+let input = List.nth tx.inputs 0 
+let input_script = M.decode_script input.script 
 
 let signature,pubkey = match input_script with 
   | M.BYTES s :: M.BYTES p :: [] -> s, p
@@ -59,7 +53,8 @@ let signature,pubkey = match input_script with
 (* how do we know whether to decompress the pubkey? *)
 let pubkey = Microecc.decompress pubkey 
 
-let tx = substitute tx 1 output_script in 
+(* so we substitute the prev output script into current tx with its outputs *)   
+let tx = substitute tx 0 output_script in 
 let hash = encode_and_hash tx in
 	
 (*
