@@ -1,6 +1,6 @@
-(* 
+(*
   corebuild -I src  -package pgocaml,microecc,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax  src/client3.byte
- *) 
+ *)
 
 
 module M = Message
@@ -22,17 +22,17 @@ let read_from_file filename =
   let () = close_in in_channel in
   s
 
-let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
-let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" 
+let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb"
+let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905"
 
 
 (* substitute input script, and clear others *)
-let substitute tx i output_script = 
-	let f index (input: M.tx_in ) = 
-		if index == i then { input with script = M.encode_script output_script; }  
-		else { input with script = M.encode_script [] } 
+let substitute tx i output_script =
+	let f index (input: M.tx_in ) =
+		if index == i then { input with script = M.encode_script output_script; }
+		else { input with script = M.encode_script [] }
 	in
-	{ tx with inputs = List.mapi f tx.inputs }  
+	{ tx with inputs = List.mapi f tx.inputs }
 
 
 let encode_and_hash tx =
@@ -44,25 +44,25 @@ let encode_and_hash tx =
 
 (* so we'd loop through the inputs *)
 
-let _,tx = M.decodeTx tx_s 0 
-let input = List.nth tx.inputs 0 
+let _,tx = M.decodeTx tx_s 0
+let input = List.nth tx.inputs 0
 (*let () = Printf.printf "%s\n" @@ M.hex_of_string input .previous  *)
-let input_script = M.decode_script input.script 
+let input_script = M.decode_script input.script
 
-let _, txprev = M.decodeTx txprev_s 0 
+let _, txprev = M.decodeTx txprev_s 0
 let output = List.nth txprev.outputs 0
-let output_script = M.decode_script output.script 
+let output_script = M.decode_script output.script
 
 
-let signature,pubkey = match input_script with 
+let signature,pubkey = match input_script with
   | M.BYTES s :: M.BYTES p :: [] -> s, p
 
 (* how do we know whether to decompress the pubkey? *)
-let pubkey = Microecc.decompress pubkey 
+let pubkey = Microecc.decompress pubkey
 
-(* so we substitute the prev output script into current tx with its outputs *)   
-let tx = substitute tx 0 output_script  
-let hash = encode_and_hash tx 
+(* so we substitute the prev output script into current tx with its outputs *)
+let tx = substitute tx 0 output_script
+let hash = encode_and_hash tx
 
 (*
 let () = Printf.printf "%s\n" @@ M.formatTx (tx )
@@ -83,18 +83,18 @@ let log s = U.write_stdout s
 
 let get_db_tx db hash =
   let query =
-  "select substr(d.data,tx.pos+1,tx.len) as data 
-    from tx 
-    join block b on b.id = tx.block_id 
-    join blockdata d on d.id = 
-    b.blockdata_id 
+  "select substr(d.data,tx.pos+1,tx.len) as data
+    from tx
+    join block b on b.id = tx.block_id
+    join blockdata d on d.id =
+    b.blockdata_id
     where tx.hash = $1;
   " in
-    PG.prepare db ~query:query () 
+    PG.prepare db ~query:query ()
     >> PG.execute db ~params:[
       Some (PG.string_of_bytea hash);
-    ] () 
-  >>= function 
+    ] ()
+  >>= function
     (Some field ::_ )::_ -> return @@ PG.bytea_of_string field
     | _ -> raise (Failure "tx not found")
 
@@ -106,19 +106,20 @@ let () = Lwt_main.run U.(
   >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
     let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
-    get_db_tx db hash 
+    get_db_tx db hash
   >>= fun result ->
     let hash = M.sha256d result |> M.strrev in
     log @@ M.hex_of_string hash
-    >>
-    log @@ M.hex_of_string result 
-    >>
+  >>
+    log @@ M.hex_of_string result
+  >>
+    (* foldm over inputs - to build a structure? *)
+    let _,tx = M.decodeTx result 0 in
     let input = List.nth tx.inputs 0 in
-    log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index 
-
+    log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
   >>
     log "whoot"
-) 
+)
 
 
 
