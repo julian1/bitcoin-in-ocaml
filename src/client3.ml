@@ -81,30 +81,35 @@ let log s = U.write_stdout s
 
 (* '\x0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb' *)
 
+let get_db_tx db hash =
+  let query =
+  "select substr(d.data,tx.pos+1,tx.len) as data 
+    from tx 
+    join block b on b.id = tx.block_id 
+    join blockdata d on d.id = 
+    b.blockdata_id 
+    where tx.hash = $1;
+  " in
+  PG.( prepare db ~query:query () 
+      >> execute db ~params:[
+      Some (string_of_bytea hash);
+    ] () 
+  )
+  >>= fun rows ->
+    match rows with
+      (Some field ::_ )::_ -> return @@ PG.bytea_of_string field
+      | _ -> raise (Failure "tx not found")
+
+
+
 let () = Lwt_main.run U.(
     log "connecting and create db"
     >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
-      let s =
-      "select substr(d.data,tx.pos+1,tx.len) as data 
-        from tx 
-        join block b on b.id = tx.block_id 
-        join blockdata d on d.id = 
-        b.blockdata_id 
-        where tx.hash = $1;
-      " in
-      PG.( prepare db ~query:s   () 
-          >> execute db ~params:[
-          let hash = M.string_of_hex "9ec4bc49e828d924af1d1029cacf709431abbde46d59554b62bc270e3b29c4b1" in 
-          Some (string_of_bytea hash);
-        ] () 
-      )
-      >>= fun rows ->
-        let result = 
-          match rows with
-            (Some field ::_ )::_ -> PG.bytea_of_string field
-            | _ -> raise (Failure "tx not found")
-        in log @@ M.hex_of_string result
+      let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
+      get_db_tx db hash 
+    >>= fun result ->
+      log @@ M.hex_of_string result
 
   >>
     log "whoot"
