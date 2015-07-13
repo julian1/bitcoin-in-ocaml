@@ -40,7 +40,7 @@ let substitute tx i output_script =
 
 let encode_and_hash tx =
   (* ok, now we need a re-encode tx function and we need to append 1 byte to end before hasing *)
-  let s = M.encodeTx tx ^ M.encodeInteger32 1 in (* "\x01" *)  (* should be single byte not string - adding hash type *)
+  let s = M.encodeTx tx ^ M.encodeInteger32 1 in
   let hash = M.sha256d s in
   hash
 
@@ -54,8 +54,6 @@ let input_script = M.decode_script @@ (List.hd tx.inputs).script
 let signature = match List.hd input_script with BYTES s -> s 
 let pubkey    = match List.nth input_script 1 with BYTES s -> s
 let pubkey = Microecc.decompress pubkey 
-
-
 
 
 
