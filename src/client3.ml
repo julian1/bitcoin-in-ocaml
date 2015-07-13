@@ -19,7 +19,6 @@ let read_from_file filename =
   s
 
 let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" 
-let _,tx = M.decodeTx tx_s 0 
 
 (*
 let () = Printf.printf "org %s\n" @@ M.hex_of_string tx_s
@@ -50,13 +49,14 @@ let encode_and_hash tx =
 
 let _, txprev = M.decodeTx txprev_s 0 
 let output_script = M.decode_script (List.nth txprev.outputs 0).script 
+
+let _,tx = M.decodeTx tx_s 0 
 let input_script = M.decode_script @@ (List.nth tx.inputs 0).script 
 
 let signature,pubkey = match input_script with 
-    | M.BYTES s :: M.BYTES p :: [] -> s, p
+  | M.BYTES s :: M.BYTES p :: [] -> s, p
 
-
-(*let pubkey    = match List.nth input_script 1 with BYTES s -> s *)
+(* how do we know whether to decompress the pubkey? *)
 let pubkey = Microecc.decompress pubkey 
 
 
