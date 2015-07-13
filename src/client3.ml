@@ -4,10 +4,16 @@
 
 
 module M = Message
+module U = Util
+module PG = U.PG  (* TODO PG shouldn't depend on U, move PG out of Util *)
+
+let (>>=) = Lwt.(>>=)
+let return = Lwt.return
+
+
+
 
 open M
-
-
 
 
 let read_from_file filename =
@@ -36,10 +42,11 @@ let encode_and_hash tx =
   hash
 
 
+(* so we'd loop through the inputs *)
 
 let _,tx = M.decodeTx tx_s 0 
 let input = List.nth tx.inputs 0 
-let () = Printf.printf "%s\n" @@ M.hex_of_string input .previous 
+(*let () = Printf.printf "%s\n" @@ M.hex_of_string input .previous  *)
 let input_script = M.decode_script input.script 
 
 let _, txprev = M.decodeTx txprev_s 0 
@@ -54,9 +61,9 @@ let signature,pubkey = match input_script with
 let pubkey = Microecc.decompress pubkey 
 
 (* so we substitute the prev output script into current tx with its outputs *)   
-let tx = substitute tx 0 output_script in 
-let hash = encode_and_hash tx in
-	
+let tx = substitute tx 0 output_script  
+let hash = encode_and_hash tx 
+
 (*
 let () = Printf.printf "%s\n" @@ M.formatTx (tx )
 *)
@@ -70,6 +77,38 @@ let () = Printf.printf "sig result %b\n" x in
 
 
 
+let log s = U.write_stdout s
+
+(* '\x0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb' *)
+
+let () = Lwt_main.run U.(
+    log "connecting and create db"
+    >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+    >>= fun db ->
+      let s =
+      "select substr(d.data,tx.pos+1,tx.len) as data 
+        from tx 
+        join block b on b.id = tx.block_id 
+        join blockdata d on d.id = 
+        b.blockdata_id 
+        where tx.hash = $1;
+      " in
+      PG.( prepare db ~query:s   () 
+          >> execute db ~params:[
+          let hash = M.string_of_hex "9ec4bc49e828d924af1d1029cacf709431abbde46d59554b62bc270e3b29c4b1" in 
+          Some (string_of_bytea hash);
+        ] () 
+      )
+      >>= fun rows ->
+        let result = 
+          match rows with
+            (Some field ::_ )::_ -> PG.bytea_of_string field
+            | _ -> raise (Failure "tx not found")
+        in log @@ M.hex_of_string result
+
+  >>
+    log "whoot"
+) 
 
 
 
