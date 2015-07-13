@@ -90,11 +90,10 @@ let get_db_tx db hash =
     b.blockdata_id 
     where tx.hash = $1;
   " in
-  PG.( prepare db ~query:query () 
-      >> execute db ~params:[
-      Some (string_of_bytea hash);
+    PG.prepare db ~query:query () 
+    >> PG.execute db ~params:[
+      Some (PG.string_of_bytea hash);
     ] () 
-  )
   >>= function 
     (Some field ::_ )::_ -> return @@ PG.bytea_of_string field
     | _ -> raise (Failure "tx not found")
@@ -113,6 +112,9 @@ let () = Lwt_main.run U.(
     log @@ M.hex_of_string hash
     >>
     log @@ M.hex_of_string result 
+    >>
+    let input = List.nth tx.inputs 0 in
+    log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index 
 
   >>
     log "whoot"
