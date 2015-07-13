@@ -59,9 +59,7 @@ let signature,pubkey = match input_script with
 (* how do we know whether to decompress the pubkey? *)
 let pubkey = Microecc.decompress pubkey 
 
-
-
-let tx = substitute tx 0 output_script in 
+let tx = substitute tx 1 output_script in 
 let hash = encode_and_hash tx in
 	
 (*
