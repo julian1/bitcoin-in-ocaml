@@ -30,9 +30,9 @@ let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6
 
 
 (* substitute input script, and clear others *)
-let substitute tx i subscript = 
+let substitute tx i output_script = 
 	let f index (input: M.tx_in ) = 
-		if index == i then { input with script = M.encode_script subscript; }  
+		if index == i then { input with script = M.encode_script output_script; }  
 		else { input with script = M.encode_script [] } 
 	in
 	{ tx with inputs = List.mapi f tx.inputs }  
@@ -49,17 +49,17 @@ let encode_and_hash tx =
 (* must be an easier way to drill down into the scripts that we want *)
 
 let _, txprev = M.decodeTx txprev_s 0 
-let subscript = M.decode_script (List.hd txprev.outputs).script 
-let tx_input_script = M.decode_script @@ (List.hd tx.inputs).script 
-let signature = match List.hd tx_input_script with BYTES s -> s 
-let pubkey    = match List.nth tx_input_script 1 with BYTES s -> s
+let output_script = M.decode_script (List.hd txprev.outputs).script 
+let input_script = M.decode_script @@ (List.hd tx.inputs).script 
+let signature = match List.hd input_script with BYTES s -> s 
+let pubkey    = match List.nth input_script 1 with BYTES s -> s
 let pubkey = Microecc.decompress pubkey 
 
 
 
 
 
-let tx = substitute tx 0 subscript in 
+let tx = substitute tx 0 output_script in 
 let hash = encode_and_hash tx in
 	
 (*
