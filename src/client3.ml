@@ -27,18 +27,6 @@ let () = Printf.printf "hash %s\n" ( tx_s |> M.sha256d |> M.strrev |> M.hex_of_s
 *)
 
 let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" 
-let _, txprev = M.decodeTx txprev_s 0 
-
-(* let () = Printf.printf "%s\n" @@ M.formatTx tx *)
-
-(* must be an easier way to drill down into the scripts that we want *)
-let subscript = M.decode_script @@ (List.hd txprev.outputs).script 
-let tx_input_script = M.decode_script @@ (List.hd tx.inputs).script 
-let signature = match List.hd tx_input_script with BYTES s -> s 
-let pubkey    = match List.nth tx_input_script 1 with BYTES s -> s
-let pubkey = Microecc.decompress pubkey 
-
-
 
 
 (* substitute input script, and clear others *)
@@ -55,6 +43,19 @@ let encode_and_hash tx =
   let s = M.encodeTx tx ^ M.encodeInteger32 1 in (* "\x01" *)  (* should be single byte not string - adding hash type *)
   let hash = M.sha256d s in
   hash
+
+(* let () = Printf.printf "%s\n" @@ M.formatTx tx *)
+
+(* must be an easier way to drill down into the scripts that we want *)
+
+let _, txprev = M.decodeTx txprev_s 0 
+let subscript = M.decode_script (List.hd txprev.outputs).script 
+let tx_input_script = M.decode_script @@ (List.hd tx.inputs).script 
+let signature = match List.hd tx_input_script with BYTES s -> s 
+let pubkey    = match List.nth tx_input_script 1 with BYTES s -> s
+let pubkey = Microecc.decompress pubkey 
+
+
 
 
 
