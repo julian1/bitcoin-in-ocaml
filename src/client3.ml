@@ -35,17 +35,17 @@ let encode_and_hash tx =
   let hash = M.sha256d s in
   hash
 
-(* let () = Printf.printf "%s\n" @@ M.formatTx tx *)
 
-(* must be an easier way to drill down into the scripts that we want *)
+
+let _,tx = M.decodeTx tx_s 0 
+let input = List.nth tx.inputs 0 
+let () = Printf.printf "%s\n" @@ M.hex_of_string input .previous 
+let input_script = M.decode_script input.script 
 
 let _, txprev = M.decodeTx txprev_s 0 
 let output = List.nth txprev.outputs 0
 let output_script = M.decode_script output.script 
 
-let _,tx = M.decodeTx tx_s 0 
-let input = List.nth tx.inputs 0 
-let input_script = M.decode_script input.script 
 
 let signature,pubkey = match input_script with 
   | M.BYTES s :: M.BYTES p :: [] -> s, p
