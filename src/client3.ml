@@ -95,21 +95,24 @@ let get_db_tx db hash =
       Some (string_of_bytea hash);
     ] () 
   )
-  >>= fun rows ->
-    match rows with
-      (Some field ::_ )::_ -> return @@ PG.bytea_of_string field
-      | _ -> raise (Failure "tx not found")
+  >>= function 
+    (Some field ::_ )::_ -> return @@ PG.bytea_of_string field
+    | _ -> raise (Failure "tx not found")
 
 
 
 let () = Lwt_main.run U.(
-    log "connecting and create db"
-    >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
-    >>= fun db ->
-      let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
-      get_db_tx db hash 
-    >>= fun result ->
-      log @@ M.hex_of_string result
+
+  log "connecting to db"
+  >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+  >>= fun db ->
+    let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
+    get_db_tx db hash 
+  >>= fun result ->
+    let hash = M.sha256d result |> M.strrev in
+    log @@ M.hex_of_string hash
+    >>
+    log @@ M.hex_of_string result 
 
   >>
     log "whoot"
