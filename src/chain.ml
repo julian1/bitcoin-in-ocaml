@@ -11,6 +11,16 @@ module CL = Core.Core_list
 let (>>=) = Lwt.(>>=) 
 let return = Lwt.return
 
+(*
+  VERY VERY IMPORTANT
+
+    - rather than requesting the tip, we should request tip - 1. 
+    - then when we get a block inventory back, we will get the tip hash back
+      and know it's what we want.
+       
+    - we might be able to remove the solicited stuff.
+    - we still need to handle, random single blocks that advance the chain.
+*)
 
 (*
   - ok, now we need more block rules (merckle root, difficulty, time checks )

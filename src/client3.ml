@@ -121,6 +121,14 @@ let () = Lwt_main.run U.(
     log "whoot"
 )
 
+(*
+  - For standard Bitcoind UTXOs are going to include the full output - including the script.
+    so verifying tx's can be done entirely in memory to be looked up on disk .
 
+  - we really want to index outputs... then we can get at them quickly, and even return
+  all of them in one request.
 
+  - if we are verifying txs we are going to have to manage the chainstate as if the block
+    is included. eg. the latest block back to genesis only.  
 
+*)
