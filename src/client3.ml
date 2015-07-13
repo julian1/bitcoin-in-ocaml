@@ -49,10 +49,14 @@ let encode_and_hash tx =
 (* must be an easier way to drill down into the scripts that we want *)
 
 let _, txprev = M.decodeTx txprev_s 0 
-let output_script = M.decode_script (List.hd txprev.outputs).script 
-let input_script = M.decode_script @@ (List.hd tx.inputs).script 
-let signature = match List.hd input_script with BYTES s -> s 
-let pubkey    = match List.nth input_script 1 with BYTES s -> s
+let output_script = M.decode_script (List.nth txprev.outputs 0).script 
+let input_script = M.decode_script @@ (List.nth tx.inputs 0).script 
+
+let signature,pubkey = match input_script with 
+    | M.BYTES s :: M.BYTES p :: [] -> s, p
+
+
+(*let pubkey    = match List.nth input_script 1 with BYTES s -> s *)
 let pubkey = Microecc.decompress pubkey 
 
 
