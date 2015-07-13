@@ -23,12 +23,11 @@ let return = Lwt.return
 module L = List
 module CL = Core.Core_list
 module S = String
+module U = Util
+module PG = U.PG
 
-module M = Message
 (* module Sc = Scanner *)
-
-
-module PG = Misc.PG
+module M = Message
 
 (*  - as well as fold_m should have takeWhile ...
 *)
@@ -106,40 +105,49 @@ let create_prepared_stmts db =
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
 
+      ("insert_blockdata", "
+          insert into blockdata(data)
+          values ($1)
+          returning id
+      ");
+
       ("insert_block", "
-          insert into block(hash,previous_id,time)
+          insert into block(hash,previous_id,time, blockdata_id)
           select
               $1,
               b.id,
-              to_timestamp($3) at time zone 'UTC'
+              to_timestamp($3) at time zone 'UTC',
+              $4
           from block b
           where hash = $2 and b.id is not null
           returning id
-        " );
+      ");
 
       (* TODO maybe remove this *)
       ("insert_genesis_block", "insert into block(hash) select $1" );
 
-      ("insert_tx", "insert into tx(block_id,hash) values ($1, $2) returning id"  );
+      ("insert_tx", "insert into tx(block_id,hash, pos, len) values ($1, $2, $3, $4) returning id"  );
+
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
       ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
       ("insert_input", "insert into input(tx_id,output_id) values ($1,$2) returning id" );
 
       ("insert_address", "
           with s as (
-              select id, hash
+              select id, hash, script
               from address
               where hash = $1
+              and script = $2
           ), i as (
-              insert into address (hash)
-              select $1
+              insert into address (hash, script)
+              select $1, $2
               where not exists (select 1 from s)
-              returning id, hash
+              returning id, hash, script
           )
-          select id, hash
+          select id, hash, script
           from i
           union all
-          select id, hash
+          select id, hash, script
           from s
         "  );
       ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
@@ -160,20 +168,6 @@ let create_prepared_stmts db =
   )
 
 
-(*
-let can_insert_block db (hash,previous_hash) =
-  PG.( execute db ~name:"can_insert_block" ~params:[
-    Some (string_of_bytea hash);
-    Some (string_of_bytea previous_hash)
-  ] ()
-  )
-  >>= function
-    | (Some "t" ::_ )::_ -> return true
-    | (Some "f" ::_ )::_ -> return false
-    | _ -> raise (Failure "previous tx not found")
-*)
-
-
 let format_tx hash i value script =
   " i " ^ string_of_int i
   ^ " value " ^ string_of_float ((Int64.to_float value ) /. 100000000.)
@@ -182,9 +176,13 @@ let format_tx hash i value script =
 
 
 type my_script =
-  | Some of string
   | None
   | Strange
+  | P2PK of string
+  | P2PKH of string
+  | P2SH of string
+  (* | P2MS p2ms MULTI of string *)
+
 
 
 let process_output x (index,output,tx_hash,tx_id) =
@@ -199,65 +197,41 @@ let process_output x (index,output,tx_hash,tx_id) =
     let output_id = decode_id rows in
     let script = M.decode_script output.script in
     let decoded_script = match script with
-      (* pay to pubkey *)
-      | BYTES s :: OP_CHECKSIG :: [] -> Some (s |> M.sha256 |> M.ripemd160)
-      (* pay to pubkey hash*)
-      | OP_DUP :: OP_HASH160 :: BYTES s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> Some s
-      (* pay to script - 3 *)
-      | OP_HASH160 :: BYTES s :: OP_EQUAL :: [] -> Some s
+      | BYTES s :: OP_CHECKSIG :: [] -> P2PK s  (* could do the hashing later *)
+      | OP_DUP :: OP_HASH160 :: BYTES s :: OP_EQUALVERIFY :: OP_CHECKSIG :: [] -> P2PKH s
+      | OP_HASH160 :: BYTES s :: OP_EQUAL :: [] -> P2SH s
       (* null data *)
       | OP_RETURN :: BYTES _ :: [] -> None
-      (* common for embedding raw data, prior to op_return  *)
+      (* seems common for embedding raw data, prior to op_return *)
       | BYTES _ :: [] -> None
-      (* N K1 K2 K3 M CHECKMULTISIGVERIFY, addresses? TODO make generic *)
+      (* N K1 K2 K3 M CHECKMULTISIGVERIFY, addresses? TODO should record all these make generic  *)
       | (OP_1|OP_2|OP_3) :: _ when List.rev script |> List.hd = OP_CHECKMULTISIG -> None
-
       | _ -> Strange
     in
+    let insert hash160 script =
+      PG.( 
+        execute x.db ~name:"insert_address" ~params:[
+          Some (string_of_bytea hash160);
+          Some script
+        ] ()
+      >>= fun rows ->
+        let address_id = decode_id rows in
+        execute x.db ~name:"insert_output_address" ~params:[
+          Some (string_of_int output_id);
+          Some (string_of_int address_id);
+        ] ()
+      )
+    in
     match decoded_script with
-      | Some hash160 ->
-          PG.( execute x.db ~name:"insert_address" ~params:[
-            Some (string_of_bytea hash160 ) ] ()
-          )
-          >>= fun rows ->
-          let address_id = decode_id rows in
-
-          PG.( execute x.db ~name:"insert_output_address" ~params:[
-            Some (string_of_int output_id);
-            Some (string_of_int address_id);
-          ] ()
-          )
-          >> return x
-
+      | P2PK pk -> insert (pk |> M.sha256 |> M.ripemd160) "p2pk" >> return x
+      | P2PKH hash160 -> insert hash160 "p2pkh" >> return x
+      | P2SH hash160 -> insert hash160 "p2sh" >> return x
       | Strange ->
-          log @@ "strange " ^ format_tx tx_hash index output.value script
+        (* why don't we record strange... because it's not an address should be in another table *)
+        log @@ "strange " ^ format_tx tx_hash index output.value script
           >> return x
       | None ->
         return x
-
-(* Important - in fact we don't have to return the value, but could just
-    select the correct output id and insert at the same time.
-    -
-  - need an index on tx.hash at least.
-  - but should do timing.
-  - and avoid preparing the statement each time. should do it in createdb
-  2m 5 - to 50k with no index
-  1m 19 with index on tx(hash)
-  1m 40 with index on tx(hash) and output(index)
-
-now,
-    43,50 secs to 50k.
-    30 sec best with separated prepare. but it varys.
-        seems to use bitmap scan initially - which is slower.
-
-important - we're also doing a lot more
-
-  we should create another table for addresses (for more than one)
-    - since not every output is associated with an address and there
-    maybe more than one.
-    - likewise for pubkeys - to avoid nulls
-  and der sigs...
-*)
 
 
 
@@ -318,9 +292,12 @@ let process_input x (index, input, hash, tx_id) =
 
 
 let process_tx x (block_id,hash,tx) =
+  let (tx : M.tx) = tx in
   PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_int block_id);
       Some (PG.string_of_bytea hash);
+      Some (PG.string_of_int tx.pos);
+      Some (PG.string_of_int tx.length);
     ] ()
   >>= fun rows ->
     let tx_id = decode_id rows in
@@ -360,12 +337,17 @@ let process_block x payload =
         | _ -> return ()
     end
   >>
-*)  let _, block  = M.decodeBlock payload 0 in
+u
+*)  
+
+
+
+  let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
     log @@ "insert_block " ^ M.hex_of_string hash
+
   >> PG.begin_work x.db
 
-  >>  log  "after begin work " 
   >> PG.( execute x.db ~name:"can_insert_block" ~params:[
       Some (string_of_bytea hash);
       Some (string_of_bytea block.previous)
@@ -375,12 +357,18 @@ let process_block x payload =
       function
       | (Some "t" ::_ )::_ ->
         begin
-          log "can insert " 
 
-          >> PG.execute x.db ~name:"insert_block" ~params:[
+          PG.execute x.db ~name:"insert_blockdata" ~params:[
+            Some (PG.string_of_bytea payload );
+          ] ()
+          >>= fun rows ->
+            let blockdata_id = decode_id rows in
+
+          PG.execute x.db ~name:"insert_block" ~params:[
             Some (PG.string_of_bytea hash );
             Some (PG.string_of_bytea block.previous );
             Some (PG.string_of_int block.nTime );
+            Some (PG.string_of_int blockdata_id );
           ] ()
           >>= fun rows ->
             log "done insert_block"
@@ -389,11 +377,17 @@ let process_block x payload =
             let txs = M.decode_block_txs payload in
             let txs = L.map (fun (tx : M.tx) ->
               block_id,
+              (*M.strsub payload tx.pos tx.length, *)  (* TODO should pass raw payload and do hashing in process_tx *)
               M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
               tx
             ) txs
             in
-            fold_m process_tx x txs
+            (*let process_tx x (block_id,payload,hash,tx) =
+                log @@ "here -> " ^ M.hex_of_string hash ^ " " ^ M.hex_of_string payload
+                >> 
+                return x 
+            in *)
+            fold_m process_tx  x txs
           end
 
       | (Some "f" ::_ )::_ ->
@@ -401,10 +395,11 @@ let process_block x payload =
           log "cannot insert"
           >> return x
         end 
-      | _ -> begin
-          log "unknown"
+(*      | _ -> begin
+          log "unknown db response"
           >> return x
         end 
+*)
     end
   >>= fun x ->
     PG.commit x.db

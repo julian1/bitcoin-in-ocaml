@@ -13,11 +13,11 @@ let log s = U.write_stdout s >> return U.Nop
     rather than seq_job_running to false when finished we should wrap
     it in a closure here...
 
-
-
     OK, i think there's an issue that when one job is complete
     we're not immediately scheduling the next one... 
+    ------------------
   
+    sequence job should return the new state.  
 *)
 
 let (>>=) = Lwt.(>>=) 
@@ -43,7 +43,7 @@ let update2 _ (state : Misc.my_app_state) =
       seq_job_running = true;
       seq_jobs_pending = t;
       jobs = (
-        job () 
+        job ()   (* IMPORTANT TODO the state should be injected here *)
         (* >> U.write_stdout "here"  *)
         >> return Misc.SeqJobFinished)
         :: state.jobs;

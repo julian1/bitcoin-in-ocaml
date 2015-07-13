@@ -58,25 +58,13 @@ let format_addr conn =
   pad s 18
 
 
-type my_event =
-   | GotConnection of connection
-   | GotConnectionError of string
-   | GotMessage of connection * Message.header * string * string
-   | GotMessageError of connection * string
-
-	(* hash, height, raw_header, payload *)
-  (* | GotBlock of string * int * string * string  *)
-
-	| SeqJobFinished  (* SeqJobOK , SeqJobFailed? *)
-   | Nop
-
-
-type jobs_type =  my_event Lwt.t list 
-
 
 
 (* module SS = Map.Make(struct type t = string let compare = compare end) *)
+
 module SS = Map.Make( String ) 
+
+(*
 
 module SSS = Set.Make(String);;
 
@@ -88,6 +76,7 @@ type my_head =
     height : int;   (* if known? *)
    (*  difficulty : int ; *) (* aggregated *)
 }
+*)
 
 
 (* revert this back to a tuple instead *)
@@ -111,17 +100,8 @@ module PG = PGOCaml_generic.Make (Lwt_thread)
 
 type my_app_state =
 {
-  jobs :  jobs_type  ;
 
   connections : connection list ;
-
-
-
-  (* tree structure  - change name tree *)
-  (* change name my_headers *)
-(*
-  heads : my_head SS.t ;
-*)
 
   (* set when inv request made to peer *)
   block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
@@ -132,18 +112,28 @@ type my_app_state =
   (*  last_block_received_time : (Lwt_unix.file_descr * float) list ; *)
   last_block_received_time : ggg list ;
 
-
-  seq_jobs_pending : (unit -> my_event Lwt.t ) Myqueue.t;	
-
-  seq_job_running : bool ;
-
-  blocks_fd : Lwt_unix.file_descr ;
-
   db : int PG.t ; (* TODO what is this type *)
  
-  (* db : LevelDB.db ;  *)
 }
 
+
+
+
+type my_event =
+  | GotConnection of connection
+  | GotConnectionError of string
+  | GotMessage of connection * Message.header * string * string
+  | GotMessageError of connection * string
+
+	(* hash, height, raw_header, payload *)
+  (* | GotBlock of string * int * string * string  *)
+
+  | SeqJobFinished of my_app_state * my_event Lwt.t list
+  | Nop
+  | JJ of my_event
+
+
+type jobs_type =  my_event Lwt.t list 
 
 
 (* the head structure shouldn't be here - place it in app_state? *)

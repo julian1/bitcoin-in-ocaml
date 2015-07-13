@@ -1,6 +1,6 @@
 
 module M = Message
-module U = Misc
+module U = Util
 module S = String
 
 module L = List
@@ -40,7 +40,7 @@ let initial_getdata hashes =
     let encodeInvItem hash = M.encodeInteger32 2 ^ M.encodeHash32 hash in
       (* encodeInv - move to Message  - and need to zip *)
       M.encodeVarInt (L.length hashes )
-      ^ String.concat "" @@ L.map encodeInvItem hashes
+      ^ S.concat "" @@ L.map encodeInvItem hashes
   in
   let payload = encodeInventory hashes in
   U.encodeMessage "getdata" payload
@@ -48,13 +48,27 @@ let initial_getdata hashes =
 
 let log s = U.write_stdout s >> return U.Nop
 
+(*
+    Very important
+    If all i/o gets pushed through the serializer (back or front), then queued items can own state through 
+      the computation and return new state or db.  we don't have to add it through various points
 
-let manage_chain1 (state : Misc.my_app_state) e    =
+    - a ordinate job that completes cannot alter state, but can only queue. because the new state
+      is a result of the serializer job. 
+       
+    - an advantage - we don't have to have partial jobs ...  that call a continuation Action f
+
+    - we can still do partial stuff, if wanted by pushing another message on back of queue. 
+
+    BUT - must keep queue out of state. because parallel jobs that run. will compete.
+      - think this is good anyway.
+*)
+
+let manage_chain1 (state : U.my_app_state) e    =
   match e with
 
     (* TODO connection errors should monitor read errors and clear fd *)
     | U.GotMessage ( conn , header, raw_header, payload) -> (
-
       let now = Unix.time () in
       match header.command with
         | "inv" -> (
@@ -103,10 +117,11 @@ let manage_chain1 (state : Misc.my_app_state) e    =
             let blocks_on_request =
               L.fold_left (fun m h -> U.SS.add h (conn.fd, now, solicited) m) state.blocks_on_request block_hashes
             in
-            ( { state with
+            let state = { state with
                 block_inv_pending = block_inv_pending;
                 blocks_on_request = blocks_on_request ;
-				      jobs = state.jobs @  
+				    } in
+            let jobs =  
               [
                 log @@ U.format_addr conn
                   ^ " *** got inventory blocks " ^ (string_of_int @@ L.length block_hashes  )
@@ -114,10 +129,11 @@ let manage_chain1 (state : Misc.my_app_state) e    =
                   (* request blocks from the peer *)
                   U.send_message conn (initial_getdata block_hashes );
               ]
-				}
-            )
+            in
+            return (U.SeqJobFinished (state, jobs))
+
           else
-            state
+            return (U.SeqJobFinished (state, []))
           )
 
         | "block" -> (
@@ -144,48 +160,51 @@ let manage_chain1 (state : Misc.my_app_state) e    =
           (* update the time that we got a valid block from the peer *)
           let last =
               (* update the fd to indicate we got a good block, TODO tidy this *)
-              let last = L.filter (fun (x : Misc.ggg) -> x.fd != conn .fd) state.last_block_received_time in
+              let last = L.filter (fun (x : U.ggg) -> x.fd != conn .fd) state.last_block_received_time in
               ({ fd = conn.fd; t = now ;
-              } : Misc.ggg )::last
+              } : U.ggg )::last
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
-          let y () = 
-            let x = Processblock.(  
-              {
-                block_count = 0;
-                db = state.db;
-              })
-            in
-              log "\nbegin writing db"
-              >> Processblock.process_block x payload 
-              >> log "done writing db"
+
+          let x = Processblock.(  
+            {
+              block_count = 0;
+              db = state.db;
+            })
           in
-          { state with
+
+          (* OK. now we have to run this computation inline *) 
+          log "\nbegin writing db"
+          >> Processblock.process_block x payload 
+          >> log "done writing db"
+          >>
+
+          let state = { state with
             (* heads = heads; *)
             blocks_on_request = blocks_on_request;
             last_block_received_time = last;
-            seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ;
-            jobs = state.jobs @ 
-            [ 
+            (* seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ; *) 
+			    } in
+          let jobs = [ 
               log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
               " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
-            ]
-			}
+          ] 
+          in
+          return (U.SeqJobFinished (state, jobs ))
         )
-        | _ -> state
+        | _ -> return (U.SeqJobFinished (state, []))
       )
-    | _ -> state
+    | _ -> return (U.SeqJobFinished (state, []))
 
 (*
     So we need a db connecttion....
     to see what blocks we need...
 *)
 
-let manage_chain2 (state : Misc.my_app_state) e  =
-  (* issue inventory requests to advance the tips *)
+let manage_chain2 (state : U.my_app_state) e  =
+  (* issue inventory requests for blocks based on current chainstate leaves *)
   match e with
-    | U.Nop -> state
     | _ ->
       (* we need to check we have completed handshake *)
       (* shouldn't we always issue a request when blocks_on_request *)
@@ -222,7 +241,7 @@ let manage_chain2 (state : Misc.my_app_state) e  =
       if not has_solicited 
         && state.block_inv_pending = None 
         && state.connections <> [] 
-        && state.seq_jobs_pending = Myqueue.empty
+        (* && state.seq_jobs_pending = Myqueue.empty *)
         then
 
 (*
@@ -246,319 +265,70 @@ let manage_chain2 (state : Misc.my_app_state) e  =
         (* choose a peer fd at random *)
         let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
         let (conn : U.connection) = List.nth state.connections index in
+
         (* TODO fixme *)
         (* let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in *)
         (* TODO we need to record if handshake has been performed *)
 
+        log @@ S.concat "" [
+          "request addr " ; conn.addr;
+          "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
+          (* "\nheads count " ; string_of_int (L.length heads); *)
+          (* "\nrequested head is ";  M.hex_of_string head ; *)
+          "\n fds\n" ; S.concat "\n" ( L.map (fun (x : U.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
+          ]
+        >> U.PG.begin_work state.db
+        >> U.PG.prepare state.db ~query:"select pb from leaves order by random() limit 1" ()
+        >> U.PG.execute state.db ~params:[ ] ()
+        >>= fun rows -> 
+          let head = 
+            match rows with
+              (Some field ::_ )::_ -> U.PG.bytea_of_string field
+              | _ -> raise (Failure "couldn't get leaf")
+        in 
+        U.PG.commit state.db
+        >> log @@ "\nrequested head is " ^ M.hex_of_string head
+        >> 
+        let state = { state with
+            block_inv_pending = Some (conn.fd, now ) ;
+        } in
+        let jobs = [
+          U.send_message conn (initial_getblocks head)
+        ] in
+        return (U.SeqJobFinished (state, jobs))
 
-        let y () = 
-          log @@ S.concat "" [
-            "request addr " ; conn.addr;
-            "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
-            (* "\nheads count " ; string_of_int (L.length heads); *)
-            (* "\nrequested head is ";  M.hex_of_string head ; *)
-            "\n fds\n" ; S.concat "\n" ( L.map (fun (x : Misc.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
-            ]
-            >> Misc.PG.begin_work state.db
-            >> Misc.PG.prepare state.db  ~query:"select pb from leaves" ()
-            >> Misc.PG.execute state.db  ~params:[ ] ()
-            >>= fun rows -> 
-              let head = 
-                match rows with
-                  (Some field ::_ )::_ -> Misc.PG.bytea_of_string field
-                  | _ -> raise (Failure "couldn't get leaf")
-            in 
-            Misc.PG.commit state.db
-            >> log @@ "\nrequested head is " ^ M.hex_of_string head
-            >>
-            (* request inv 
-                TODO What if the conn has been closed in the meantime???k
-                we should post a message with the tip... to use a known good connection
-            *)
-            U.send_message conn (initial_getblocks head)
-          in
-
-        { state with
-          block_inv_pending = Some (conn.fd, now ) ;
-       
-          seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ;
- 
-		      (* jobs = state.jobs @ [ y (); ] *)
-		  }
       else
-        state
+        return (U.SeqJobFinished (state, []))
 
-(*
-    so a lot of the job will 
-    - if we bind the fd to use, then it could get closed by something else...
+(* 
+  VERY IMPORTANT 
+  the queue doesn't go deep. 
+
+  - Because we don't try to read the next readMessage until the GotMessage has processed...
+  - Perhaps we should change - so that we rebind the read handler as soon as we read something. 
+  - this would be nice, in that we wouldn't need to always rebind the handler in the p2p loop ..
 *)
 
-
-
-(*
-    this whole function should go. 
-    we use db state to determine what blocks we have or need.
-*)
-(*
-let readBlocks fd =
-  let advance fd len =
-      Lwt_unix.lseek fd len SEEK_CUR 
-      >>= fun r -> 
-      (* Lwt_io.write_line Lwt_io.stdout @@ "seek result " ^ string_of_int r  *)
-      return ()
-  in
-  (* to scan the messages stored in file *)
-  let rec loop fd ( heads : U.my_head U.SS.t ) =
-    U.read_bytes fd 24
-    >>= fun x -> match x with 
-      | Some s -> ( 
-        let _, header = M.decodeHeader s 0 in
-        (* Lwt_io.write_line Lwt_io.stdout @@ header.command ^ " " ^ string_of_int header.length >> *) 
-        U.read_bytes fd 80 
-        >>= fun u -> match u with 
-          | Some ss -> 
-            let hash = ss |> Message.sha256d |> Message.strrev  in
-            let _, block_header = M.decodeBlock ss 0 in
-
-            (* Core.Core_map.find *)
-			(* should be refactored to function - get_height and called with args *)
-            let height = 
-              if (U.SS.mem block_header.previous heads) then 
-                (U.SS.find block_header.previous heads ).height + 1 
-              else
-                1     (* we have a bug, where we never download the first block *)
-            in
-
-            (* Lwt_io.write_line Lwt_io.stdout @@ M.hex_of_string hash ^ " " ^ M.hex_of_string block_header.previous 
-            >> *) advance fd (header.length - 80 )
-            >> let heads = U.SS.add hash ({ 
-                previous = block_header.previous;  
-                height = height; 
-              } : U.my_head ) heads 
-            in
-            loop fd  heads  (* *)
-          | None -> 
-            return heads 
-        )
-      | None -> 
-        return heads 
-  in    
-    loop fd U.SS.empty  
-    >>= fun heads -> return heads
-*) 
-
-
-let create () =
-  (* initialization should be an io function? 
-    
-    how can we initialize if the fd failed????
-
-    we could use continuation passing style, so if the action failed, 
-      we could output the error
-      we kind of also need to catch file exceptions.
-   *)
-  U.write_stdout "**** initializing chain "
+let update state e = 
+  manage_chain1 state e 
+  >>= fun (U.SeqJobFinished (state, jobs1)) ->
+    manage_chain2 state e
+  >>= fun (U.SeqJobFinished (state, jobs2)) ->
+    return (U.SeqJobFinished (state, jobs1 @ jobs2))
  
 
- 
-  (* open blocks.dat writer *)
-  >> Lwt_unix.openfile "blocks.dat"  [O_RDWR ; O_CREAT ] 0o644 
-  (*>> Lwt_unix.openfile "blocks.dat__"  [O_RDONLY (*; O_APPEND*) ; O_CREAT ] 0o644  *)
 
 (*
-  >>= fun blocks_fd -> 
-      match Lwt_unix.state blocks_fd with
-        | Opened -> ( 
-          readBlocks blocks_fd  
-          >>= fun heads ->
-            U.write_stdout ( "**** heads size " ^ (string_of_int (U.SS.cardinal heads) ))
-          >>
-          let heads =
-            if U.SS.cardinal heads = 0 then  
-              U.SS.empty
-              |> U.SS.add (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") 
-              (* |> U.SS.add ( M.zeros 32) *) (* for some reason nodes respond with second block,... *)
-               ({
-                previous = "";
-                height = 0;
-              } : U.my_head )
-            else 
-              heads
-          in 
+  ok, we can't chain things together because we return state and jobs .... 
 
-         let ret =   heads , blocks_fd 
-         in
-        return (Some  ret )
-        ) 
-      | _ -> return None
+  val update : Util.my_app_state -> Util.my_event -> (Util.my_event ) Lwt.t
 *)
-(* there's an issue that jobs are running immediately before placing in choose() ?  *)
 
-
-
-
-let update state e =
+let update_ state e =
   let state = manage_chain1 state e in
-  let state = manage_chain2 state e in
+(*  let state = manage_chain2 state e in *)
   state
 
 
 
-            (* write fd buf ofs len has the same semantic as Unix.write, but is cooperative 
-                how do we read this block data again. fd though???
-                we're going to have to open the file everytime if we want to be able to lseek the end ...
-
-                - Important rather than spinning through a message....
-
-                - seems that we're not positioned at the end initially...
-
-                  - ughhh, we can't just query the position, and then do a separate function....
-                  because 
-                  - we need a queue or the ability to sequence the writes....
-                  - otherwise recording the position isn't guaranteed...
-
-                23.227.191.50:8333  block 000000000000000007bba9bd66a0198babed0334539318369102c30223008d89 353727 on request 25
-                23.227.191.50:8333  block 000000000000000000408a768f84c20967fac5c12cc6ed00717b19364997eeba 353728 on request 24
-                 pos 30
-                 pos 30
-
-                - we can seek the end when we first open the file...
-				- but what about doing the writing, we're going to have to create an effective mutex...
-				- to synchronize.
-				- so much fucking io.
-					-----
-
-				- IMPORTANT - OK we just use a lwt mutex actually lwt may have mutexes...
-
-				we could return an array that would be 
-					
-				- also in the time that we're trying to write it, we can't clear from blocks_on_request
-				- fuck 	
-            *)
-
-
-
-(*
-  Rule, for removing.
-
-
-  Hang on.
-    Can't we do it by looking at the minimum time a block has been in the requested blocks.
-    if anything has been sitting there.
-
---------
-  - in time on request > 10 mins && last block send > 10mins
-
-    - if we requested a block at least 10 minutes ago, and haven't received anything for 10 mins
-
-    ahh. no. if time requested from minimum in - last block sent, then clear everythgin...
-    - makes it easy...
-
-    - so map blocks_on_request and get the smallest time for each fd.
-*)
-
-(*
-  - should we pull the head structure in here?. depends are we going to export that structure
-     hopefully yes...
-  - also how do we structure the next bit which involves, reading the actual blocks
-    that we have...
-  - we just need to scan the blocks... to load up our data structure, and then write blocks
-    as we get and confirm them
-  - then we have to handle tx indexing and fork arrangements...
-  - I think we need definately need add_block...
-
-	- so we're going to have one head with the most pow. and we need to scan back to common
-	fork points.
-	- we can compute work here - and put it the thing.
-
-	- new_block...
-  blocks output channel
-	- we also have mempool that we want to coordinate with  .
-	- VERY IMPORTANT we can post back to the main p2p message loop though...
-
-*)
-(*
-  - we only care about the minimum time, fd
-  map -> list...
-  - then we'll walk the list....
-  - uggh actually it won't work...
-  - if we requested the blocks 20 minutes ago, then they'll all show an age of 20 minutes...
-  because its when the block was cleared...  no doesn't matter.
-  - if we know that any block has been on request greater than 10 minutes from a conn, but
-  we haven't received anything from that conn, then we should clear.
-  - ok, rather than organizing by block.  should we organize by fd?
-
-  -----
-  - if we get nothing for 3 minutes it's a read error.
-  - what about if we get no block for 3 minutes then we generate a read error and clear...
-
-  - when do request for a block we'll add to the last_block_received_time...
-    if that exceeds 3 minutes then we'll clear blocks_on_request...
-
-  we have to prevent a newly put block from triggering...
-
-
-*)
-(*
-  - the only thing we want is a time, so if a node doesn't respond with
-  an inv request, after a period we'll reissue
-
-  - think we might remove the fd test.
-  - the pending thing, will mean we just ignore stray blocks mostly...
-  yes. a random block will be ok, since we will already have it. when synched
-  and will be ignored, when blocks are on request, when not synched
-
-  - we need to record the fd of the node that we make the block request
-    to.
-*)
-
-(* let manage_chain (state : U.my_app_state ) (e : U.my_event)  =   *)
-
-(* uggh we have to pass the conn as well - no *)
-
-(*
-- if someone doesn't send us a block they told us about, (eg. they disconnect)
-                it will stall in blocks_on_request, because we won't re-request it because we only
-                re-request when blocks_on_request is empty...
-                unless blocks_on_request is empty...
-            - if someone sends us an inv for a block that doesn't exist...
-            - remember we request lots of blocks at a time...
-
-            - i think the only thing we can do is record the time of the request then filter
-            for being old occasionally...
-            - i don't think we need the idea of a block_inv_pending...
-            the major thing is if there
-            --------------
-
-            - we kind of need to check if the peer is still sending us blocks...
-            - time of last_valid_block from peer.
-
-            - we only really need to store the fd...
-            - if a peer hasn't sent us anything for a while that it said it would, then clean out the fd
-            - what about a really simple rule that if a block has been on request for an hour
-            we remove it...   it would actual
-            IMPORTANT - if we can close the peer connection... - then it prevents them continuing to send
-              while we ignore.
-            - if they don't send anything...
-            - we might also remove stuff in an out of order fashion...
-*)
-
-       (*
-          match state.block_inv_pending with
-            | Some (fd, _) when fd == conn.fd && not (CL.is_empty block_hashes ) ->
-              (* probably in response to a getdata request *)
-              (* let h = CL.take block_hashes 10 in *)
-              let h = block_hashes in
-              ( { state with
-                (* can we already have blocks on request ? *)
-                blocks_on_request = U.SSS.of_list h;
-                block_inv_pending = None;
-              },
-                 [
-                  log @@ U.format_addr conn ^ " *** WHOOT chainstate got inv "
-                  ^ string_of_int @@ List.length block_hashes;
-                  U.send_message conn (initial_getdata h );
-                ] )
-            | _ ->  (state, [] )
-        *)
 

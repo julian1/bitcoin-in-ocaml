@@ -1,4 +1,48 @@
+make changes and start reindex, then can work on other stuff...
 
+---
+what did we learn,
+  - not many recent mistakes.
+  - there's still some 
+
+
+done - multisig is a problem for address stuff.
+    - maybe need to reindex without multisig, or be able to exclude multisig sigs 
+    - should record the script classifiction output type.   
+      pk, pkh, multi, s strange  etc.
+    - so can disambiguate multisig address types.
+
+done
+  - pos,len to get the specific txs to verify  
+  - need tx data, to run signing confirm, to compute z .
+  - means need pos of tx, or ability to get tx... 
+
+- ok, we probably should verify, that we can decode the txs from the db...
+    actually just have to hash...
+
+select substr(d.data,tx.pos,tx.len ) from tx join block b on b.id = tx.block_id join blockdata d on d.id = b.blockdata_id ;
+
+select tx.pos,tx.len, tx.hash,substr(d.data,tx.pos+1,tx.len ) from tx join block b on b.id = tx.block_id join blockdata d on d.id = b.blockdata_id order by tx.id;
+
+--
+NEEDED
+  - we're getting tx's recorded twice, because they're in an orphaned block
+
+- replaying blocks...
+
+---
+
+
+------
+- need to screen inv block hashes against what we already have.
+
+- lots of old filedescriptors in list, when they're probably not active. 
+
+----
+fix our current packing of the inv with a single entry, means we can't progress if the 
+only leaf is an orphaned block. 
+
+------
 - should potentially make the lookup of the output transactional in the db.
     (not really necessary)
 - also need to handle case of block  

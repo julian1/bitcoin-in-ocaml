@@ -1,90 +1,166 @@
 (*
   corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte
+
+  we don't need the syntax, but do need the package.
+  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax  src/client.byte
 *)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 module M = Message
+module U = Util
+module L = List
 
 
-let log s = Misc.write_stdout s
 
-let run f =
 
-  Lwt_main.run (
+type whoot_t =
+{
+  state : U.my_app_state option;
+
+  (* jobs : U.jobs_type; *) (* it's not a job it's a job completion code, or result or event *)
+ jobs :  U.my_event Lwt.t list; 
+
+
+  queue : U.my_event Myqueue.t;
+
+}
+
+
+let log s = U.write_stdout s
+
+
+(*
+let myupdate state e = 
+log "running myupdate"
+>> return (Misc.SeqJobFinished state)
+*)
+
+
+(*
+  let state = P2p.update state e
+  in return Misc.SeqJobFinished
+*) 
+
+
+let run () =
+
+  Lwt_main.run U.(
 
     (* we'll have to think about db transactions *) 
     log "connecting and create db"
-    >> Misc.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+    >> U.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
 
       Processblock.create_prepared_stmts db 
     >>
-
-      Chain.create ()
+(*
+      Chain.create () 
     >>= fun blocks_fd -> 
+    *)
        (
-        (* we actually need to read it as well... as write it... *)
-        let state =
-          ({
-			jobs = P2p.create();
-            connections = [];
-			(*heads = tree; *)
 
-            db = db; 
-			blocks_fd = blocks_fd;
+        let rec loop whoot =
 
-			(* should be hidden ?? *)
-			block_inv_pending  = None;
-			blocks_on_request = Misc.SS.empty;
-			last_block_received_time = [];
-
-			seq_jobs_pending = Myqueue.empty;
-			seq_job_running = false;
-
-          } : Misc.my_app_state )
-        in
-
-        let rec loop (state : Misc.my_app_state ) =
           Lwt.catch (
-          fun () -> Lwt.nchoose_split state.jobs
 
+            (* select completed jobs *)            
+            fun () -> Lwt.nchoose_split whoot.jobs
             >>= fun (complete, incomplete) ->
-              (*Lwt_io.write_line Lwt_io.stdout  @@
-                "complete " ^ (string_of_int @@ List.length complete )
-                ^ ", incomplete " ^ (string_of_int @@ List.length incomplete)
-                ^ ", connections " ^ (string_of_int @@ List.length state.connections )
-            >>
-          *)
-              let state = List.fold_left f { state with jobs = incomplete } complete in
-              if List.length state.jobs > 0 then
-                loop state
+        
+              (* update incoplete jobs *)
+              let whoot = { whoot with jobs = incomplete } in 
+
+              (* process complete io jobs *) 
+              let f whoot e = 
+                match e with 
+                  (* nop *)
+                  | U.Nop -> whoot 
+                  (* a seq job finished, so take take the new state and add any new jobs*) 
+                  | SeqJobFinished (newstate, newjobs) -> { 
+                    whoot with state = Some newstate; 
+                    jobs =  newjobs @ whoot.jobs ;
+                  } 
+                  (* any other normal event gets added to queue for processing *)
+                  | _ -> { whoot with queue = Myqueue.add whoot.queue e }  
+              in
+              let whoot = L.fold_left f whoot complete in
+
+              log @@ " here !! jobs " ^ (string_of_int (L.length whoot.jobs)) 
+                ^ " queue " ^ (string_of_int (Myqueue.length whoot.queue )) 
+                ^ " conns " ^ (match whoot.state with 
+                    | Some state -> (string_of_int (L.length state.connections )) 
+                    | None -> "unknown"  
+                )
+              >>   
+
+              (* process a queue item if we can *)
+              let whoot = 
+                if whoot.queue <> Myqueue.empty && whoot.state <> None then 
+                  let e,queue = Myqueue.take whoot.queue in
+                  {  (* whoot with *) 
+                    queue = queue;
+                    jobs = (
+                      (* state is injected into the seq job, and nulled *)
+                      let Some state = whoot.state in
+                        P2p.update state e 
+                     >>= fun (U.SeqJobFinished (state, jobs1)) ->
+                        Chain.update state e 
+                     >>= fun (U.SeqJobFinished (state, jobs2)) ->
+                      return ( U.SeqJobFinished (state,jobs1 @ jobs2))
+
+                    ) :: whoot.jobs;
+                    state = None;
+                  }
+                else
+                  whoot
+              in
+            
+              (* more jobs to process? *) 
+              if L.length whoot.jobs > 0 then
+                loop whoot 
               else
-                Lwt_io.write_line Lwt_io.stdout "finishing - no more jobs to run!!"
+                log "finishing - no more jobs to run!!"
                 >> return ()
           )
             (fun exn ->
               (* must close *)
               let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-              Lwt_io.write_line Lwt_io.stdout ("finishing - exception " ^ s )
+              log ("finishing - exception " ^ s )
               >> (* just exist cleanly *)
                 return ()
             )
-        in
-          loop state
+          in
+
+        (* we actually need to read it as well... as write it... *)
+
+        let whoot = {
+          state = Some ({
+            connections = [];
+            db = db; 
+            (* should be hidden ?? *)
+            block_inv_pending  = None;
+            blocks_on_request = U.SS.empty;
+            last_block_received_time = [];
+          } : U.my_app_state )
+          ; 
+          jobs = P2p.create(); 
+          queue = Myqueue.empty ;
+        } in
+        loop whoot 
         )
   )
 
-
+(*
 let update state e =
   let state = P2p.update state e in
   let state = Chain.update state e in
   let state = Seq.update state e in
   state
+*)
 
-
-let () = run update 
+let () = run () 
 
 
 

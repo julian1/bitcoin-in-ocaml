@@ -3,7 +3,11 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 module M = Message
-module U = Misc
+module U = Util
+module S = String 
+module L = List
+
+
 
 
 let log s = U.write_stdout s >> return U.Nop
@@ -121,7 +125,130 @@ let get_message (conn : U.connection ) =
 *)
 
 (* let update connections e = *)
-let update (state : Misc.my_app_state) e =
+
+
+
+
+
+
+let update state e = 
+  let state = (state : U.my_app_state) in 
+  match e with
+
+    | U.GotConnection conn ->
+      log "whoot got connection"
+      >> 
+      let state = { state with
+        connections = conn :: state.connections; 
+      } in
+      let jobs = [
+        log @@ U.format_addr conn ^  " got connection "  ^
+          ", connections now " ^ ( string_of_int @@ List.length state.connections )
+        >> U.send_message conn initial_version
+        >> log @@ "*** sent our version " ^ U.format_addr conn;
+        get_message conn
+      ]
+      in
+      return (U.SeqJobFinished (state, jobs))
+
+    | U.GotConnectionError msg ->
+      let jobs = [ log @@ "connection error " ^ msg ] in
+      return (U.SeqJobFinished (state, jobs))
+
+    | U.GotMessageError (conn , msg) ->
+      (* fd test is physical equality *)
+      let state = { state with 
+        connections = List.filter (fun (c : U.connection) -> c.fd != conn.fd) state.connections;
+      } in
+      let jobs = [
+        log @@ U.format_addr conn ^ "msg error " ^ msg;
+        (* TODO move this outside jobs ??? *)
+        match Lwt_unix.state conn.fd with
+          Opened -> ( Lwt_unix.close conn.fd ) >> return U.Nop
+          | _ -> return U.Nop
+      ] in
+      return @@ U.SeqJobFinished (state, jobs)
+
+
+    | U.GotMessage (conn, header, raw_header, payload) ->
+      match header.command with
+
+        | "version" ->
+          let jobs = [
+            log @@ U.format_addr conn ^ " got version message"
+            >> U.send_message conn initial_verack
+            >> log @@ "*** sent verack " ^ U.format_addr conn
+            ;
+            get_message conn
+          ] in
+          return @@ U.SeqJobFinished (state, jobs)
+
+        | "verack" ->
+          let jobs = [
+            (* should be 3 separate jobs? *)
+            log @@ U.format_addr conn ^ " got verack";
+            (* >> send_message conn initial_getaddr *)
+            get_message conn
+          ] in 
+          return @@ U.SeqJobFinished (state, jobs)
+
+        | "addr" ->
+            let pos, count = M.decodeVarInt payload 0 in
+            (* should take more than the first *)
+            let pos, _ = M.decodeInteger32 payload pos in (* timeStamp  *)
+            let _, addr = M.decodeAddress payload pos in
+            let formatAddress (h : M.ip_address ) =
+              let soi = string_of_int in
+              let a,b,c,d = h.address  in
+              S.concat "." [
+              soi a; soi b; soi c; soi d
+              ] (* ^ ":" ^ soi h.port *)
+            in
+            let a = formatAddress addr in
+            (* ignore, same addr instances on different ports *)
+            let already_have = L.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            in
+            if already_have || L.length state.connections >= 8 then
+              let jobs = [
+                  log @@ U.format_addr conn ^ " addr - already got or ignore "
+                    ^ a ^ ":" ^ string_of_int addr.port ;
+                  get_message conn
+              ] in 
+              return @@ U.SeqJobFinished (state, jobs)
+            else
+              let jobs = [ 
+                 log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count )
+                    ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
+                  get_connection (formatAddress addr) addr.port ;
+                  get_message conn
+                ] in 
+              return @@ U.SeqJobFinished (state, jobs)
+
+        | s -> 
+          let jobs = [
+            (* *) log @@ U.format_addr conn ^ " message " ^ s; 
+            get_message conn
+          ] in 
+          return @@ U.SeqJobFinished (state, jobs)
+ 
+    | _  -> 
+      return (U.SeqJobFinished (state, []))
+
+
+  (* we have to always return U.SeqJobFinished *)
+
+(* VERY IMPORTANT - we can now log sequentially if we want, but we have to be a able to return another job 
+  uggh... it's gone astray...
+
+  - io completion might be,
+    - events
+    - seqjobcomplete state [events] 
+
+*)
+
+
+(*
+let update (state : U.my_app_state) e =
   match e with
     | U.GotConnection conn ->
 		let connections = conn :: state.connections in
@@ -191,9 +318,9 @@ let update (state : Misc.my_app_state) e =
             in
             let a = formatAddress addr in
             (* ignore, same addr instances on different ports *)
-            let already_got = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            let already_have = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
-            if already_got || List.length state.connections >= 8 then
+            if already_have || List.length state.connections >= 8 then
 				{ state with 
                  jobs = state.jobs @ [
                   log @@ U.format_addr conn ^ " addr - already got or ignore "
@@ -220,7 +347,7 @@ let update (state : Misc.my_app_state) e =
         )
 
     | _ -> state 
-
+*)
 
 (* initial jobs *)
 let create () = [
