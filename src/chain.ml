@@ -112,16 +112,15 @@ let manage_chain1 (state : U.my_app_state) e    =
         >> U.PG.begin_work state.db
         >> U.PG.prepare state.db ~query:"select exists ( select * from block where hash = $1 )" ()
 
-
         >> let f x hash = 
           U.PG.execute state.db ~params:[ Some (U.PG.string_of_bytea hash) ] ()
           >>= function 
-            (Some "t"::_ )::_ -> return  x 
+            (Some "f"::_ )::_ -> return (hash :: x) 
             | _ -> return x
           in 
           fold_m f [] block_hashes 
       
-        >>= fun result ->
+        >>= fun block_hashes ->
 
           (* did we ask for this inv *)
           let solicited =
