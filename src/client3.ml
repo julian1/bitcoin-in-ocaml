@@ -85,6 +85,8 @@ let log s = U.write_stdout s
 (* '\x0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb' *)
 
 let get_db_tx db hash =
+  log @@ "getting tx " ^ M.hex_of_string hash
+  >>
   let query =
   "select substr(d.data,tx.pos+1,tx.len) as data
     from tx
@@ -103,7 +105,7 @@ let get_db_tx db hash =
 
 
 
-let () = Lwt_main.run U.(
+let () = Lwt_main.run U.(M.(
 
   log "connecting to db"
   >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
@@ -122,12 +124,22 @@ let () = Lwt_main.run U.(
     log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
     >> log @@ "inputs " ^ string_of_int (L.length tx.inputs) 
 
-    >> let f x input = return x in
-    fold_m f [] tx.inputs  
+    >> ( 
+      let f x input = begin 
+      get_db_tx db input.previous
+      >>= fun tx_s ->
+        let _,tx = M.decodeTx tx_s 0 in
+        let output = List.nth tx.outputs input.index in
+        return ( output::x) 
+      end
+      (* now decode and get the outputs and get the right output *) 
+  
+    in fold_m f [] tx.inputs  
+    )
 
   >>= fun outputs -> 
     log "whoot"
-)
+))
 
 (*
   - For standard Bitcoind UTXOs are going to include the full output - including the script.
