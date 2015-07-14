@@ -5,15 +5,18 @@
 
 module M = Message
 module U = Util
+module L = List
 module PG = U.PG  (* TODO PG shouldn't depend on U, move PG out of Util *)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
-
-
-
 open M
+
+let fold_m f acc lst =
+  let adapt f acc e = acc >>= fun acc -> f acc e in
+  L.fold_left (adapt f) (return acc) lst
+
 
 
 let read_from_file filename =
@@ -117,7 +120,12 @@ let () = Lwt_main.run U.(
     let _,tx = M.decodeTx result 0 in
     let input = List.nth tx.inputs 0 in
     log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
-  >>
+    >> log @@ "inputs " ^ string_of_int (L.length tx.inputs) 
+
+    >> let f x input = return x in
+    fold_m f [] tx.inputs  
+
+  >>= fun outputs -> 
     log "whoot"
 )
 
