@@ -118,24 +118,20 @@ let () = Lwt_main.run U.(M.(
   >>
     log @@ M.hex_of_string result
   >>
+    (* TODO factor the getting of inputs into a separate function *)
     (* foldm over inputs - to build a structure? *)
     let _,tx = M.decodeTx result 0 in
     let input = List.nth tx.inputs 0 in
     log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
     >> log @@ "inputs " ^ string_of_int (L.length tx.inputs) 
-
-    >> ( 
-      let f x input = begin 
+    >>  
+      let f x input = 
       get_db_tx db input.previous
       >>= fun tx_s ->
         let _,tx = M.decodeTx tx_s 0 in
         let output = List.nth tx.outputs input.index in
         return ( output::x) 
-      end
-      (* now decode and get the outputs and get the right output *) 
-  
     in fold_m f [] tx.inputs  
-    )
 
   >>= fun outputs -> 
     log "whoot"
