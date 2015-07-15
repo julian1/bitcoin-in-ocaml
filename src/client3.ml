@@ -52,12 +52,17 @@ let encode_and_hash tx =
 let check_scripts tx lst = 
   let combine_script i output = 
 
-    let (input: M.tx_in) = L.nth tx.inputs i in
+    let input = L.nth tx.inputs i in
     let input_script = M.decode_script input.script in
     let output_script = M.decode_script output.script in
 
     let signature,pubkey = match input_script with
       | M.BYTES s :: M.BYTES p :: [] -> s, p in
+
+    let () = print_endline @@ 
+      "input " ^ M.format_script input_script 
+      ^ " output " ^ M.format_script output_script 
+    in
 
     (* how do we know whether to decompress the pubkey? *)
     let pubkey = Microecc.decompress pubkey in
@@ -80,8 +85,8 @@ let log s = U.write_stdout s
 (* '\x0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb' *)
 
 let get_tx_from_db db hash =
-  log @@ "getting tx " ^ M.hex_of_string hash
-  >>
+  (*log @@ "getting tx " ^ M.hex_of_string hash
+  >>*)
   let query =
   "select substr(d.data,tx.pos+1,tx.len) as data
     from tx
@@ -106,11 +111,16 @@ let get_tx_outputs_from_db db lst =
     >>= fun tx_s ->
       let _,tx = M.decodeTx tx_s 0 in
       let output = L.nth tx.outputs index in
+
+      log @@ "get output " ^ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ Int64.to_string output.value
+      >>
       return (output::x) 
   in fold_m f [] lst 
-  >>= fun r -> return (L.rev r )
+  >>= fun r -> return (L.rev r)  (* fmap *)
 
-
+(*
+  has something else got reversed, - eg the outputs whereby,,, it doesn't work
+*)
 
 let () = Lwt_main.run U.(M.(
 
@@ -118,6 +128,8 @@ let () = Lwt_main.run U.(M.(
   >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
     let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
+   (* let hash = M.string_of_hex "d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" in *)
+    (*let hash  = M.string_of_hex "406df8c1fc64c8b68ccba2ebdf0da46bcb030e2e44133444e64a46cc8c1a830b" in *) (* works for first *)
     get_tx_from_db db hash
   >>= fun result ->
     let hash = M.sha256d result |> M.strrev in
