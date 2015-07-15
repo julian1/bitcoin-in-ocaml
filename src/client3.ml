@@ -50,7 +50,7 @@ let encode_and_hash tx =
 
 (* change name to checksig *)
 let check_scripts tx lst = 
-  let combine_script ((input : M.tx_in),output) = 
+  let combine_script i ((input : M.tx_in),output) = 
 
     let input_script = M.decode_script input.script in
     let output_script = M.decode_script output.script in
@@ -62,7 +62,7 @@ let check_scripts tx lst =
     let pubkey = Microecc.decompress pubkey in
 
     (* so we substitute the prev output script into current tx with its outputs *)
-    let tx = substitute tx 0 output_script in
+    let tx = substitute tx i output_script in
     let hash = encode_and_hash tx in
 
     let Some (r,s) = M.decode_der_signature signature in
@@ -70,7 +70,7 @@ let check_scripts tx lst =
     Microecc.verify pubkey hash decoded_sig
   in
   let zipped = CL.zip_exn tx.inputs lst in
-  L.map combine_script zipped
+  L.mapi combine_script zipped
 
 
 
