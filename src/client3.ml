@@ -56,7 +56,6 @@ let verify tx lst =
   let output = List.nth txprev.outputs 0 in
   let output_script = M.decode_script output.script in
 
-
   let signature,pubkey = match input_script with
     | M.BYTES s :: M.BYTES p :: [] -> s, p in
 
@@ -67,17 +66,17 @@ let verify tx lst =
   let tx = substitute tx 0 output_script in
   let hash = encode_and_hash tx in
 
-(*
-let () = Printf.printf "%s\n" @@ M.formatTx (tx )
-*)
-
-
+  (*
+  let () = Printf.printf "%s\n" @@ M.formatTx (tx )
+  *)
   let Some (r,s) = M.decode_der_signature signature in
   let decoded_sig = r ^ s in
   let x = Microecc.verify pubkey hash decoded_sig in
+    x
+(*
   let () = Printf.printf "sig result %b\n" x in
   ()
-
+*)
 
 
 let log s = U.write_stdout s
@@ -135,7 +134,10 @@ let () = Lwt_main.run U.(M.(
 
     >> get_tx_outputs_from_db db lst 
     >>= fun outputs -> 
-      log "whoot"
+
+      log @@ "lst " ^ string_of_int (L.length outputs ) 
+     >> log @@ "verify result " ^ string_of_bool (verify tx outputs) 
+ 
 ))
 
 
