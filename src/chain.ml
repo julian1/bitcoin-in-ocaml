@@ -11,6 +11,16 @@ module CL = Core.Core_list
 let (>>=) = Lwt.(>>=) 
 let return = Lwt.return
 
+(*
+  VERY VERY IMPORTANT
+
+    - rather than requesting the tip, we should request tip - 1. 
+    - then when we get a block inventory back, we will get the tip hash back
+      and know it's what we want.
+       
+    - we might be able to remove the solicited stuff.
+    - we still need to handle, random single blocks that advance the chain.
+*)
 
 (*
   - ok, now we need more block rules (merckle root, difficulty, time checks )
@@ -64,6 +74,14 @@ let log s = U.write_stdout s >> return U.Nop
       - think this is good anyway.
 *)
 
+(*  - as well as fold_m should have takeWhile ...
+*)
+let fold_m f acc lst =
+  let adapt f acc e = acc >>= fun acc -> f acc e in
+  L.fold_left (adapt f) (return acc) lst
+
+
+
 let manage_chain1 (state : U.my_app_state) e    =
   match e with
 
@@ -88,6 +106,28 @@ let manage_chain1 (state : U.my_app_state) e    =
               && not ( U.SS.mem hash state.blocks_on_request))  (* eg. ignore if we've already requested the block *)
             |> L.map (fun (_,hash) -> hash)
           in
+          (
+          if block_hashes <> [] then ( 
+            log @@ "\n@@@ inv blocks - checking db for blocks " ^ string_of_int (L.length block_hashes)
+            >> U.PG.begin_work state.db
+            >> U.PG.prepare state.db ~query:"select exists ( select * from block where hash = $1 )" ()
+            >> let f x hash = 
+              U.PG.execute state.db ~params:[ Some (U.PG.string_of_bytea hash) ] ()
+              >>= function 
+                (Some "f"::_ )::_ -> return (hash :: x) 
+                | _ -> return x
+              in 
+              fold_m f [] block_hashes 
+            >>= fun block_hashes ->
+              U.PG.commit state.db
+            >> log @@ "@@@ done checking db for blocks " ^ string_of_int (L.length block_hashes)
+            >> return block_hashes 
+            )
+          else
+            return []
+          )
+          >>= fun block_hashes -> 
+
           (* did we ask for this inv *)
           let solicited =
               match state.block_inv_pending with

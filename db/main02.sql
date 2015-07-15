@@ -1,6 +1,9 @@
 
 begin;
 
+--  select time, height,hash from leaves l join block_ b on b.id = l.id ;
+--  select time, height,hash from leaves l join block_ b on b.id = l.id order by height desc;
+
 -- important chainstate projection to tx ought to be easy, we just
 -- create a view of tx's that are the mainchain only, and use that
 -- for all the received, unspent etc.
