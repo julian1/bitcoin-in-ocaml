@@ -146,10 +146,14 @@ let () = Lwt_main.run U.(M.(
 
       log @@ "lst " ^ string_of_int (L.length outputs ) 
 
+      >> let s2 = check_scripts tx outputs 
+          |> L.map string_of_bool
+          |> S.concat " "
+      in
 
-      >> let result = check_scripts tx outputs in
-      let s = S.concat " " (L.map string_of_bool result) in
-     log @@ "check_scripts result " ^ s 
+      (*>> let result = check_scripts tx outputs in
+      let s = S.concat " " (L.map string_of_bool result) in *)
+     log @@ "check_scripts result " ^ s2 
  
 ))
 
