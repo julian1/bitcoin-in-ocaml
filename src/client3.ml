@@ -84,7 +84,7 @@ let log s = U.write_stdout s
 
 (* '\x0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb' *)
 
-let get_db_tx db hash =
+let get_tx_from_db db hash =
   log @@ "getting tx " ^ M.hex_of_string hash
   >>
   let query =
@@ -104,6 +104,17 @@ let get_db_tx db hash =
     | _ -> raise (Failure "tx not found")
 
 
+(* needs to be a list of (hash, index) *)
+let get_tx_outputs_from_db db lst =
+  let f x (hash,index) = 
+    get_tx_from_db db hash 
+    >>= fun tx_s ->
+      let _,tx = M.decodeTx tx_s 0 in
+      let output = List.nth tx.outputs index in
+      return (output::x) 
+  in fold_m f [] lst  
+
+
 
 let () = Lwt_main.run U.(M.(
 
@@ -111,32 +122,27 @@ let () = Lwt_main.run U.(M.(
   >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
     let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
-    get_db_tx db hash
+    get_tx_from_db db hash
   >>= fun result ->
     let hash = M.sha256d result |> M.strrev in
     log @@ M.hex_of_string hash
   >>
     log @@ M.hex_of_string result
   >>
-    (* TODO factor the getting of inputs into a separate function *)
-    (* foldm over inputs - to build a structure? *)
     let _,tx = M.decodeTx result 0 in
-    let input = List.nth tx.inputs 0 in
-    log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
-    >> log @@ "inputs " ^ string_of_int (L.length tx.inputs) 
-    >>  
-      let f x input = 
-      get_db_tx db input.previous
-      >>= fun tx_s ->
-        let _,tx = M.decodeTx tx_s 0 in
-        let output = List.nth tx.outputs input.index in
-        return ( output::x) 
-    in fold_m f [] tx.inputs  
+    let inputs = L.map (fun input -> (input.previous, input.index)) tx.inputs in
+    log @@ "inputs " ^ string_of_int (L.length tx.inputs) 
 
-  >>= fun outputs -> 
-    log "whoot"
+    >> get_tx_outputs_from_db db inputs
+    >>= fun outputs -> 
+      log "whoot"
 ))
 
+
+(*    let input = List.nth tx.inputs 0 in
+    log @@ M.hex_of_string input.previous ^ " " ^ string_of_int input.index
+    >> 
+*)
 (*
   - For standard Bitcoind UTXOs are going to include the full output - including the script.
     so verifying tx's can be done entirely in memory to be looked up on disk .
