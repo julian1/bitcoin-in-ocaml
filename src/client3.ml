@@ -46,37 +46,37 @@ let encode_and_hash tx =
 
 
 (* so we'd loop through the inputs *)
+let verify tx lst = 
+  (*let _,tx = M.decodeTx tx_s 0*)
+  let input = List.nth tx.inputs 0 in
+  (*let () = Printf.printf "%s\n" @@ M.hex_of_string input .previous  *)
+  let input_script = M.decode_script input.script in
 
-let _,tx = M.decodeTx tx_s 0
-let input = List.nth tx.inputs 0
-(*let () = Printf.printf "%s\n" @@ M.hex_of_string input .previous  *)
-let input_script = M.decode_script input.script
-
-let _, txprev = M.decodeTx txprev_s 0
-let output = List.nth txprev.outputs 0
-let output_script = M.decode_script output.script
+  let _, txprev = M.decodeTx txprev_s 0 in
+  let output = List.nth txprev.outputs 0 in
+  let output_script = M.decode_script output.script in
 
 
-let signature,pubkey = match input_script with
-  | M.BYTES s :: M.BYTES p :: [] -> s, p
+  let signature,pubkey = match input_script with
+    | M.BYTES s :: M.BYTES p :: [] -> s, p in
 
-(* how do we know whether to decompress the pubkey? *)
-let pubkey = Microecc.decompress pubkey
+  (* how do we know whether to decompress the pubkey? *)
+  let pubkey = Microecc.decompress pubkey in
 
-(* so we substitute the prev output script into current tx with its outputs *)
-let tx = substitute tx 0 output_script
-let hash = encode_and_hash tx
+  (* so we substitute the prev output script into current tx with its outputs *)
+  let tx = substitute tx 0 output_script in
+  let hash = encode_and_hash tx in
 
 (*
 let () = Printf.printf "%s\n" @@ M.formatTx (tx )
 *)
 
 
-let Some (r,s) = M.decode_der_signature signature in
-let decoded_sig = r ^ s in
-let x = Microecc.verify pubkey hash decoded_sig in
-let () = Printf.printf "sig result %b\n" x in
-()
+  let Some (r,s) = M.decode_der_signature signature in
+  let decoded_sig = r ^ s in
+  let x = Microecc.verify pubkey hash decoded_sig in
+  let () = Printf.printf "sig result %b\n" x in
+  ()
 
 
 
@@ -130,10 +130,10 @@ let () = Lwt_main.run U.(M.(
     log @@ M.hex_of_string result
   >>
     let _,tx = M.decodeTx result 0 in
-    let inputs = L.map (fun input -> (input.previous, input.index)) tx.inputs in
-    log @@ "inputs " ^ string_of_int (L.length tx.inputs) 
+    let lst = L.map (fun input -> (input.previous, input.index)) tx.inputs in
+    log @@ "inputs " ^ string_of_int (L.length lst ) 
 
-    >> get_tx_outputs_from_db db inputs
+    >> get_tx_outputs_from_db db lst 
     >>= fun outputs -> 
       log "whoot"
 ))
