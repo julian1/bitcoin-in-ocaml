@@ -22,10 +22,15 @@ create index on block(hash);
 create index on block(previous_id); --  not sure if needed 
 create index on block(blockdata_id);
 
+-- VERY IMPORTANT we need a mapping between tx and block, to allow the same tx to appear
+-- in different fork blocks or mempool.
 create table tx(id serial primary key, block_id integer references block(id), hash bytea, pos integer, len integer );
 create index on tx(block_id);
 create index on tx(hash);
 
+-- needs pos, len, index 
+-- VERY IMPORTANT - should probably be offset by start of tx, rather than block
+-- so that we can find if in mempool and not yet in a block
 create table output(id serial primary key, tx_id integer references tx(id), index int, amount bigint);
 create index on output(tx_id);
 
