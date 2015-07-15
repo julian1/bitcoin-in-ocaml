@@ -32,6 +32,12 @@ let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb22526
 let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905"
 *)
 
+(*
+  maybe it accumulates ... eg previous value is left in there ... 
+
+  zero padding of the compressed signature???
+*)
+
 (* substitute input script, and clear others *)
 let substitute tx i output_script =
 	let f index (input: M.tx_in ) =
@@ -47,6 +53,12 @@ let encode_and_hash tx =
   let hash = M.sha256d s in
   hash
 
+(*
+  0 padding of der or pubkey 
+
+  71 length pubkey works
+  72 doesn't
+*)
 
 (* change name to checksig *)
 let check_scripts tx lst = 
@@ -66,6 +78,10 @@ let check_scripts tx lst =
 
     (* how do we know whether to decompress the pubkey? *)
     let pubkey = Microecc.decompress pubkey in
+    let () = print_endline @@ "uncompressed pubkey len " ^ (S.length pubkey |> string_of_int ) in
+    let () = print_endline @@ "sig len " ^ (S.length signature |> string_of_int ) in
+
+
 
     (* so we substitute the prev output script into current tx with its outputs *)
     let tx = substitute tx i output_script in
@@ -127,9 +143,8 @@ let () = Lwt_main.run U.(M.(
   log "connecting to db"
   >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
-    let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in
-   (* let hash = M.string_of_hex "d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905" in *)
-    (*let hash  = M.string_of_hex "406df8c1fc64c8b68ccba2ebdf0da46bcb030e2e44133444e64a46cc8c1a830b" in *) (* works for first *)
+(*    let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in *)
+    let hash  = M.string_of_hex "90bbbbf21ecd7017b341c44bb1a0860a3adcbee04b716f1798861a368931f667" in
     get_tx_from_db db hash
   >>= fun result ->
     let hash = M.sha256d result |> M.strrev in
@@ -153,7 +168,7 @@ let () = Lwt_main.run U.(M.(
         |> L.map string_of_bool
         |> S.concat " "
       in
-      log @@ "check_scripts result " ^ s
+      log @@ "check_scripts result - " ^ s
  
 ))
 
