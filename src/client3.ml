@@ -18,7 +18,7 @@ let fold_m f acc lst =
   L.fold_left (adapt f) (return acc) lst
 
 
-
+(*
 let read_from_file filename =
   let in_channel = open_in filename in
   let s = Core.In_channel.input_all in_channel in
@@ -27,7 +27,7 @@ let read_from_file filename =
 
 let tx_s = read_from_file "test_data/0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb"
 let txprev_s = read_from_file "test_data/d1ae76b9e9275fc88e3163dfba0a6bf5b3c8fe6a259a45a29e96a7c710777905"
-
+*)
 
 (* substitute input script, and clear others *)
 let substitute tx i output_script =
@@ -45,8 +45,8 @@ let encode_and_hash tx =
   hash
 
 
-(* so we'd loop through the inputs *)
-let verify tx lst = 
+(* change name to checksig *)
+let check_scripts tx lst = 
   let input = List.nth tx.inputs 0 in
   let input_script = M.decode_script input.script in
 
@@ -130,7 +130,7 @@ let () = Lwt_main.run U.(M.(
     >>= fun outputs -> 
 
       log @@ "lst " ^ string_of_int (L.length outputs ) 
-     >> log @@ "verify result " ^ string_of_bool (verify tx outputs) 
+     >> log @@ "check_scripts result " ^ string_of_bool (check_scripts tx outputs) 
  
 ))
 
