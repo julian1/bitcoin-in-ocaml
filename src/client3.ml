@@ -50,7 +50,7 @@ let check_scripts tx lst =
   let input = List.nth tx.inputs 0 in
   let input_script = M.decode_script input.script in
 
-  let output = List.nth lst  2 in
+  let output = List.nth lst  0 in
   let output_script = M.decode_script output.script in
 
   let signature,pubkey = match input_script with
@@ -105,7 +105,8 @@ let get_tx_outputs_from_db db lst =
       let _,tx = M.decodeTx tx_s 0 in
       let output = List.nth tx.outputs index in
       return (output::x) 
-  in fold_m f [] lst  
+  in fold_m f [] lst 
+  >>= fun r -> return (L.rev r )
 
 
 
@@ -126,6 +127,9 @@ let () = Lwt_main.run U.(M.(
     let lst = L.map (fun input -> (input.previous, input.index)) tx.inputs in
     log @@ "inputs " ^ string_of_int (L.length lst ) 
 
+(*    >> let (first,_) = (L.nth 0 lst) in
+    log @@ "first " ^ M.hex_of_string first 
+*)
     >> get_tx_outputs_from_db db lst 
     >>= fun outputs -> 
 
