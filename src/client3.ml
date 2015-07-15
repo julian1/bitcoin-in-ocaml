@@ -50,10 +50,11 @@ let encode_and_hash tx =
 
 (* change name to checksig *)
 let check_scripts tx lst = 
-
+  M.(
   let combine_script (input,output) = 
-    true
-    (*
+
+    let (input: M.tx_in) = input in
+
     (*let input = L.nth tx.inputs 0 in*)
     let input_script = M.decode_script input.script in
 
@@ -77,11 +78,10 @@ let check_scripts tx lst =
     let Some (r,s) = M.decode_der_signature signature in
     let decoded_sig = r ^ s in
     Microecc.verify pubkey hash decoded_sig
-     *) 
   in
   let zipped = CL.zip_exn tx.inputs lst in
   L.map combine_script zipped
-
+  )
 
 
 let log s = U.write_stdout s
@@ -146,14 +146,11 @@ let () = Lwt_main.run U.(M.(
 
       log @@ "lst " ^ string_of_int (L.length outputs ) 
 
-      >> let s2 = check_scripts tx outputs 
-          |> L.map string_of_bool
-          |> S.concat " "
+      >> let s = check_scripts tx outputs 
+        |> L.map string_of_bool
+        |> S.concat " "
       in
-
-      (*>> let result = check_scripts tx outputs in
-      let s = S.concat " " (L.map string_of_bool result) in *)
-     log @@ "check_scripts result " ^ s2 
+      log @@ "check_scripts result " ^ s
  
 ))
 
