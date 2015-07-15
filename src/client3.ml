@@ -47,13 +47,10 @@ let encode_and_hash tx =
 
 (* so we'd loop through the inputs *)
 let verify tx lst = 
-  (*let _,tx = M.decodeTx tx_s 0*)
   let input = List.nth tx.inputs 0 in
-  (*let () = Printf.printf "%s\n" @@ M.hex_of_string input .previous  *)
   let input_script = M.decode_script input.script in
 
-  let _, txprev = M.decodeTx txprev_s 0 in
-  let output = List.nth txprev.outputs 0 in
+  let output = List.nth lst  2 in
   let output_script = M.decode_script output.script in
 
   let signature,pubkey = match input_script with
@@ -71,12 +68,9 @@ let verify tx lst =
   *)
   let Some (r,s) = M.decode_der_signature signature in
   let decoded_sig = r ^ s in
-  let x = Microecc.verify pubkey hash decoded_sig in
-    x
-(*
-  let () = Printf.printf "sig result %b\n" x in
-  ()
-*)
+  Microecc.verify pubkey hash decoded_sig
+    
+
 
 
 let log s = U.write_stdout s
