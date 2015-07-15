@@ -6,6 +6,9 @@
 module M = Message
 module U = Util
 module L = List
+module S = String
+module CL = Core.Core_list
+
 module PG = U.PG  (* TODO PG shouldn't depend on U, move PG out of Util *)
 
 let (>>=) = Lwt.(>>=)
@@ -35,7 +38,7 @@ let substitute tx i output_script =
 		if index == i then { input with script = M.encode_script output_script; }
 		else { input with script = M.encode_script [] }
 	in
-	{ tx with inputs = List.mapi f tx.inputs }
+	{ tx with inputs = L.mapi f tx.inputs }
 
 
 let encode_and_hash tx =
@@ -47,29 +50,37 @@ let encode_and_hash tx =
 
 (* change name to checksig *)
 let check_scripts tx lst = 
-  let input = List.nth tx.inputs 0 in
-  let input_script = M.decode_script input.script in
 
-  let output = List.nth lst  0 in
-  let output_script = M.decode_script output.script in
+  let combine_script (input,output) = 
+    true
+    (*
+    (*let input = L.nth tx.inputs 0 in*)
+    let input_script = M.decode_script input.script in
 
-  let signature,pubkey = match input_script with
-    | M.BYTES s :: M.BYTES p :: [] -> s, p in
+    (*let output = L.nth lst  0 in*)
+    let output_script = M.decode_script output.script in
 
-  (* how do we know whether to decompress the pubkey? *)
-  let pubkey = Microecc.decompress pubkey in
 
-  (* so we substitute the prev output script into current tx with its outputs *)
-  let tx = substitute tx 0 output_script in
-  let hash = encode_and_hash tx in
+    let signature,pubkey = match input_script with
+      | M.BYTES s :: M.BYTES p :: [] -> s, p in
 
-  (*
-  let () = Printf.printf "%s\n" @@ M.formatTx (tx )
-  *)
-  let Some (r,s) = M.decode_der_signature signature in
-  let decoded_sig = r ^ s in
-  Microecc.verify pubkey hash decoded_sig
-    
+    (* how do we know whether to decompress the pubkey? *)
+    let pubkey = Microecc.decompress pubkey in
+
+    (* so we substitute the prev output script into current tx with its outputs *)
+    let tx = substitute tx 0 output_script in
+    let hash = encode_and_hash tx in
+
+    (*
+    let () = Printf.printf "%s\n" @@ M.formatTx (tx )
+    *)
+    let Some (r,s) = M.decode_der_signature signature in
+    let decoded_sig = r ^ s in
+    Microecc.verify pubkey hash decoded_sig
+     *) 
+  in
+  let zipped = CL.zip_exn tx.inputs lst in
+  L.map combine_script zipped
 
 
 
@@ -103,7 +114,7 @@ let get_tx_outputs_from_db db lst =
     get_tx_from_db db hash 
     >>= fun tx_s ->
       let _,tx = M.decodeTx tx_s 0 in
-      let output = List.nth tx.outputs index in
+      let output = L.nth tx.outputs index in
       return (output::x) 
   in fold_m f [] lst 
   >>= fun r -> return (L.rev r )
@@ -134,7 +145,11 @@ let () = Lwt_main.run U.(M.(
     >>= fun outputs -> 
 
       log @@ "lst " ^ string_of_int (L.length outputs ) 
-     >> log @@ "check_scripts result " ^ string_of_bool (check_scripts tx outputs) 
+
+
+      >> let result = check_scripts tx outputs in
+      let s = S.concat " " (L.map string_of_bool result) in
+     log @@ "check_scripts result " ^ s 
  
 ))
 
