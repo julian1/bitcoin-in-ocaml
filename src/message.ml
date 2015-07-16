@@ -678,24 +678,23 @@ let rec printRaw s a b =
 *)
 
 (*
-  TODO We have to pad with zero, if not 32 bits... 
 
-  https://bitcointalk.org/index.php?topic=653313.0
 *)
 (*
-  - it would be much better to use option type to parse this... 
-  and probably need padding.
-
   32 and 33 byte r and s values,
   http://bitcoin.stackexchange.com/questions/12554/why-the-signature-is-always-65-13232-bytes-long
   
   https://github.com/bitcoin/bips/blob/master/bip-0066.mediawiki
+
+  https://bitcointalk.org/index.php?topic=653313.0
+
+  TODO We have to pad with zero, if < 32 bits... 
 *)
 
 let decode_der_signature s =
   try 
     let fixup s =
-      (* if length is less than 32 we need to pad *)
+      (* perhaps should check if 33 bytes, since can't be more *)
       S.sub s (S.length s - 32) 32 
     in
     let decode_elt s pos =
@@ -709,8 +708,6 @@ let decode_der_signature s =
     let pos, header = decodeInteger8 s pos in
     let pos, length = decodeInteger8 s pos in
 
-    (* let () = print_endline @@ "@@@ len " ^ string_of_int length in *)
-
     let pos, r, rheader = decode_elt s pos in
     (* let () = print_endline @@ "@@@  r " ^ hex_of_string r in *)
     let r = fixup r in
@@ -723,7 +720,7 @@ let decode_der_signature s =
 
     match header = 0x30 && rheader = 0x02 && sheader = 0x02 with 
       | true -> Some (r, s_, sigType)
-      | false -> None
+      | false -> None (* could remove and let case throw *)
   with _  
     -> None
 
