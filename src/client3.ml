@@ -71,10 +71,10 @@ let check_scripts tx lst =
     let signature,pubkey = match input_script with
       | M.BYTES s :: M.BYTES p :: [] -> s, p in
 
-    let () = print_endline @@ 
+    (* let () = print_endline @@ 
       "input " ^ M.format_script input_script 
       ^ " output " ^ M.format_script output_script 
-    in
+    in *)
 
     let pubkey = 
       match S.get pubkey 0 |> int_of_char  with 
@@ -84,14 +84,22 @@ let check_scripts tx lst =
  
     (* let pubkey = trim pubkey in  *)
 
+    (*
     let () = print_endline @@ "uncompressed pubkey len " ^ (S.length pubkey |> string_of_int ) in
     let () = print_endline @@ "sig len " ^ (S.length signature |> string_of_int ) in
+    *)
 
     (* so we substitute the prev output script into current tx with its outputs *)
     let tx = substitute tx i output_script in
     let hash = encode_and_hash tx in
 
     let Some (r,s,_) = M.decode_der_signature signature in
+
+    let () = print_endline @@ "r " ^ M.hex_of_string r  in
+    let () = print_endline @@ "s " ^ M.hex_of_string s  in
+ 
+
+
     let decoded_sig = r ^ s in
     Microecc.verify pubkey hash decoded_sig
   in
@@ -131,9 +139,8 @@ let get_tx_outputs_from_db db lst =
     >>= fun tx_s ->
       let _,tx = M.decodeTx tx_s 0 in
       let output = L.nth tx.outputs index in
-
-      log @@ "get output " ^ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ Int64.to_string output.value
-      >>
+      (* log @@ "get output " ^ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ Int64.to_string output.value 
+      >> *)
       return (output::x) 
   in fold_m f [] lst 
   >>= fun r -> return (L.rev r)  (* fmap *)
