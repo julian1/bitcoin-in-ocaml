@@ -3,10 +3,15 @@
 
   This is really not the right file...
 
--	get rid of caml case for function. eg int_of_string not intOfString.
+-	get rid of caml case for function. eg int_of_string not intOfS.
   - need to hex functions - to easily compare the data .
    -  can only use printf %x with integers
 *)
+
+module S = String
+module L = List
+
+
 
 type header =
 {
@@ -120,7 +125,7 @@ let hex_of_char c =
 *)
 let hex_of_string s =
   (* functional *)
-  let n = String.length s in
+  let n = S.length s in
   let buf = Buffer.create (n*2) in
   for i = 0 to n-1 do
     let x, y = hex_of_char s.[i] in
@@ -147,7 +152,7 @@ let int_of_hex (c : char) =
 
 let string_of_hex (s: string) =
   (* TODO perhaps rename binary_of_hex *)
-  let n = String.length s in
+  let n = S.length s in
   let buf = Buffer.create (n/2) in
   for i = 0 to n/2-1 do
     let i2 = i * 2 in
@@ -164,13 +169,14 @@ let hex_of_int =
   Printf.sprintf "%x"
 
 (* string manipulation *)
-let strsub = String.sub
-let strlen = String.length
+(* TODO remove and use module prefixes *)
+let strsub = S.sub
+let strlen = S.length
 let strrev = Core.Core_string.rev
-let zeros n = String.init n (fun _ -> char_of_int 0)
+let zeros n = S.init n (fun _ -> char_of_int 0)
 
 (* decode byte in s at pos *)
-let dec1 s pos = int_of_char @@ String.get s pos
+let dec1 s pos = int_of_char @@ S.get s pos
 
 (* for big-endian
 let dec s pos bytes =
@@ -227,7 +233,7 @@ let sha256d s = s |> sha256 |> sha256
 let checksum s = s |> sha256d |> fun x -> dec x 0 4
 
 (* hmmmn we don't always want to decode to integer *)
-let checksum2 s = s |> sha256d |> (fun x -> String.sub x 0 4 )
+let checksum2 s = s |> sha256d |> (fun x -> S.sub x 0 4 )
 
 
 (* decode items - this should be generalized decodeItems
@@ -239,13 +245,13 @@ let checksum2 s = s |> sha256d |> (fun x -> String.sub x 0 4 )
 let decodeNItems s pos f count =
   let rec fff pos acc count =
     if count == 0 then
-	  pos, (List.rev acc)
+	  pos, (L.rev acc)
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1)
   in fff pos [] count
 
 
-let decodeString s pos =
+let decodeS s pos =
   let pos, len = decodeInteger8 s pos in
   let pos, s = decs_ s pos len in
   pos, s
@@ -280,7 +286,7 @@ let decodeVersion s pos =
   let pos, from = decodeAddress s pos in
   let pos, to_ = decodeAddress s pos in
   let pos, nonce = decodeInteger64 s pos in
-  let pos, agent = decodeString s pos in
+  let pos, agent = decodeS s pos in
   let pos, height = decodeInteger32 s pos in
   let _, relay = decodeInteger8 s pos in
   pos, { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
@@ -296,7 +302,7 @@ let decodeVersionLtc s pos =
   let pos, from = decodeAddress s pos in
   let pos, to_ = decodeAddress s pos in
   let pos, nonce = decodeInteger64 s pos in
-  let pos, agent = decodeString s pos in
+  let pos, agent = decodeS s pos in
   let pos, height = decodeInteger32 s pos in
 (*  let _, relay = decodeInteger8 s pos in *)
   pos, { protocol = protocol; nlocalServices = nlocalServices; nTime = nTime;
@@ -356,7 +362,7 @@ let decode_script' s =
         in f pos (op::acc)
     else pos, acc
   in let _, result = f 0 []
-  in List.rev result
+  in L.rev result
 
 
 let decode_script s =
@@ -384,7 +390,7 @@ let format_token x =
     | BAD -> "BAD"
 
 let format_script tokens =
-  String.concat " " @@ List.map format_token tokens
+  S.concat " " @@ L.map format_token tokens
 
 
 let decodeTxOutput s pos =
@@ -486,7 +492,7 @@ let decodeInv s pos =
 
 
 let enc bytes value =
-  String.init bytes (fun i ->
+  S.init bytes (fun i ->
     let h = 0xff land (value lsr (i * 8)) in
     char_of_int h
   )
@@ -510,7 +516,7 @@ let encodeInteger16 value = enc 2 value
 let encodeInteger32 value = enc 4 value
 
 let enc64 bytes value =
-  String.init bytes (fun i ->
+  S.init bytes (fun i ->
     let h = Int64.logand 0xffL (Int64.shift_right value (i * 8)) in
     char_of_int (Int64.to_int h)
   )
@@ -518,11 +524,11 @@ let enc64 bytes value =
 let encodeInteger64 value = enc64 8 value
 
 (* should do string reverse if necessary *)
-let encodeString (h : string) = enc 1 (strlen h) ^ h
+let encodeS (h : string) = enc 1 (strlen h) ^ h
 
 (* change name to encode hash32 and do a sanity check on the length ? *)
 let encodeHash32 (h : string) =
-  if String.length h <> 32 then
+  if S.length h <> 32 then
     raise (Failure "hash length ")
   else
   strrev h
@@ -582,7 +588,7 @@ let encode_script tokens =
                 (* FIXME length *)
     | BYTES s -> (encodeInteger8 (strlen s)) ^ s
 
-  in List.map f tokens |> String.concat ""
+  in L.map f tokens |> S.concat ""
 
 
 let encodeInput (input : tx_in) =
@@ -592,7 +598,7 @@ let encodeInput (input : tx_in) =
     let len = strlen s in
     (encodeInteger8 len) ^ s );  (* FIXME *)  (* and get rid of the ^ *)
     encodeInteger32 input.sequence
-  ] |> String.concat ""
+  ] |> S.concat ""
 
 
 let encodeOutput (output : tx_out) =
@@ -609,18 +615,18 @@ let encodeOutput (output : tx_out) =
     let len = strlen s in
     (encodeInteger8 len) ^ s );  (* FIXME *)
     encodeInteger32 output.sequence
-*)  ] |> String.concat ""
+*)  ] |> S.concat ""
 
 
 
 
 let encodeTx (tx : tx) =
-  String.concat ""
+  S.concat ""
   [ encodeInteger32 tx.version;
-    encodeVarInt @@ List.length tx.inputs;
-    List.map encodeInput tx.inputs |> String.concat "";
-	encodeVarInt @@ List.length tx.outputs;
-    List.map encodeOutput tx.outputs |> String.concat "";
+    encodeVarInt @@ L.length tx.inputs;
+    L.map encodeInput tx.inputs |> S.concat "";
+	encodeVarInt @@ L.length tx.outputs;
+    L.map encodeOutput tx.outputs |> S.concat "";
 	encodeInteger32 tx.lockTime
   ]
 
@@ -649,7 +655,7 @@ let encodeVersion (h : version) =
   ^ encodeAddress h.from
   ^ encodeAddress h.to_
   ^ encodeInteger64 h.nonce
-  ^ encodeString  h.agent
+  ^ encodeS  h.agent
   ^ encodeInteger32 h.height
   ^ encodeInteger8 h.relay
 
@@ -710,6 +716,9 @@ let decode_der_signature s =
 (*
   - it would be much better to use option type to parse this... 
   and probably need padding.
+
+  32 and 33 byte r and s values,
+  http://bitcoin.stackexchange.com/questions/12554/why-the-signature-is-always-65-13232-bytes-long
 *)
 
 let decode_der_signature s =
@@ -717,6 +726,8 @@ let decode_der_signature s =
     let decode_elt s pos =
       let pos, _0x02 = decodeInteger8 s pos in
       let pos, length = decodeInteger8 s pos in
+
+      let () = print_endline @@ "@@@@ len " ^ string_of_int length in
       let pos, value = decs_ s pos length  in
       pos, value, _0x02 
     in
@@ -724,13 +735,21 @@ let decode_der_signature s =
     let pos, header = decodeInteger8 s pos in
     let pos, length = decodeInteger8 s pos in
 
+    let () = print_endline @@ "@@@ len " ^ string_of_int length in
+
     let pos, r, rheader = decode_elt s pos in
+    let r = S.sub r 0 32 in
+
+    let () = print_endline @@ "@@@  r " ^ hex_of_string r in
     let pos, s_, sheader= decode_elt s pos in
+
+    let () = print_endline @@ "@@@ s_ " ^ hex_of_string s_ in
 
     let pos, sigType = decodeInteger8 s pos in
 
+
     match header = 0x30 && rheader = 0x02 && sheader = 0x02 with 
-      | true -> Some (r, s_)
+      | true -> Some (r, s_, sigType)
       | false -> None
   with _  
     -> None
@@ -739,7 +758,7 @@ let decode_der_signature s =
 
 
 let formatHeader (h : header) =
-  String.concat "" [
+  S.concat "" [
     "magic:    "; hex_of_int h.magic;
     "\ncommand:  "; h.command;
     "\nlength:   "; string_of_int h.length;
@@ -749,13 +768,13 @@ let formatHeader (h : header) =
 let formatAddress (h : ip_address ) =
   let soi = string_of_int in
   let a,b,c,d = h.address  in
-  String.concat "." [
+  S.concat "." [
     soi a; soi b; soi c; soi d
   ] ^ ":" ^ soi h.port
 
 let formatVersion (h : version) =
   (* we can easily write a concat that will space fields, insert separator etc, pass as tuple pairs instead*)
-  String.concat "" [
+  S.concat "" [
     "protocol_version: "; string_of_int h.protocol;
     "\nnLocalServices:   "; Int64.to_string h.nlocalServices;
     "\nnTime:            "; Int64.to_string h.nTime;
@@ -768,7 +787,7 @@ let formatVersion (h : version) =
   ]
 
 let formatInv h =
-  String.concat "" @@ List.map (
+  S.concat "" @@ L.map (
     fun (inv_type, hash ) ->
       "\n inv_type " ^ string_of_int inv_type
       ^ ", hash " ^ hex_of_string hash
@@ -777,7 +796,7 @@ let formatInv h =
 
 
 let formatBlock (h : block) =
-  String.concat "" [
+  S.concat "" [
     "version:    "; string_of_int h.version;
     "\nprevious: "; hex_of_string h.previous;
     "\nmerkle:   "; hex_of_string h.merkle;
@@ -791,7 +810,7 @@ let formatBlock (h : block) =
 
 
 (* not sure if we want to enclose this scope, in the format tx action *)
-let formatTxInput input = String.concat "" [
+let formatTxInput input = S.concat "" [
   "  previous: " ^ hex_of_string input.previous
   ^ "\n  index: " ^ string_of_int input.index
   ^ "\n  script: " ^ (* format_script*) hex_of_string input.script
@@ -799,22 +818,22 @@ let formatTxInput input = String.concat "" [
 ]
 
 let formatTxInputs inputs =
-  String.concat "\n" @@ List.map formatTxInput inputs
+  S.concat "\n" @@ L.map formatTxInput inputs
 
-let formatTxOutput output = String.concat "" [
+let formatTxOutput output = S.concat "" [
   "  value: " ^ Int64.to_string output.value
   ^ "\n  script: " ^ (* format_script *) hex_of_string output.script
 ]
 
 let formatTxOutputs outputs =
-  String.concat "\n" @@ List.map formatTxOutput outputs
+  S.concat "\n" @@ L.map formatTxOutput outputs
 
 let formatTx tx =
   (* " hash " ^ hex_of_string tx.hash  *)
   "\n version " ^ string_of_int tx.version
-  ^ "\n inputsCount " ^(string_of_int @@ List.length tx.inputs)
+  ^ "\n inputsCount " ^(string_of_int @@ L.length tx.inputs)
   ^ "\n" ^ formatTxInputs tx.inputs
-  ^ "\n outputsCount " ^ (string_of_int @@ List.length tx.outputs )
+  ^ "\n outputsCount " ^ (string_of_int @@ L.length tx.outputs )
   ^ "\n" ^ formatTxOutputs tx.outputs
   ^ "\n lockTime " ^ string_of_int tx.lockTime
 
