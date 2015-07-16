@@ -689,6 +689,11 @@ let rec printRaw s a b =
   https://bitcointalk.org/index.php?topic=653313.0
 
   TODO We have to pad with zero, if < 32 bits... 
+
+
+    let trim_front s =
+      S.sub s 1 (S.length s - 1)  
+    in
 *)
 
 let decode_der_signature s =
