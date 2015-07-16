@@ -53,12 +53,7 @@ let encode_and_hash tx =
   let hash = M.sha256d s in
   hash
 
-(*
-  0 padding of der or pubkey 
 
-  71 length pubkey works
-  72 doesn't
-*)
 
 (* change name to checksig *)
 let check_scripts tx lst = 
@@ -98,8 +93,6 @@ let check_scripts tx lst =
     let () = print_endline @@ "r " ^ M.hex_of_string r  in
     let () = print_endline @@ "s " ^ M.hex_of_string s  in
  
-
-
     let decoded_sig = r ^ s in
     Microecc.verify pubkey hash decoded_sig
   in
@@ -158,13 +151,12 @@ let () = Lwt_main.run U.(M.(
  (*   let hash  = M.string_of_hex "90bbbbf21ecd7017b341c44bb1a0860a3adcbee04b716f1798861a368931f667" in  *)
     let hash = M.string_of_hex "9ec4bc49e828d924af1d1029cacf709431abbde46d59554b62bc270e3b29c4b1" in  
     get_tx_from_db db hash
-  >>= fun result ->
-    let hash = M.sha256d result |> M.strrev in
-    log @@ M.hex_of_string hash
+  >>= fun tx_s ->
+    let hash = M.sha256d tx_s |> M.strrev in
+    log @@ "hash " ^ M.hex_of_string hash
+  >> log @@ "tx " ^ M.hex_of_string tx_s
   >>
-    log @@ M.hex_of_string result
-  >>
-    let _,tx = M.decodeTx result 0 in
+    let _,tx = M.decodeTx tx_s 0 in
     let lst = L.map (fun input -> (input.previous, input.index)) tx.inputs in
     log @@ "inputs " ^ string_of_int (L.length lst ) 
 
