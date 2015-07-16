@@ -726,8 +726,7 @@ let decode_der_signature s =
     let decode_elt s pos =
       let pos, _0x02 = decodeInteger8 s pos in
       let pos, length = decodeInteger8 s pos in
-
-      let () = print_endline @@ "@@@@ len " ^ string_of_int length in
+      (* let () = print_endline @@ "@@@@ len " ^ string_of_int length in *)
       let pos, value = decs_ s pos length  in
       pos, value, _0x02 
     in
@@ -735,18 +734,19 @@ let decode_der_signature s =
     let pos, header = decodeInteger8 s pos in
     let pos, length = decodeInteger8 s pos in
 
-    let () = print_endline @@ "@@@ len " ^ string_of_int length in
+    (* let () = print_endline @@ "@@@ len " ^ string_of_int length in *)
 
     let pos, r, rheader = decode_elt s pos in
-    let r = S.sub r 0 32 in
-
     let () = print_endline @@ "@@@  r " ^ hex_of_string r in
-    let pos, s_, sheader= decode_elt s pos in
 
+    (* we only want to chop off - if exceeds length *)  
+    (* let r = S.sub r 1 32 in *)
+
+    let pos, s_, sheader= decode_elt s pos in
     let () = print_endline @@ "@@@ s_ " ^ hex_of_string s_ in
+    (* let s_ = S.sub s_ 1 32 in *)
 
     let pos, sigType = decodeInteger8 s pos in
-
 
     match header = 0x30 && rheader = 0x02 && sheader = 0x02 with 
       | true -> Some (r, s_, sigType)
