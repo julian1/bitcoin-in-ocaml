@@ -740,7 +740,7 @@ let decode_der_signature s =
     let () = print_endline @@ "@@@  r " ^ hex_of_string r in
 
     (* we only want to chop off - if exceeds length *)  
-    (* let r = S.sub r 1 32 in *)
+    let r = S.sub r (S.length r - 32) 32 in
 
     let pos, s_, sheader= decode_elt s pos in
     let () = print_endline @@ "@@@ s_ " ^ hex_of_string s_ in
