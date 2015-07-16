@@ -87,7 +87,7 @@ let check_scripts tx lst =
     let tx = substitute tx i output_script in
     let hash = encode_and_hash tx in
 
-    let Some (r,s) = M.decode_der_signature signature in
+    let Some (r,s,_) = M.decode_der_signature signature in
     let decoded_sig = r ^ s in
     Microecc.verify pubkey hash decoded_sig
   in
