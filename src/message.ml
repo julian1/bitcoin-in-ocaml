@@ -10,6 +10,8 @@
 
 module S = String
 module L = List
+module B = Buffer
+
 
 
 
@@ -126,17 +128,17 @@ let hex_of_char c =
 let hex_of_string s =
   (* functional *)
   let n = S.length s in
-  let buf = Buffer.create (n*2) in
+  let buf = B.create (n*2) in
   for i = 0 to n-1 do
     let x, y = hex_of_char s.[i] in
-    Buffer.add_char buf x;
-    Buffer.add_char buf y;
-    (*Buffer.add_char buf ' ';
-    Buffer.add_char buf s.[i];
-    Buffer.add_char buf '\n';
+    B.add_char buf x;
+    B.add_char buf y;
+    (*B.add_char buf ' ';
+    B.add_char buf s.[i];
+    B.add_char buf '\n';
     *)
   done;
-  Buffer.contents buf
+  B.contents buf
 
 
 
@@ -153,14 +155,14 @@ let int_of_hex (c : char) =
 let string_of_hex (s: string) =
   (* TODO perhaps rename binary_of_hex *)
   let n = S.length s in
-  let buf = Buffer.create (n/2) in
+  let buf = B.create (n/2) in
   for i = 0 to n/2-1 do
     let i2 = i * 2 in
     let x = int_of_hex s.[i2] in
     let y = int_of_hex s.[i2+1] in
-    Buffer.add_char buf @@ char_of_int (x lsl 4 + y)
+    B.add_char buf @@ char_of_int (x lsl 4 + y)
   done;
-  Buffer.contents buf
+  B.contents buf
 
 
 
@@ -676,42 +678,9 @@ let rec printRaw s a b =
 *)
 
 (*
-  how do we deal with parse errors here?? 
-  to verify a tx 
-
   TODO We have to pad with zero, if not 32 bits... 
 
   https://bitcointalk.org/index.php?topic=653313.0
-
-  Actually - we may not need with the non-SSL version of our ECC implementation
-    it's not used for hashes.
-
-let decode_der_signature s =
-
-  let decode_elt s pos =
-    let pos, _0x02 = decodeInteger8 s pos in
-    let () = Printf.printf "02 %d\n" _0x02 in
-    let pos, r_length = decodeInteger8 s pos in
-    let () = Printf.printf "elt length %d\n" r_length in 
-    let pos, r = decs_ s pos r_length  in
-    pos, r
-  in
-	let () = Printf.printf "string length %d \n" (strlen s) in
-	let pos = 0 in
-	let pos, structure = decodeInteger8 s pos in
-  let pos, length = decodeInteger8 s pos in
-  let () = Printf.printf "length %d\n" length  in
-
-  let pos, r = decode_elt s pos in
-	let () = Printf.printf "r %s\n" (hex_of_string r) in
-  let pos, s_ = decode_elt s pos in
-	let () = Printf.printf "s %s\n" (hex_of_string s_) in
-
-	let pos, sigType = decodeInteger8 s pos in
-	let () = Printf.printf "sigType %d\n" sigType in
-	r, s_
-
-
 *)
 (*
   - it would be much better to use option type to parse this... 
@@ -719,10 +688,16 @@ let decode_der_signature s =
 
   32 and 33 byte r and s values,
   http://bitcoin.stackexchange.com/questions/12554/why-the-signature-is-always-65-13232-bytes-long
+  
+  https://github.com/bitcoin/bips/blob/master/bip-0066.mediawiki
 *)
 
 let decode_der_signature s =
   try 
+    let fixup s =
+      (* if length is less than 32 we need to pad *)
+      S.sub s (S.length s - 32) 32 
+    in
     let decode_elt s pos =
       let pos, _0x02 = decodeInteger8 s pos in
       let pos, length = decodeInteger8 s pos in
@@ -737,14 +712,12 @@ let decode_der_signature s =
     (* let () = print_endline @@ "@@@ len " ^ string_of_int length in *)
 
     let pos, r, rheader = decode_elt s pos in
-    let () = print_endline @@ "@@@  r " ^ hex_of_string r in
-
-    (* we only want to chop off - if exceeds length *)  
-    let r = S.sub r (S.length r - 32) 32 in
+    (* let () = print_endline @@ "@@@  r " ^ hex_of_string r in *)
+    let r = fixup r in
 
     let pos, s_, sheader= decode_elt s pos in
-    let () = print_endline @@ "@@@ s_ " ^ hex_of_string s_ in
-    (* let s_ = S.sub s_ 1 32 in *)
+    (* let () = print_endline @@ "@@@ s_ " ^ hex_of_string s_ in *)
+    let s_ = fixup s_ in
 
     let pos, sigType = decodeInteger8 s pos in
 
