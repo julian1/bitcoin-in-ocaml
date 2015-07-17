@@ -126,7 +126,9 @@ let create_prepared_stmts db =
       (* TODO maybe remove this *)
       ("insert_genesis_block", "insert into block(hash) select $1" );
 
-      ("insert_tx", "insert into tx(block_id,hash, pos, len) values ($1, $2, $3, $4) returning id"  );
+      (*"insert_tx", "insert into tx(block_id,hash, pos, len) values ($1, $2, $3, $4) returning id"  *)
+      ("insert_tx", "insert into tx( hash, pos, len) values ($1, $2, $3) returning id");
+
 
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
       ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
@@ -320,32 +322,8 @@ let process_tx x (block_id,hash,tx) =
     tx we can.
 *)
 
-(*
-  either locking. it can't seem to begin work ? because nested too deep. or not closing some other tx? 
 
-  begin writing db
-  insert_block 000000001fb56bef722327ef1b56442c6ee5f1989d0a8467b981a03ed6d4938e
-  23.229.45.32:8333   *** got inventory blocks 1 - on request 1
-  request addr 50.199.113.193
-  blocks on request 1
-  fds
-
-*)
 let process_block x payload =
-(*
-  let x = { x with block_count = succ x.block_count } in
-    begin
-      (* todo move commits to co-incide with blocks *)
-      match x.block_count mod 10000 with
-        | 0 -> log @@ " block_count " ^ string_of_int x.block_count;
-        | _ -> return ()
-    end
-  >>
-u
-*)  
-
-
-
   let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
     log @@ "insert_block " ^ M.hex_of_string hash
@@ -357,52 +335,52 @@ u
       Some (string_of_bytea block.previous)
     ] ()
     )
-    >>= begin
-      function
-      | (Some "t" ::_ )::_ ->
-        begin
+  >>= begin
+    function
+    | (Some "t" ::_ )::_ ->
+      begin
 
-          PG.execute x.db ~name:"insert_blockdata" ~params:[
-            Some (PG.string_of_bytea payload );
-          ] ()
-          >>= fun rows ->
-            let blockdata_id = decode_id rows in
+        PG.execute x.db ~name:"insert_blockdata" ~params:[
+          Some (PG.string_of_bytea payload );
+        ] ()
+        >>= fun rows ->
+          let blockdata_id = decode_id rows in
 
-          PG.execute x.db ~name:"insert_block" ~params:[
-            Some (PG.string_of_bytea hash );
-            Some (PG.string_of_bytea block.previous );
-            Some (PG.string_of_int block.nTime );
-            Some (PG.string_of_int blockdata_id );
-          ] ()
-          >>= fun rows ->
-            log "done insert_block"
-          >>
-            let block_id = decode_id rows in
-            let txs = M.decode_block_txs payload in
-            let txs = L.map (fun (tx : M.tx) ->
-              block_id,
-              (*M.strsub payload tx.pos tx.length, *)  (* TODO should pass raw payload and do hashing in process_tx *)
-              M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
-              tx
-            ) txs
-            in
-            (*let process_tx x (block_id,payload,hash,tx) =
-                log @@ "here -> " ^ M.hex_of_string hash ^ " " ^ M.hex_of_string payload
-                >> 
-                return x 
-            in *)
-            fold_m process_tx  x txs
-          end
+        PG.execute x.db ~name:"insert_block" ~params:[
+          Some (PG.string_of_bytea hash );
+          Some (PG.string_of_bytea block.previous );
+          Some (PG.string_of_int block.nTime );
+          Some (PG.string_of_int blockdata_id );
+        ] ()
+        >>= fun rows ->
+          log "done insert_block"
+        >>
+          let block_id = decode_id rows in
+          let txs = M.decode_block_txs payload in
+          let txs = L.map (fun (tx : M.tx) ->
+            block_id,
+            (*M.strsub payload tx.pos tx.length, *)  (* TODO should pass raw payload and do hashing in process_tx *)
+            M.strsub payload tx.pos tx.length |> M.sha256d |> M.strrev,
+            tx
+          ) txs
+          in
+          (*let process_tx x (block_id,payload,hash,tx) =
+              log @@ "here -> " ^ M.hex_of_string hash ^ " " ^ M.hex_of_string payload
+              >> 
+              return x 
+          in *)
+          fold_m process_tx  x txs
+        end
 
-      | (Some "f" ::_ )::_ ->
-        begin
-          log "cannot insert"
-          >> return x
-        end 
+    | (Some "f" ::_ )::_ ->
+      begin
+        log "cannot insert"
+        >> return x
+      end 
 (*      | _ -> begin
-          log "unknown db response"
-          >> return x
-        end 
+        log "unknown db response"
+        >> return x
+      end 
 *)
     end
   >>= fun x ->
