@@ -126,8 +126,7 @@ let create_prepared_stmts db =
       (* TODO maybe remove this *)
       ("insert_genesis_block", "insert into block(hash) select $1" );
 
-      (*"insert_tx", "insert into tx(block_id,hash, pos, len) values ($1, $2, $3, $4) returning id"  *)
-      ("insert_tx", "insert into tx( hash, pos, len) values ($1, $2, $3) returning id");
+      ("insert_tx", "insert into tx( hash, pos, length) values ($1, $2, $3) returning id");
 
       ("insert_tx_block", "insert into tx_block( tx_id, block_id ) values ($1, $2) returning id");
 
@@ -136,6 +135,7 @@ let create_prepared_stmts db =
       ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
       ("insert_input", "insert into input(tx_id,output_id) values ($1,$2) returning id" );
 
+      (* TODO this is too complicated - do it client side *)
       ("insert_address", "
           with s as (
               select id, hash, script
@@ -158,15 +158,16 @@ let create_prepared_stmts db =
       ("insert_coinbase", "insert into coinbase(tx_id) values ($1)"  );
       ("insert_signature", "insert into signature(input_id,r,s) values ($1,$2,$3)"  );
 
+      (* TODO change name to extends_chain? *)
       ("can_insert_block", "
           -- hash, previous hash
           select not exists(
             select * from block where hash = $1
           )
           and exists(
-           select * from block where hash = $2
+            select * from block where hash = $2
           )
-      "  );
+      ");
     ]
     >> commit db
   )
