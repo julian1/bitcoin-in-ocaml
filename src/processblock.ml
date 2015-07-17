@@ -129,6 +129,8 @@ let create_prepared_stmts db =
       (*"insert_tx", "insert into tx(block_id,hash, pos, len) values ($1, $2, $3, $4) returning id"  *)
       ("insert_tx", "insert into tx( hash, pos, len) values ($1, $2, $3) returning id");
 
+      ("insert_tx_block", "insert into tx_block( tx_id, block_id ) values ($1, $2) returning id");
+
 
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
       ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
@@ -299,14 +301,26 @@ let process_input x (index, input, hash, tx_id) =
 
 let process_tx x (block_id,hash,tx) =
   let (tx : M.tx) = tx in
-  PG.execute x.db ~name:"insert_tx"  ~params:[
-      Some (PG.string_of_int block_id);
+
+    (* TODO we have to lookup the tx first... rather than just insert and return the tx_id  *)
+
+    PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_bytea hash);
       Some (PG.string_of_int tx.pos);
       Some (PG.string_of_int tx.length);
     ] ()
   >>= fun rows ->
     let tx_id = decode_id rows in
+    log @@ "inserted tx - id " ^ string_of_int tx_id
+  >>
+    PG.execute x.db ~name:"insert_tx_block" ~params:[
+      Some (PG.string_of_int tx_id );
+      Some (PG.string_of_int block_id );
+    ] ()
+  >>= fun rows ->
+      log "done insert_tx_block"
+  >>
+
     (* can get rid of the hash *)
     let group index a = (index,a,hash,tx_id) in
     let open M in
@@ -316,11 +330,9 @@ let process_tx x (block_id,hash,tx) =
     let outputs = L.mapi group tx.outputs in
     fold_m process_output x outputs
 
-(*
-  - IMPORTANT should move the transaction isolation begin and commit outside the process block
-    so that if want to do other actions - like check if block has been inserted in the same
-    tx we can.
-*)
+
+
+
 
 
 let process_block x payload =
