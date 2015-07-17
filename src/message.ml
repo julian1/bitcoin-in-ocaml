@@ -395,62 +395,64 @@ let format_script tokens =
   S.concat " " @@ L.map format_token tokens
 
 
+(*
+  pos and len must be with respect to tx_start 
+*)
+
 let decodeTxOutput s pos =
   let first = pos in
   let pos, value = decodeInteger64 s pos in
   let pos, scriptLen = decodeVarInt s pos in
   let pos, script = decs_ s pos scriptLen in
-  pos, { value = value; script = (* decode_script *) script;
+  pos, { 
+    value = value; 
+    script = script;
   (*
     pos = first;
     length = pos - first;
 *)
   }
 
+let decodeTxInput s pos =
+  let pos, previous = decodeHash32 s pos in
+  let pos, index = decodeInteger32 s pos in
+  let pos, scriptLen = decodeVarInt s pos in
+  let pos, script = decs_ s pos scriptLen in
+
+  let pos, sequence = decodeInteger32 s pos in
+
+  pos, { previous = previous; index = index;
+    script = script ; 
+    sequence = sequence; 
+  }
 
 
 let decodeTx s pos =
 	(* we can't do the hash here cause we don't know the tx length, when
-    it's embedded in a block
-   *)
-(*  let hash = sha256d s |> strrev in
-  let pos = 0 in *)
+      embedded in a block.
+     actually we can, but we don't want to mix up parsing and crypto 
+  *)
+
   let first = pos in
   let pos, version = decodeInteger32 s pos in
 
-  let decodeInput s pos =
-    let pos, previous = decodeHash32 s pos in
-    let pos, index = decodeInteger32 s pos in
-    let pos, scriptLen = decodeVarInt s pos in
-    let pos, script = decs_ s pos scriptLen in
-    (* should we decode the script here as well? *)
-
-    let pos, sequence = decodeInteger32 s pos in
-    pos, { previous = previous; index = index;
-      script = (* decode_script *) script ; sequence = sequence; }
-  in
-  let decodeInputs s pos n = decodeNItems s pos decodeInput n in
-  (* should we be reversing the list, when running decodeInput ?  *)
+  let decodeTxInputs s pos n = decodeNItems s pos decodeTxInput n in
   let pos, inputsCount = decodeVarInt s pos in
-  let pos, inputs = decodeInputs s pos inputsCount in
+  let pos, inputs = decodeTxInputs s pos inputsCount in
 
-(*  let decodeOutput s pos =
-    let first = pos in
-    let pos, value = decodeInteger64 s pos in
-    let pos, scriptLen = decodeVarInt s pos in
-    let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = (* decode_script *) script;
-      pos = first;
-      length = pos - first;
-    }
-  in
-*)
-  let decodeOutputs s pos n = decodeNItems s pos decodeTxOutput n in
+  let decodeTxOutputs s pos n = decodeNItems s pos decodeTxOutput n in
   let pos, outputsCount = decodeVarInt s pos in
-  let pos, outputs = decodeOutputs s pos outputsCount in
+  let pos, outputs = decodeTxOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { pos = first; length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, {  
+    pos = first; 
+    length = pos - first; 
+    version = version; 
+    inputs = inputs; 
+    outputs = outputs; 
+    lockTime = lockTime; 
+  }
 
 
 
