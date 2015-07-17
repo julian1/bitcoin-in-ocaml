@@ -27,7 +27,6 @@ create table tx(
   pos integer not null, 
   len integer not null 
 );
-create index on tx(block_id);
 create index on tx(hash);
 
 
@@ -62,7 +61,8 @@ create index on output(tx_id);
 create table input(
   id serial primary key, 
   tx_id integer references tx(id) not null, 
-  output_id integer references output(id) not null -- unique ????
+  -- output_id cannot be unique, since different tx in different forked blocks could spend the same output
+  output_id integer references output(id) not null, 
 
   pos integer not null, 
   len integer not null 
