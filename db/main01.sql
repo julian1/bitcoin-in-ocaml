@@ -14,7 +14,6 @@ begin;
  
 --  need pos of block in .dat file. 
 
--- select now() - time, time, height,hash from leaves l join block_ b on b.id = l.id order by height desc;
 
 create table blockdata(id serial primary key, data bytea not null );
 
@@ -38,6 +37,11 @@ create index on output(tx_id);
 create table input(id serial primary key, tx_id integer references tx(id), output_id integer references output(id) unique );
 create index on input(tx_id);
 create index on input(output_id);
+
+
+
+
+
 
 create table address(id serial primary key, hash bytea , script text); -- the tuple(bytea,script) is unique
   --  "create index on address(output_id)" 

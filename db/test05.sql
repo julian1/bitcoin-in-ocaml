@@ -9,14 +9,23 @@
 
 -- actually only need tx view with limit and non left join and it will work, 
 
+begin;
+
+drop MATERIALIZED VIEW if exists _dups ;
+
+CREATE MATERIALIZED VIEW _dups as 
+
+--explain
 select 
   substr( s.r, 0, 10 ),
-  -- s.input_id, 
   tx.hash as tx, 
-  -- o.amount,
+  o.index, 
+
   a.hash as address, 
-  format_amount( unspent( a.hash) ) as unspent 
+  -- format_amount( unspent( a.hash) ) as unspent 
+  unspent( a.hash)  as unspent 
  
+-- from _test t 
 from test t 
 join signature s on s.r = t.r 
 join input i on i.id = s.input_id 
@@ -26,6 +35,9 @@ join output o on o.id = i.output_id  -- the output we're unlocking
 join output_address oa on oa.output_id = o.id
 join address a on a.id = oa.address_id 
 
-order by s.r;
+limit 1000
+;
+-- shouldn't do the order here
+--order by s.r;
 
-
+commit;

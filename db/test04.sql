@@ -6,10 +6,11 @@
 -- create table test( id integer, input_id integer, r bytea, row integer );
 
 -- truncate test;
-
 -- insert into test
 
-CREATE MATERIALIZED VIEW test as 
+begin;
+
+CREATE MATERIALIZED VIEW _test as 
 
 select * from
 (SELECT 
@@ -25,5 +26,8 @@ select * from
     where Row =  2
 ;
 
+-- create index on test( input_id);
+-- create index on test( r); 
 
+commit;
 
