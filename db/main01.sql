@@ -10,10 +10,10 @@ create table blockdata(
 
 create table block(
   id serial primary key, 
-  previous_id integer,
-  blockdata_id integer references blockdata(id) not null, 
+  previous_id integer,-- nullable for first 
+  blockdata_id integer references blockdata(id),  -- nullable for first 
   hash bytea unique not null, 
-  time timestamptz not null
+  time timestamptz -- nullable for first 
 );
 create index on block(previous_id); --  not sure if needed 
 create index on block(blockdata_id);
