@@ -5,6 +5,8 @@
 drop view if exists both_ ;
 drop view if exists outputs;
 
+-- CHange name to _outputs  and _inputs
+
 create view outputs as
 select 
   b.time as time,

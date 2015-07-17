@@ -1,9 +1,16 @@
-drop table test;
-create table test( id integer, input_id integer, r bytea, row integer );
 
-truncate test;
+-- todo change this to a materialized view 
 
-insert into test
+
+-- drop table test;
+-- create table test( id integer, input_id integer, r bytea, row integer );
+
+-- truncate test;
+
+-- insert into test
+
+CREATE MATERIALIZED VIEW test as 
+
 select * from
 (SELECT 
     id,
