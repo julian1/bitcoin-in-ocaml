@@ -25,7 +25,7 @@ create table tx(
   -- block_id integer references block(id) not null, 
   hash bytea unique not null, 
   pos integer not null, 
-  len integer not null 
+  length integer not null 
 );
 create index on tx(hash);
 
@@ -53,7 +53,7 @@ create table output(
   amount bigint not null,
 
   pos integer not null, 
-  len integer not null 
+  length integer not null 
 );
 create index on output(tx_id);
 
@@ -65,7 +65,7 @@ create table input(
   output_id integer references output(id) not null, 
 
   pos integer not null, 
-  len integer not null 
+  length integer not null 
 );
 
 create index on input(tx_id);
