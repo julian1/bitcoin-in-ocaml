@@ -14,6 +14,7 @@ begin;
  
 --  need pos of block in .dat file. 
 
+-- select now() - time, time, height,hash from leaves l join block_ b on b.id = l.id order by height desc;
 
 create table blockdata(id serial primary key, data bytea not null );
 

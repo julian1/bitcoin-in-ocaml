@@ -252,7 +252,11 @@ let process_input_script x (input_id, input) =
 
   let process_der x der =
     (* ok, all we have to do is insert the der ...  *)
-    let r,s = der in
+    (* TODO we should be storing and indexing the sigType 
+
+      TODO actually should we be just storing the pos,length, and then creating an index on it?
+    *)
+    let r,s,sigType = der in
     PG.execute x.db ~name:"insert_signature" ~params:[
       Some (PG.string_of_int input_id);
       Some (PG.string_of_bytea r);

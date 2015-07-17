@@ -20,6 +20,11 @@ let fold_m f acc lst =
   let adapt f acc e = acc >>= fun acc -> f acc e in
   L.fold_left (adapt f) (return acc) lst
 
+(*
+  VERY IMPORTANT - we might be able to store signatures using pos,len 
+    and then build an index over a function . 
+    - probably for address as well, 
+*)
 
 (*
 let read_from_file filename =
@@ -78,7 +83,11 @@ let check_scripts tx lst =
       in
  
     (* let pubkey = trim pubkey in  *)
+  (*
+    - the final z maybe computed in another function
+    - eg. EccPoint_mult  takes a z
 
+  *)
     (*
     let () = print_endline @@ "uncompressed pubkey len " ^ (S.length pubkey |> string_of_int ) in
     let () = print_endline @@ "sig len " ^ (S.length signature |> string_of_int ) in
@@ -87,6 +96,9 @@ let check_scripts tx lst =
     (* so we substitute the prev output script into current tx with its outputs *)
     let tx = substitute tx i output_script in
     let hash = encode_and_hash tx in
+
+    let () = print_endline @@ "#### " ^ M.hex_of_string hash in
+    
 
     let Some (r,s,_) = M.decode_der_signature signature in
 
