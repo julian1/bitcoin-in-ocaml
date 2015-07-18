@@ -4,22 +4,32 @@ begin;
 -- having a separate block_data means we can insist on not null attribute
 -- and may make scanning block table faster
 
-create table block_data(
-  id serial primary key, 
-  data bytea not null 
-);
 
-
+-- maybe change name to header
 create table block(
   id serial primary key, 
-  previous_id integer,-- nullable for first 
-  block_data_id integer references block_data(id),  -- nullable for first 
   hash bytea unique not null, 
-  time timestamptz -- nullable for first 
+  time timestamptz not null -- nullable for first, use unix epoch time or something... 
 );
-create index on block(previous_id); --  not sure if needed 
-create index on block(block_data_id);
 create index on block(hash);
+
+
+create table previous (
+  id serial primary key, 
+  block_id integer references block(id) not null,
+  block_previous_id integer references block(id) not null
+);
+create index on previous(block_id);
+create index on previous(block_previous_id);
+
+
+
+create table block_data(
+  id serial primary key, 
+  block_id integer references block(id) not null,
+  data bytea not null 
+);
+create index on block_data(block_id);
 
 
 create table tx(
