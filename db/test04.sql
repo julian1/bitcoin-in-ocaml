@@ -1,9 +1,17 @@
-drop table test;
-create table test( id integer, input_id integer, r bytea, row integer );
 
-truncate test;
+-- todo change this to a materialized view 
 
-insert into test
+
+-- drop table test;
+-- create table test( id integer, input_id integer, r bytea, row integer );
+
+-- truncate test;
+-- insert into test
+
+begin;
+
+CREATE MATERIALIZED VIEW _test as 
+
 select * from
 (SELECT 
     id,
@@ -18,5 +26,8 @@ select * from
     where Row =  2
 ;
 
+-- create index on test( input_id);
+-- create index on test( r); 
 
+commit;
 

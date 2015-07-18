@@ -20,6 +20,11 @@ let fold_m f acc lst =
   let adapt f acc e = acc >>= fun acc -> f acc e in
   L.fold_left (adapt f) (return acc) lst
 
+(*
+  VERY IMPORTANT - we might be able to store signatures using pos,len 
+    and then build an index over a function . 
+    - probably for address as well, 
+*)
 
 (*
 let read_from_file filename =
@@ -53,12 +58,7 @@ let encode_and_hash tx =
   let hash = M.sha256d s in
   hash
 
-(*
-  0 padding of der or pubkey 
 
-  71 length pubkey works
-  72 doesn't
-*)
 
 (* change name to checksig *)
 let check_scripts tx lst = 
@@ -71,23 +71,40 @@ let check_scripts tx lst =
     let signature,pubkey = match input_script with
       | M.BYTES s :: M.BYTES p :: [] -> s, p in
 
-    let () = print_endline @@ 
+    (* let () = print_endline @@ 
       "input " ^ M.format_script input_script 
       ^ " output " ^ M.format_script output_script 
-    in
+    in *)
 
-    (* how do we know whether to decompress the pubkey? *)
-    let pubkey = Microecc.decompress pubkey in
+    let pubkey = 
+      match S.get pubkey 0 |> int_of_char  with 
+        | 0x04 -> S.sub pubkey 1 (S.length pubkey - 1)  
+        | 0x02|0x03 -> Microecc.decompress pubkey
+      in
+ 
+    (* let pubkey = trim pubkey in  *)
+  (*
+    - the final z maybe computed in another function
+    - eg. EccPoint_mult  takes a z
+
+  *)
+    (*
     let () = print_endline @@ "uncompressed pubkey len " ^ (S.length pubkey |> string_of_int ) in
     let () = print_endline @@ "sig len " ^ (S.length signature |> string_of_int ) in
-
-
+    *)
 
     (* so we substitute the prev output script into current tx with its outputs *)
     let tx = substitute tx i output_script in
     let hash = encode_and_hash tx in
 
+    let () = print_endline @@ "#### " ^ M.hex_of_string hash in
+    
+
     let Some (r,s,_) = M.decode_der_signature signature in
+
+    let () = print_endline @@ "r " ^ M.hex_of_string r  in
+    let () = print_endline @@ "s " ^ M.hex_of_string s  in
+ 
     let decoded_sig = r ^ s in
     Microecc.verify pubkey hash decoded_sig
   in
@@ -127,9 +144,8 @@ let get_tx_outputs_from_db db lst =
     >>= fun tx_s ->
       let _,tx = M.decodeTx tx_s 0 in
       let output = L.nth tx.outputs index in
-
-      log @@ "get output " ^ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ Int64.to_string output.value
-      >>
+      (* log @@ "get output " ^ M.hex_of_string hash ^ " " ^ string_of_int index ^ " " ^ Int64.to_string output.value 
+      >> *)
       return (output::x) 
   in fold_m f [] lst 
   >>= fun r -> return (L.rev r)  (* fmap *)
@@ -143,16 +159,16 @@ let () = Lwt_main.run U.(M.(
   log "connecting to db"
   >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
-(*    let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in *)
-    let hash  = M.string_of_hex "90bbbbf21ecd7017b341c44bb1a0860a3adcbee04b716f1798861a368931f667" in
+ (*   let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in *) 
+ (*   let hash  = M.string_of_hex "90bbbbf21ecd7017b341c44bb1a0860a3adcbee04b716f1798861a368931f667" in  *)
+    let hash = M.string_of_hex "9ec4bc49e828d924af1d1029cacf709431abbde46d59554b62bc270e3b29c4b1" in  
     get_tx_from_db db hash
-  >>= fun result ->
-    let hash = M.sha256d result |> M.strrev in
-    log @@ M.hex_of_string hash
+  >>= fun tx_s ->
+    let hash = M.sha256d tx_s |> M.strrev in
+    log @@ "hash " ^ M.hex_of_string hash
+  >> log @@ "tx " ^ M.hex_of_string tx_s
   >>
-    log @@ M.hex_of_string result
-  >>
-    let _,tx = M.decodeTx result 0 in
+    let _,tx = M.decodeTx tx_s 0 in
     let lst = L.map (fun input -> (input.previous, input.index)) tx.inputs in
     log @@ "inputs " ^ string_of_int (L.length lst ) 
 

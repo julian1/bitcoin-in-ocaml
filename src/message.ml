@@ -10,6 +10,8 @@
 
 module S = String
 module L = List
+module B = Buffer
+
 
 
 
@@ -81,6 +83,9 @@ type tx_in =
   (* script: script_token list; *)
   script : string;
   sequence : int;
+
+  pos : int;
+  length : int;
 }
 
 (* need to sort out naming convention for types *)
@@ -90,13 +95,8 @@ type tx_out =
   (* script: script_token list; *)
   script : string;
 
-
-  (* calculated on parse 
-    TODO remove. we don't need these
-  
   pos : int;
-  length : int ;
-*)
+  length : int;
 }
 
 type tx =
@@ -126,17 +126,17 @@ let hex_of_char c =
 let hex_of_string s =
   (* functional *)
   let n = S.length s in
-  let buf = Buffer.create (n*2) in
+  let buf = B.create (n*2) in
   for i = 0 to n-1 do
     let x, y = hex_of_char s.[i] in
-    Buffer.add_char buf x;
-    Buffer.add_char buf y;
-    (*Buffer.add_char buf ' ';
-    Buffer.add_char buf s.[i];
-    Buffer.add_char buf '\n';
+    B.add_char buf x;
+    B.add_char buf y;
+    (*B.add_char buf ' ';
+    B.add_char buf s.[i];
+    B.add_char buf '\n';
     *)
   done;
-  Buffer.contents buf
+  B.contents buf
 
 
 
@@ -153,14 +153,14 @@ let int_of_hex (c : char) =
 let string_of_hex (s: string) =
   (* TODO perhaps rename binary_of_hex *)
   let n = S.length s in
-  let buf = Buffer.create (n/2) in
+  let buf = B.create (n/2) in
   for i = 0 to n/2-1 do
     let i2 = i * 2 in
     let x = int_of_hex s.[i2] in
     let y = int_of_hex s.[i2+1] in
-    Buffer.add_char buf @@ char_of_int (x lsl 4 + y)
+    B.add_char buf @@ char_of_int (x lsl 4 + y)
   done;
-  Buffer.contents buf
+  B.contents buf
 
 
 
@@ -393,62 +393,65 @@ let format_script tokens =
   S.concat " " @@ L.map format_token tokens
 
 
+(*
+  pos and len must be with respect to tx_start 
+*)
+
 let decodeTxOutput s pos =
   let first = pos in
   let pos, value = decodeInteger64 s pos in
   let pos, scriptLen = decodeVarInt s pos in
   let pos, script = decs_ s pos scriptLen in
-  pos, { value = value; script = (* decode_script *) script;
-  (*
+  pos, { 
+    value = value; 
+    script = script;
     pos = first;
     length = pos - first;
-*)
+  }
+
+let decodeTxInput s pos =
+  let first = pos in
+  let pos, previous = decodeHash32 s pos in
+  let pos, index = decodeInteger32 s pos in
+  let pos, scriptLen = decodeVarInt s pos in
+  let pos, script = decs_ s pos scriptLen in
+  let pos, sequence = decodeInteger32 s pos in
+  pos, { 
+    previous = previous; 
+    index = index;
+    script = script ; 
+    sequence = sequence; 
+    pos = first;
+    length = pos - first;
   }
 
 
 
 let decodeTx s pos =
-	(* we can't do the hash here cause we don't know the tx length, when
-    it's embedded in a block
-   *)
-(*  let hash = sha256d s |> strrev in
-  let pos = 0 in *)
+	(* we can't do the hash here cause we don't know the tx length, when embedded in a block.
+     actually we can, but avoid mixing up parsing and crypto actions
+  *)
   let first = pos in
   let pos, version = decodeInteger32 s pos in
 
-  let decodeInput s pos =
-    let pos, previous = decodeHash32 s pos in
-    let pos, index = decodeInteger32 s pos in
-    let pos, scriptLen = decodeVarInt s pos in
-    let pos, script = decs_ s pos scriptLen in
-    (* should we decode the script here as well? *)
-
-    let pos, sequence = decodeInteger32 s pos in
-    pos, { previous = previous; index = index;
-      script = (* decode_script *) script ; sequence = sequence; }
-  in
-  let decodeInputs s pos n = decodeNItems s pos decodeInput n in
-  (* should we be reversing the list, when running decodeInput ?  *)
+  let decodeTxInputs s pos n = decodeNItems s pos decodeTxInput n in
   let pos, inputsCount = decodeVarInt s pos in
-  let pos, inputs = decodeInputs s pos inputsCount in
+  let pos, inputs = decodeTxInputs s pos inputsCount in
 
-(*  let decodeOutput s pos =
-    let first = pos in
-    let pos, value = decodeInteger64 s pos in
-    let pos, scriptLen = decodeVarInt s pos in
-    let pos, script = decs_ s pos scriptLen in
-    pos, { value = value; script = (* decode_script *) script;
-      pos = first;
-      length = pos - first;
-    }
-  in
-*)
-  let decodeOutputs s pos n = decodeNItems s pos decodeTxOutput n in
+  let decodeTxOutputs s pos n = decodeNItems s pos decodeTxOutput n in
   let pos, outputsCount = decodeVarInt s pos in
-  let pos, outputs = decodeOutputs s pos outputsCount in
+  let pos, outputs = decodeTxOutputs s pos outputsCount in
 
   let pos, lockTime = decodeInteger32 s pos in
-  pos, { pos = first; length = pos - first; version = version; inputs = inputs; outputs = outputs; lockTime }
+  pos, {  
+    pos = first; 
+    length = pos - first; 
+    version = version; 
+    (* patch offset with respect to tx *)
+    inputs = L.map (fun (input:tx_in) -> { input with pos = input.pos - first; }) inputs;
+    outputs = L.map (fun (output:tx_out) -> { output with pos = output.pos - first; }) outputs;
+    lockTime = lockTime; 
+  }
 
 
 
@@ -676,53 +679,30 @@ let rec printRaw s a b =
 *)
 
 (*
-  how do we deal with parse errors here?? 
-  to verify a tx 
-
-  TODO We have to pad with zero, if not 32 bits... 
-
-  https://bitcointalk.org/index.php?topic=653313.0
-
-  Actually - we may not need with the non-SSL version of our ECC implementation
-    it's not used for hashes.
-
-let decode_der_signature s =
-
-  let decode_elt s pos =
-    let pos, _0x02 = decodeInteger8 s pos in
-    let () = Printf.printf "02 %d\n" _0x02 in
-    let pos, r_length = decodeInteger8 s pos in
-    let () = Printf.printf "elt length %d\n" r_length in 
-    let pos, r = decs_ s pos r_length  in
-    pos, r
-  in
-	let () = Printf.printf "string length %d \n" (strlen s) in
-	let pos = 0 in
-	let pos, structure = decodeInteger8 s pos in
-  let pos, length = decodeInteger8 s pos in
-  let () = Printf.printf "length %d\n" length  in
-
-  let pos, r = decode_elt s pos in
-	let () = Printf.printf "r %s\n" (hex_of_string r) in
-  let pos, s_ = decode_elt s pos in
-	let () = Printf.printf "s %s\n" (hex_of_string s_) in
-
-	let pos, sigType = decodeInteger8 s pos in
-	let () = Printf.printf "sigType %d\n" sigType in
-	r, s_
-
 
 *)
 (*
-  - it would be much better to use option type to parse this... 
-  and probably need padding.
-
   32 and 33 byte r and s values,
   http://bitcoin.stackexchange.com/questions/12554/why-the-signature-is-always-65-13232-bytes-long
+  
+  https://github.com/bitcoin/bips/blob/master/bip-0066.mediawiki
+
+  https://bitcointalk.org/index.php?topic=653313.0
+
+  TODO We have to pad with zero, if < 32 bits... 
+
+
+    let trim_front s =
+      S.sub s 1 (S.length s - 1)  
+    in
 *)
 
 let decode_der_signature s =
   try 
+    let fixup s =
+      (* perhaps should check if 33 bytes, since can't be more *)
+      S.sub s (S.length s - 32) 32 
+    in
     let decode_elt s pos =
       let pos, _0x02 = decodeInteger8 s pos in
       let pos, length = decodeInteger8 s pos in
@@ -734,23 +714,19 @@ let decode_der_signature s =
     let pos, header = decodeInteger8 s pos in
     let pos, length = decodeInteger8 s pos in
 
-    (* let () = print_endline @@ "@@@ len " ^ string_of_int length in *)
-
     let pos, r, rheader = decode_elt s pos in
-    let () = print_endline @@ "@@@  r " ^ hex_of_string r in
-
-    (* we only want to chop off - if exceeds length *)  
-    (* let r = S.sub r 1 32 in *)
+    (* let () = print_endline @@ "@@@  r " ^ hex_of_string r in *)
+    let r = fixup r in
 
     let pos, s_, sheader= decode_elt s pos in
-    let () = print_endline @@ "@@@ s_ " ^ hex_of_string s_ in
-    (* let s_ = S.sub s_ 1 32 in *)
+    (* let () = print_endline @@ "@@@ s_ " ^ hex_of_string s_ in *)
+    let s_ = fixup s_ in
 
     let pos, sigType = decodeInteger8 s pos in
 
     match header = 0x30 && rheader = 0x02 && sheader = 0x02 with 
       | true -> Some (r, s_, sigType)
-      | false -> None
+      | false -> None (* could remove and let case throw *)
   with _  
     -> None
 

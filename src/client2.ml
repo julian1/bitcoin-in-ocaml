@@ -1,4 +1,6 @@
 (*
+  scans a file with blocks and inserts them into the db
+
   on block inserttion - we should check
     - the block doesn't already exist
     - it's previous links into the tree 
@@ -85,7 +87,7 @@ let replay_blocks fd f x =
 
 let process_file () =
   log "connecting and create db"
-  >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+  >> PG.connect ~host:"127.0.0.1" ~database: "test" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
     Processblock.create_prepared_stmts db
   >> Lwt_unix.openfile "blocks.dat.orig" [O_RDONLY] 0
