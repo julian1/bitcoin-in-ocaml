@@ -9,7 +9,7 @@ begin;
 create table block(
   id serial primary key, 
   hash bytea unique not null, 
-  time timestamptz not null -- nullable for first, use unix epoch time or something... 
+  time timestamptz not null
 );
 create index on block(hash);
 
