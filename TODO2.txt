@@ -7,18 +7,20 @@ So have to tx index
   - done add a mapping table between 
   - done rename views to use prefix underscores
   - done - store the sigtype in signature
+  - done move the tx pos, length into the tx_block structure, maybe also add blockdata id... no 
+  - done - get rid of blockdata? since it's one-to-one with block?  
+      - no - because allows non-null enforcement and might be faster
 
   - lookup the tx, to see if we already recorded it
+
   - simplify address storing not to use complicated prepared stmt 
 
-  - record pos, len in output, starting from 0 in tx 
+  - record pos, len in output, starting from 0 in tx (NEED to check works) 
   - maybe same for input 
 
   - wif
 
-  - move the tx pos, length into the tx_block structure, maybe also add blockdata id... no 
-  -  get rid of blockdata? since it's one-to-one with block?  
-      - no - because allows non-null enforcement and might be faster
+
 
   - ok, there's an issue that tx data might be in block, or somewhere else
     makes it har
