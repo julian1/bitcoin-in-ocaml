@@ -14,6 +14,7 @@
 
 
   - simplify address storing not to use complicated prepared stmt 
+  - change var name 'x' to acc or something
   - wif
 
   transaction malleability and removing items from mempool??? how? 

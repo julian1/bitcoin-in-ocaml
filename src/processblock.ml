@@ -334,9 +334,9 @@ let process_tx x (block_id,hash,tx) =
         ] ()
       >>= fun rows ->
         let tx_id = decode_id rows in
-        log @@ "inserted tx - id " ^ string_of_int tx_id
-      >>
-        (* can get rid of the hash *)
+      (*  log @@ "inserted tx - id " ^ string_of_int tx_id
+      >> *)
+        (* TODO can get rid of the hash - except used for reporting errors in later actions *)
         let group index a = (index,a,hash,tx_id) in
         let open M in
         let inputs = L.mapi group tx.inputs in
@@ -355,8 +355,8 @@ let process_tx x (block_id,hash,tx) =
       Some (PG.string_of_int tx.length);
     ] ()
   >>= fun rows ->
-    log "done insert_tx_block"
-    >> return x 
+    (*log "done insert_tx_block"
+    >>*) return x 
 
 
 
