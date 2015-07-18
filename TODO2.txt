@@ -17,9 +17,16 @@
   - change var name 'x' to acc or something
   - wif
 
+----
+  - done - the blockdata i think should point at block. rather than block at blockdata. 
+      because for the first query hash there will be no blockdata. 
+
+  - done - and previous should be a separate table.
+
+
+----
   transaction malleability and removing items from mempool??? how? 
     probably just record the block one, then the mempool one utxos will be spent
-
 ----
    - note that tx data may be stored twice in two forked blocks. we get it correctly... 
   - meaning it may appear more than once...
