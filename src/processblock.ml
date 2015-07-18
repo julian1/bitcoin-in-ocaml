@@ -158,7 +158,7 @@ let create_prepared_stmts db =
         "  );
       ("insert_output_address", "insert into output_address(output_id,address_id) values ($1,$2)"  );
       ("insert_coinbase", "insert into coinbase(tx_id) values ($1)"  );
-      ("insert_signature", "insert into signature(input_id,r,s) values ($1,$2,$3)"  );
+      ("insert_signature", "insert into signature(input_id,r,s, sig_type) values ($1,$2,$3,$4)"  );
 
       (* TODO change name to extends_chain? *)
       ("can_insert_block", "
@@ -265,11 +265,12 @@ let process_input_script x (input_id, input) =
 
       TODO actually should we be just storing the pos,length, and then creating an index on it?
     *)
-    let r,s,sigType = der in
+    let r,s,sig_type = der in
     PG.execute x.db ~name:"insert_signature" ~params:[
       Some (PG.string_of_int input_id);
       Some (PG.string_of_bytea r);
       Some (PG.string_of_bytea s);
+      Some (PG.string_of_int sig_type);
     ] ()
     >>
     return x

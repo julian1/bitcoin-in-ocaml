@@ -102,12 +102,12 @@ create table signature(
   input_id integer references input(id) not null, 
   r bytea not null, 
   s bytea not null,
-  sigtype integer not null
+  sig_type integer not null
 );
 
 create index on signature(input_id);
 create index on signature(r);
-create index on signature(sigtype);
+create index on signature(sig_type);
 
 commit;
 
