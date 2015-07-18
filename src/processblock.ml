@@ -110,9 +110,7 @@ let create_prepared_stmts db =
           select $1, to_timestamp($2) at time zone 'UTC'
           returning id
       ");
-(*            Some (PG.string_of_int block_id );
-            Some (PG.string_of_bytea block.previous );
-*) 
+ 
       ("insert_previous", "
           insert into previous(block_id, block_previous_id)
           select $1, block.id from block where hash = $2
@@ -124,7 +122,6 @@ let create_prepared_stmts db =
           values ($1, $2)
           returning id
       ");
-
 
       (* TODO maybe remove this *)
       ("insert_genesis_block", "insert into block(hash) select $1" );
