@@ -105,14 +105,14 @@ let create_prepared_stmts db =
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
 
-      ("insert_blockdata", "
-          insert into blockdata(data)
+      ("insert_block_data", "
+          insert into block_data(data)
           values ($1)
           returning id
       ");
 
       ("insert_block", "
-          insert into block(hash,previous_id,time, blockdata_id)
+          insert into block(hash,previous_id,time, block_data_id)
           select
               $1,
               b.id,
@@ -126,9 +126,9 @@ let create_prepared_stmts db =
       (* TODO maybe remove this *)
       ("insert_genesis_block", "insert into block(hash) select $1" );
 
-      ("insert_tx", "insert into tx( hash, pos, length) values ($1, $2, $3) returning id");
+      ("insert_tx", "insert into tx( hash) values ($1) returning id");
 
-      ("insert_tx_block", "insert into tx_block( tx_id, block_id ) values ($1, $2) returning id");
+      ("insert_tx_block", "insert into tx_block( tx_id, block_id, pos, length ) values ($1, $2, $3, $4) returning id");
 
 
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
@@ -314,8 +314,6 @@ let process_tx x (block_id,hash,tx) =
 
     PG.execute x.db ~name:"insert_tx"  ~params:[
       Some (PG.string_of_bytea hash);
-      Some (PG.string_of_int tx.pos);
-      Some (PG.string_of_int tx.length);
     ] ()
   >>= fun rows ->
     let tx_id = decode_id rows in
@@ -324,6 +322,8 @@ let process_tx x (block_id,hash,tx) =
     PG.execute x.db ~name:"insert_tx_block" ~params:[
       Some (PG.string_of_int tx_id );
       Some (PG.string_of_int block_id );
+      Some (PG.string_of_int tx.pos);
+      Some (PG.string_of_int tx.length);
     ] ()
   >>= fun rows ->
       log "done insert_tx_block"
@@ -360,17 +360,17 @@ let process_block x payload =
     | (Some "t" ::_ )::_ ->
       begin
 
-        PG.execute x.db ~name:"insert_blockdata" ~params:[
+        PG.execute x.db ~name:"insert_block_data" ~params:[
           Some (PG.string_of_bytea payload );
         ] ()
         >>= fun rows ->
-          let blockdata_id = decode_id rows in
+          let block_data_id = decode_id rows in
 
         PG.execute x.db ~name:"insert_block" ~params:[
           Some (PG.string_of_bytea hash );
           Some (PG.string_of_bytea block.previous );
           Some (PG.string_of_int block.nTime );
-          Some (PG.string_of_int blockdata_id );
+          Some (PG.string_of_int block_data_id );
         ] ()
         >>= fun rows ->
           log "done insert_block"

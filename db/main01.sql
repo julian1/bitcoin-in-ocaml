@@ -1,8 +1,10 @@
 
 begin;
 
+-- having a separate block_data means we can insist on not null attribute
+-- and may make scanning block table faster
 
-create table blockdata(
+create table block_data(
   id serial primary key, 
   data bytea not null 
 );
@@ -11,21 +13,21 @@ create table blockdata(
 create table block(
   id serial primary key, 
   previous_id integer,-- nullable for first 
-  blockdata_id integer references blockdata(id),  -- nullable for first 
+  block_data_id integer references block_data(id),  -- nullable for first 
   hash bytea unique not null, 
   time timestamptz -- nullable for first 
 );
 create index on block(previous_id); --  not sure if needed 
-create index on block(blockdata_id);
+create index on block(block_data_id);
 create index on block(hash);
 
 
 create table tx(
   id serial primary key, 
   -- block_id integer references block(id) not null, 
-  hash bytea unique not null, 
-  pos integer not null, 
-  length integer not null 
+  hash bytea unique not null
+  
+  -- data might be in the block, or the mempool so can't have pos,length here
 );
 create index on tx(hash);
 
@@ -36,7 +38,10 @@ create index on tx(hash);
 create table tx_block(
   id serial primary key, 
   tx_id integer references tx(id) not null, 
-  block_id integer references block(id) not null
+  block_id integer references block(id) not null,
+
+  pos integer not null, 
+  length integer not null 
 );
 
 create index on tx_block(tx_id);
