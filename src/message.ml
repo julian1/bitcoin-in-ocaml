@@ -83,6 +83,9 @@ type tx_in =
   (* script: script_token list; *)
   script : string;
   sequence : int;
+
+  pos : int;
+  length : int;
 }
 
 (* need to sort out naming convention for types *)
@@ -92,13 +95,8 @@ type tx_out =
   (* script: script_token list; *)
   script : string;
 
-
-  (* calculated on parse 
-    TODO remove. we don't need these
-  
   pos : int;
-  length : int ;
-*)
+  length : int;
 }
 
 type tx =
@@ -407,13 +405,12 @@ let decodeTxOutput s pos =
   pos, { 
     value = value; 
     script = script;
-  (*
     pos = first;
     length = pos - first;
-*)
   }
 
 let decodeTxInput s pos =
+  let first = pos in
   let pos, previous = decodeHash32 s pos in
   let pos, index = decodeInteger32 s pos in
   let pos, scriptLen = decodeVarInt s pos in
@@ -424,11 +421,12 @@ let decodeTxInput s pos =
     index = index;
     script = script ; 
     sequence = sequence; 
+    pos = first;
+    length = pos - first;
   }
 
-(*
-  rather than passing in the tx start pos to the decode input, why not patch it up later?...
-*)
+
+
 let decodeTx s pos =
 	(* we can't do the hash here cause we don't know the tx length, when embedded in a block.
      actually we can, but avoid mixing up parsing and crypto actions
@@ -449,8 +447,9 @@ let decodeTx s pos =
     pos = first; 
     length = pos - first; 
     version = version; 
-    inputs = inputs; 
-    outputs = outputs; 
+    (* patch offset with respect to tx *)
+    inputs = L.map (fun (input:tx_in) -> { input with pos = input.pos - first; }) inputs;
+    outputs = L.map (fun (output:tx_out) -> { output with pos = output.pos - first; }) outputs;
     lockTime = lockTime; 
   }
 

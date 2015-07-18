@@ -132,8 +132,10 @@ let create_prepared_stmts db =
 
 
       ("select_output_id", "select output.id from output join tx on tx.id = output.tx_id where tx.hash = $1 and output.index = $2"  );
-      ("insert_output", "insert into output(tx_id,index,amount) values ($1,$2,$3) returning id" );
-      ("insert_input", "insert into input(tx_id,output_id) values ($1,$2) returning id" );
+
+      ("insert_output", "insert into output(tx_id,index,amount, pos, length) values ($1,$2,$3,$4,$5) returning id" );
+
+      ("insert_input", "insert into input(tx_id,output_id, pos, length) values ($1,$2,$3,$4) returning id" );
 
       (* TODO this is too complicated - do it client side *)
       ("insert_address", "
@@ -191,14 +193,16 @@ type my_script =
 
 
 let process_output x (index,output,tx_hash,tx_id) =
-    (* TODO should get rid of tx_hash argument used for loging strange *)
-    let open M in
-    PG.( execute x.db ~name:"insert_output" ~params:[
-        Some (string_of_int tx_id);
-        Some (string_of_int index);
-        Some (string_of_int64 output.value)
-        ] () )
-    >>= fun rows ->
+  (* TODO should get rid of tx_hash argument used for loging strange *)
+  let open M in
+  PG.( execute x.db ~name:"insert_output" ~params:[
+      Some (string_of_int tx_id);
+      Some (string_of_int index);
+      Some (string_of_int64 output.value);
+      Some (PG.string_of_int output.pos);
+      Some (PG.string_of_int output.length);
+    ] () )
+  >>= fun rows ->
     let output_id = decode_id rows in
     let script = M.decode_script output.script in
     let decoded_script = match script with
@@ -294,6 +298,8 @@ let process_input x (index, input, hash, tx_id) =
       PG.execute x.db ~name:"insert_input" ~params:[
         Some (PG.string_of_int tx_id);
         Some (PG.string_of_int output_id);
+        Some (PG.string_of_int input.pos);
+        Some (PG.string_of_int input.length);
       ] ()
     >>= fun rows ->
       let input_id = decode_id rows in
