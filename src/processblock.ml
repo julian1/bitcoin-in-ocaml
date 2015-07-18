@@ -126,6 +126,8 @@ let create_prepared_stmts db =
       (* TODO maybe remove this *)
       ("insert_genesis_block", "insert into block(hash) select $1" );
 
+      ("select_tx_id", "select tx.id from tx where tx.hash = $1"  );
+
       ("insert_tx", "insert into tx( hash) values ($1) returning id");
 
       ("insert_tx_block", "insert into tx_block( tx_id, block_id, pos, length ) values ($1, $2, $3, $4) returning id");
@@ -310,15 +312,42 @@ let process_input x (index, input, hash, tx_id) =
 let process_tx x (block_id,hash,tx) =
   let (tx : M.tx) = tx in
 
-    (* TODO we have to lookup the tx first... rather than just insert and return the tx_id  *)
+    (* TODO we have to lookup the tx first... rather than just insert and return the tx_id  
+      the insertion of the tx, should be done completely before we insert the tx_block ? 
+      and preferably outside this function to support mempool stuff...
+      - we don't want to return values, since we are passing values in....
 
-    PG.execute x.db ~name:"insert_tx"  ~params:[
+      ("select_tx_id", "select tx.id from tx where tx.hash = $1"  );
+    *)
+
+    PG.execute x.db ~name:"select_tx_id"  ~params:[
       Some (PG.string_of_bytea hash);
     ] ()
-  >>= fun rows ->
-    let tx_id = decode_id rows in
-    log @@ "inserted tx - id " ^ string_of_int tx_id
-  >>
+
+  >>= (function
+    | (Some tx_id ::_ )::_ -> 
+      return (PG.int_of_string tx_id ) 
+
+    | _ -> (* it's not a null it's going to be empty??? *) 
+      PG.execute x.db ~name:"insert_tx"  ~params:[
+          Some (PG.string_of_bytea hash);
+        ] ()
+      >>= fun rows ->
+        let tx_id = decode_id rows in
+        log @@ "inserted tx - id " ^ string_of_int tx_id
+      >>
+        (* can get rid of the hash *)
+        let group index a = (index,a,hash,tx_id) in
+        let open M in
+        let inputs = L.mapi group tx.inputs in
+        fold_m process_input x inputs
+      >>= fun x ->
+        let outputs = L.mapi group tx.outputs in
+        fold_m process_output x outputs
+      >> return tx_id
+    ) 
+  (* now insert tx_block if that was the source *) 
+  >>= fun tx_id ->
     PG.execute x.db ~name:"insert_tx_block" ~params:[
       Some (PG.string_of_int tx_id );
       Some (PG.string_of_int block_id );
@@ -326,19 +355,8 @@ let process_tx x (block_id,hash,tx) =
       Some (PG.string_of_int tx.length);
     ] ()
   >>= fun rows ->
-      log "done insert_tx_block"
-  >>
-
-    (* can get rid of the hash *)
-    let group index a = (index,a,hash,tx_id) in
-    let open M in
-    let inputs = L.mapi group tx.inputs in
-    fold_m process_input x inputs
-  >>= fun x ->
-    let outputs = L.mapi group tx.outputs in
-    fold_m process_output x outputs
-
-
+    log "done insert_tx_block"
+    >> return x 
 
 
 

@@ -17,12 +17,12 @@ So have to tx index
 
   - simplify address storing not to use complicated prepared stmt 
 
- 
 
   - wif
 
 ----
    - note that tx data may be stored twice in two forked blocks. we get it correctly... 
+  - meaning it may appear more than once...
 
   - ok, there's an issue that tx data might be in block, or somewhere else
     makes it har
