@@ -238,7 +238,7 @@ let process_output x (index,output,tx_hash,tx_id) =
       | P2PKH hash160 -> insert hash160 "p2pkh" >> return x
       | P2SH hash160 -> insert hash160 "p2sh" >> return x
       | Strange ->
-        (* why don't we record strange... because it's not an address should be in another table *)
+        (* TODO we should record strange... but in another table *)
         log @@ "strange " ^ format_tx tx_hash index output.value script
           >> return x
       | None ->
@@ -328,7 +328,7 @@ let process_tx x (block_id,hash,tx) =
     | (Some tx_id ::_ )::_ -> 
       return (PG.int_of_string tx_id ) 
 
-    | _ -> (* it's not a null it's going to be empty??? *) 
+    | _ -> (* it's not a null it's going to be empty??? - remember we have the unique constraint on the tx hash *) 
       PG.execute x.db ~name:"insert_tx"  ~params:[
           Some (PG.string_of_bytea hash);
         ] ()

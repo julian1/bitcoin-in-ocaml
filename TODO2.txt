@@ -1,6 +1,4 @@
 
-
-So have to tx index
   - done - not null on main columns 
   - done - organize with foreign keys first
   - done put unique constraint on tx hash 
@@ -12,13 +10,14 @@ So have to tx index
       - no - because allows non-null enforcement and might be faster
   - done record pos, len in output, starting from 0 in tx and check 
   - done maybe same for input
+  - done lookup the tx before insert to see if already have it
 
-  - lookup the tx, to see if we already recorded it
 
   - simplify address storing not to use complicated prepared stmt 
-
-
   - wif
+
+  transaction malleability and removing items from mempool??? how? 
+    probably just record the block one, then the mempool one utxos will be spent
 
 ----
    - note that tx data may be stored twice in two forked blocks. we get it correctly... 
