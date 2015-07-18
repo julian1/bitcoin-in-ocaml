@@ -20,10 +20,10 @@ let base58_of_string (value: string ) =
   - we only need the Z type for arbitrary precision division/remainder
   might be able to implement ourselves in base 256. *)
   let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
-  let rec f div acc =
+  let rec f acc div =
     if Z.gt div Z.zero then
       let div1, rem = Z.div_rem div (Z.of_int 58) in
-      f div1 (code_string.[Z.to_int rem]::acc)
+      f (code_string.[Z.to_int rem]::acc) div1 
     else
       acc
   in
@@ -34,7 +34,7 @@ let base58_of_string (value: string ) =
       acc
   in
   Z.of_bits (Core.Core_string.rev value) 
-    |> (fun z -> f z []) 
+    |> f []  
     |> zero_pad 0 value 
     |> Core.Std.String.of_char_list 
 
