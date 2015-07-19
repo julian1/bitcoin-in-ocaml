@@ -14,6 +14,9 @@ module M = Message
     - need secp256k1 in eec. or somewhere.  
 *)
 
+(* TODO should be factored out as generally useful function? *)
+let z_of_string s = s |> Core.Core_string.rev |> Z.of_bits
+
 
 let base58_of_string (value: string ) =
   (* TODO maybe replace list concat with Buffer for speed. 
@@ -33,7 +36,7 @@ let base58_of_string (value: string ) =
     else
       acc
   in
-  Z.of_bits (Core.Core_string.rev value)  (* TODO should be factored out as generally useful function? *)
+  z_of_string value  
     |> f []  
     |> zero_pad 0 value 
     |> Core.Std.String.of_char_list 

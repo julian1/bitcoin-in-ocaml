@@ -20,6 +20,14 @@
   - change var name 'x' to acc or something
   - wif, encode tx, send etc.
 
+  - difficulty, 
+    - can use either floating point, or z. float will be eaiser 
+  - merkle root 
+
+  - an module encapsulation of the String representation 
+    - with functions for Z or sha hashing or private/pub key, hex formatting  etc.
+    - rather than converting everything around in code when needed.
+
 ----
 
 ----

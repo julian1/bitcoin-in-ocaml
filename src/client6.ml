@@ -13,9 +13,9 @@ Z.of_int: int -> t
 (* TODO this is useful enough that may want in M *)
 let get s i = S.get s i |> int_of_char 
 
-let string_of_z z = Core.Core_string.rev (Z.to_bits z) 
+let string_of_z z = z |> Z.to_bits |> Core.Core_string.rev 
 
-let z_of_string s = Z.of_bits (Core.Core_string.rev s)
+let z_of_string s = s |> Core.Core_string.rev |> Z.of_bits
 
 
 
