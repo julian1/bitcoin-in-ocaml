@@ -19,7 +19,12 @@ let string_of_z z = z |> Z.to_bits |> CS.rev
 let z_of_string s = s |> CS.rev |> Z.of_bits
 
 
+let target_1_difficulty = 
+  "00000000FFFF0000000000000000000000000000000000000000000000000000" 
+  |> M.string_of_hex |> z_of_string 
 
+
+(* change name decode difficulty *)
 let difficulty_target s =
   let exp = get s 0 in 
   let base = (get s 3) + (get s 2 lsl 8) + (get s 1 lsl 16) in 
@@ -29,9 +34,13 @@ let difficulty_target s =
 let s = M.string_of_hex "1b0404cb" in 
 let v = difficulty_target s in
 
+let bdiff = Z.div target_1_difficulty v  in
+let bdiff = Z.to_float bdiff in
+
 
 let () = print_endline (v |> string_of_z |> M.hex_of_string) in
 let () = print_endline (M.hex_of_string ( v |> string_of_z |> z_of_string  |> string_of_z )) in
+let () = print_endline (string_of_float bdiff ) in
 ()
 
 
