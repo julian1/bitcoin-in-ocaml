@@ -13,6 +13,11 @@ Z.of_int: int -> t
 (* TODO this is useful enough that may want in M *)
 let get s i = S.get s i |> int_of_char 
 
+let string_of_z z = Core.Core_string.rev (Z.to_bits z) 
+
+let z_of_string s = Z.of_bits (Core.Core_string.rev s)
+
+
 
 let difficulty_target s =
   let exp = get s 0 in 
@@ -23,10 +28,9 @@ let difficulty_target s =
 let s = M.string_of_hex "1b0404cb" in 
 let v = difficulty_target s in
 
-let yy = Core.Core_string.rev (Z.to_bits v) in
 
-
-let () = print_endline (M.hex_of_string yy) in
+let () = print_endline (v |> string_of_z |> M.hex_of_string) in
+let () = print_endline (M.hex_of_string ( v |> string_of_z |> z_of_string  |> string_of_z )) in
 ()
 
 
