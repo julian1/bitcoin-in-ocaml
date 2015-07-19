@@ -36,9 +36,9 @@ let base58_of_string (value: string ) =
     else
       acc
   in
-  z_of_string value  
+  z_of_string value
     |> f []  
-    |> zero_pad 0 value 
+    |> zero_pad 0 value  (* TODO this doesn't look right *)
     |> Core.Std.String.of_char_list 
 
 
