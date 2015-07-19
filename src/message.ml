@@ -142,13 +142,21 @@ let hex_of_string s =
 
 let int_of_hex (c : char) =
   (* change name int_of_hex_char ? *)
-  (* straight pattern match might be simpler/faster *)
   let c1 = int_of_char c in
+  match c with 
+    | '0' .. '9' -> c1 - (int_of_char '0')
+    | 'a' .. 'f' -> 10 + c1 - (int_of_char 'a')
+    | 'A' .. 'F' -> 10 + c1 - (int_of_char 'A')
+    | _ -> raise (Failure "invalid hex value")
+(*
+ in 
   if c >= '0' && c <= '9' then
     c1 - (int_of_char '0')
-  else
+  else if c >= 'a' && c <= 'f' then
     10 + c1 - (int_of_char 'a')
-
+  else 
+    raise (Failure "invalid hex value")
+*)
 
 let string_of_hex (s: string) =
   (* TODO perhaps rename binary_of_hex *)
