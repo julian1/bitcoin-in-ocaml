@@ -33,7 +33,7 @@ let base58_of_string (value: string ) =
     else
       acc
   in
-  Z.of_bits (Core.Core_string.rev value) 
+  Z.of_bits (Core.Core_string.rev value)  (* TODO should be factored out as generally useful function? *)
     |> f []  
     |> zero_pad 0 value 
     |> Core.Std.String.of_char_list 
