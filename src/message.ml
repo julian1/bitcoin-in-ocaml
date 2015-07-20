@@ -9,6 +9,7 @@
 *)
 
 module S = String
+module CS = Core.Core_string
 module L = List
 module B = Buffer
 
@@ -142,12 +143,12 @@ let hex_of_string s =
 
 let int_of_hex (c : char) =
   (* change name int_of_hex_char ? *)
-  (* straight pattern match might be simpler/faster *)
   let c1 = int_of_char c in
-  if c >= '0' && c <= '9' then
-    c1 - (int_of_char '0')
-  else
-    10 + c1 - (int_of_char 'a')
+  match c with 
+    | '0' .. '9' -> c1 - int_of_char '0'
+    | 'a' .. 'f' -> 10 + c1 - int_of_char 'a'
+    | 'A' .. 'F' -> 10 + c1 - int_of_char 'A'
+    | _ -> raise (Failure "invalid hex value")
 
 
 let string_of_hex (s: string) =
@@ -172,7 +173,7 @@ let hex_of_int =
 (* TODO remove and use module prefixes *)
 let strsub = S.sub
 let strlen = S.length
-let strrev = Core.Core_string.rev
+let strrev = CS.rev
 let zeros n = S.init n (fun _ -> char_of_int 0)
 
 (* decode byte in s at pos *)
@@ -273,7 +274,8 @@ let decodeHeader s pos =
   let pos, command = decs_ s pos 12 in
   let pos, length = decodeInteger32 s pos in
   let _, checksum = decodeInteger32 s pos in
-  let x = match ( Core.Std.String.index_from command 0 '\x00' ) with
+  (* TODO change Core.Std.String to Core.String  CS  *)
+  let x = match ( CS.index_from command 0 '\x00' ) with
     | Some n -> strsub command 0 n
     | None -> command
   in

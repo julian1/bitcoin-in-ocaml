@@ -11,18 +11,24 @@
   - done record pos, len in output, starting from 0 in tx and check 
   - done maybe same for input
   - done lookup the tx before insert to see if already have it
+  - done - the blockdata i think should point at block. rather than block at blockdata. 
+      because for the first query hash there will be no blockdata. 
+  - done - and previous should be a separate table.
 
 
   - simplify address storing not to use complicated prepared stmt 
   - change var name 'x' to acc or something
-  - wif
+  - wif, encode tx, send etc.
+
+  - difficulty, 
+    - can use either floating point, or z. float will be eaiser 
+  - merkle root 
+
+  - an module encapsulation of the String representation 
+    - with functions for Z or sha hashing or private/pub key, hex formatting  etc.
+    - rather than converting everything around in code when needed.
 
 ----
-  - done - the blockdata i think should point at block. rather than block at blockdata. 
-      because for the first query hash there will be no blockdata. 
-
-  - done - and previous should be a separate table.
-
 
 ----
   transaction malleability and removing items from mempool??? how? 
