@@ -70,6 +70,7 @@ let code_value c =
 
 let s = "1JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" 
 
+(* rather than calculate rev index - should we just reverse the string first? *)
 let len = String.length s in
 let get i = String.get s (len - 1 -i) in
 let rec f i z = 
@@ -77,17 +78,17 @@ let rec f i z =
     let c = get i in
     let value = code_value c in
     let () = Printf.printf "%c %d \n" c value in 
-    let m = 
-        (Z.pow (Z.of_int 58) i ) 
-    in
-  
-    f (i + 1) (Z.add z (Z.mul (Z.of_int value) m ) )
+    let m = Z.pow (Z.of_int 58) i in
+    f (i + 1) (Z.add z (Z.mul (Z.of_int value) m))
   else
     z 
 in
 let z = f 0 Z.zero in
 let s = string_of_z z in
+(* now we split out the 4 char checksum etc *)
 print_endline (M.hex_of_string s )
+
+(* we have to check zero padding *)
 
 
 let rec f i = 
