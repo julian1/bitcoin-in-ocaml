@@ -225,13 +225,14 @@ let decodeHash32 s pos =
   let (a,b) = decs_ s pos 32 in
   a, strrev b
 
+(* TODO all hashes etc should probably be removed from message decoding *)
 (* hashing *)
 (* let sha256 s = s |> Sha256.string |> Sha256.to_bin *)
 let sha256 (s:string) = Cryptokit.hash_string (Cryptokit.Hash.sha256 ()) s
 let ripemd160 (s:string) = Cryptokit.hash_string (Cryptokit.Hash.ripemd160()) s
 
 let sha256d s = s |> sha256 |> sha256
-let checksum s = s |> sha256d |> fun x -> dec x 0 4
+(* let checksum s = s |> sha256d |> fun x -> dec x 0 4 why is this here? *)
 
 (* hmmmn we don't always want to decode to integer *)
 let checksum2 s = s |> sha256d |> (fun x -> S.sub x 0 4 )
@@ -242,11 +243,14 @@ let checksum2 s = s |> sha256d |> (fun x -> S.sub x 0 4 )
 - can do it with a fold?
 *)
 
-(* f is decode function, at pos, count items *)
+(* f is decode function, at pos, count items 
+  TODO factor the count, from the action  
+  - also do the L.rev at the end. not in the recursion
+*)
 let decodeNItems s pos f count =
   let rec fff pos acc count =
     if count == 0 then
-	  pos, (L.rev acc)
+	    pos, (L.rev acc)  (* move this! *)
     else let pos, x = f s pos in
       fff pos (x::acc) (count-1)
   in fff pos [] count

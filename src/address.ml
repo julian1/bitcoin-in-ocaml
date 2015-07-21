@@ -1,8 +1,8 @@
 
 module M = Message
 
-module CS = Core.Core_string
 module S = String
+module CS = Core.Core_string
 
 (* corebuild  -package cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
 
@@ -17,37 +17,45 @@ module S = String
 *)
 
 (* TODO should be factored out as generally useful function? *)
-let z_of_string s = s |> CS.rev |> Z.of_bits
-
-let string_of_z z = z |> Z.to_bits |> CS.rev
-
-let code58_of_int i =
-  let code_string = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" in
-  code_string.[i] 
+let z_of_string s = 
+  s |> CS.rev 
+    |> Z.of_bits
 
 
-let base58_of_string (value: string ) =
-  (* TODO maybe replace list concat with Buffer for speed. 
-  - we only need the Z type for arbitrary precision division/remainder
-  might be able to implement ourselves in base 256. *)
-  let rec f acc value =
-    if Z.gt value Z.zero then
-      let div, rem = Z.div_rem value (Z.of_int 58) in
+(* take care to truncate leading 0's due to z internal representation *)
+let string_of_z z = 
+  z |> Z.to_bits 
+    |> CS.rev 
+    |> CS.lstrip ~drop:((=)(char_of_int 0)) 
+
+
+let code58_of_int i = 
+  S.get "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" i 
+    
+ 
+let count_prefix_chars s ch i =
+  let rec f i =
+    if S.get s i = ch then
+      f (succ i)
+    else
+      i 
+  in f i
+
+
+let base58_of_string (s : string) =
+  let rec f acc z =
+    if Z.gt z Z.zero then
+      let div, rem = Z.div_rem z (Z.of_int 58) in
       f (code58_of_int (Z.to_int rem)::acc) div 
     else
       acc
   in
-  let rec zero_pad pos s acc =
-    if s.[pos] == char_of_int 0 then
-      zero_pad (pos+1) s (code58_of_int 0 ::acc) 
-    else
-      acc
-  in
-  z_of_string value
-    |> f []  
-    |> zero_pad 0 value  (* TODO this doesn't look right *)
-    |> CS.of_char_list 
-
+  let ret = s 
+    |> z_of_string 
+    |> f [] 
+    |> CS.of_char_list  in 
+  let n = count_prefix_chars s (char_of_int 0) 0 in
+  S.init n (fun _ -> code58_of_int 0) ^ ret 
 
 
 let int_of_code58 c = 
@@ -61,34 +69,32 @@ let int_of_code58 c =
     | 'm' .. 'z' -> v - int_of_char 'm' + 44  
 
 
-(* 
-    - there's an issue, that we'll end up with a bunch of prefix zeros
-    due to the string_of_z which is the internal byte representation ... 
-    - think we may want to strip this...
-*)
+let string_of_base58 (s : string) =
+  let len = S.length s in
+  let get i = S.get s (len - 1 -i) in 
+  let rec f i z = 
+    if i < len then 
+      let c = get i in
+      let value = int_of_code58 c in
+      let b = Z.pow (Z.of_int 58) i in
+      f (succ i) (Z.add z (Z.mul (Z.of_int value) b))
+    else
+      z 
+  in
+  let ret = f 0 Z.zero 
+    |> string_of_z in
+  let n = count_prefix_chars s (code58_of_int 0) 0 in
+  S.init n (fun _ -> char_of_int 0) ^ ret
 
-(* let s = "1JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" *)
-let s = "11JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" 
+  
+ 
 
-(* rather than calculate rev index - should we just reverse the string first? *)
-let len = S.length s in
-let get i = S.get s (len - 1 -i) in
-let rec f i z = 
-  if i < len then 
-    let c = get i in
-    let value = int_of_code58 c in
-    let () = Printf.printf "%c %d \n" c value in 
-    let m = Z.pow (Z.of_int 58) i in
-    f (i + 1) (Z.add z (Z.mul (Z.of_int value) m))
-  else
-    z 
-in
-let z = f 0 Z.zero in
-let s = string_of_z z in
-(* now we split out the 4 char checksum etc *)
-print_endline (M.hex_of_string s )
+let s = string_of_base58 "1JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" in 
+let () = print_endline (M.hex_of_string s) in
 
-(* we have to check zero padding *)
+let s = base58_of_string s in
+let () = print_endline s in
+()
 
 
 
@@ -134,4 +140,25 @@ let rec f i =
 in
 f 0
 *)
+(* 
+    - there's an issue, that we'll end up with a bunch of prefix zeros
+    due to the string_of_z which is the internal byte representation ... 
+    - think we may want to strip this...
+*)
+
+
+(* let s = "111121JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1"  *)
+
+(* rather than calculate rev index - should we just reverse the string first? or count down? 
+
+  is there a way to could the leading zero's somehow ? rather than patch it up later?  
+
+  check things like,
+  \x0000000000000000000000002a072728b6665500 = 1111111111111o111111111cLV3wA 
+*)
+
+(*
+  functions at the start and then calculation at the end
+*)
+
 
