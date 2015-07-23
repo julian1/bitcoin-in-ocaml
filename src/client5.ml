@@ -15,6 +15,7 @@ module A = Address
 *)
 
 let wif_encode s compressed =
+  (* TODO check str length *)
   let s = M.string_of_hex "80" ^ s in  
   let s = match compressed with
     | true -> s ^ M.string_of_hex "01"

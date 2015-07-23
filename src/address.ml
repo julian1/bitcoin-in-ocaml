@@ -19,6 +19,9 @@ let string_of_z z =
 
 let fill n ch = S.init n (fun _ -> ch)
 
+let split_at_pos s i =
+  S.sub s 0 i, S.sub s i (S.length s - i)
+
 
 
 let code58_of_int i =
@@ -38,7 +41,7 @@ let int_of_code58 c =
 
 let count_prefix_chars s ch =
   let rec f i =
-    if S.get s i = ch then
+    if i < S.length s && S.get s i = ch then
       f (succ i)
     else
       i
@@ -62,54 +65,70 @@ let base58_of_string (s : string) =
 
 
 
-
 let string_of_base58 (s : string) =
   let len = S.length s in
-  let get i = S.get s (len - 1 -i) in
+  let rget i = S.get s (len - i - 1) in
   let rec f i z =
     if i < len then
-      let c = get i in
+      let c = rget i in
       let value = int_of_code58 c in
       let b = Z.pow (Z.of_int 58) i in
       f (succ i) (Z.add z (Z.mul (Z.of_int value) b))
     else
       z
   in
-  let ret = 
+  let ret =
     f 0 Z.zero
     |> string_of_z in
   let n = count_prefix_chars s (code58_of_int 0) in
   fill n (char_of_int 0) ^ ret
 
-(*
-  not handling conversion of "1" 
-*)
-let s = string_of_base58 "1JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" in
-(* let s = string_of_base58 "111ZZZZZ" in *)
-let () = print_endline (M.hex_of_string s) in
 
+
+let s = string_of_base58 "1JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" in
+let () = print_endline (M.hex_of_string s) in
 let s = base58_of_string s in
 let () = print_endline s in
 ()
 
 
 
+let btc_address_of_hash160 (s: string) =
+  let s = "\x00" ^ s in
+  let checksum = M.checksum2 s in
+  base58_of_string (s ^ checksum)
 
-let btc_address_of_hash160 (a: string) =
-  let a = "\x00" ^ a in
-  let checksum = M.checksum2 a in
-  base58_of_string (a ^ checksum)
 
 
-(* do we want a utils module with some of this stuff ?
-  ok, but we haven't got a one at the front of either of them...
+let hash160_of_btc_address(s: string) =
+  let s = string_of_base58 s in
+  let s, checksum = split_at_pos s (S.length s - 4) in
+  if M.checksum2 s = checksum then
+    s
+  else
+    raise (Failure "bad checksum")
 
-  would seem to be a bug with the base58_of_string thing...
+
+let s = M.string_of_hex "000000000000000000000000248bc90202c849ea" in
+let a = btc_address_of_hash160 s in
+let () = print_endline a in
+let s = hash160_of_btc_address a in
+print_endline (M.hex_of_string s )
+
+
+(*
+  be nice to have some utils. eg.
+  private key (c or u)
+    wif encode
+    pubkey
+    hash160
+    btc address
+
+  and back again? from wif private key?
 *)
 
-
 (* this should be held in a test *)
-
+(*
 let test1 () =
 
 	let s = M.string_of_hex "c1a235aafbb6fa1e954a68b872d19611da0c7dc9" in
@@ -123,38 +142,8 @@ let test1 () =
 
   Printf.printf "encoded %s %d\n" s (Message.strlen s)
 
-
-let ()  = test1 ()
-
-(*
-let rec f i =
-  if i < 58 then
-    let () = Printf.printf "%c  %i  %i\n" (code58_of_int i) i  (int_of_code58 (code58_of_int i)) in
-    f (i + 1)
-  else
-    ()
-in
-f 0
-*)
-(*
-    - there's an issue, that we'll end up with a bunch of prefix zeros
-    due to the string_of_z which is the internal byte representation ...
-    - think we may want to strip this...
 *)
 
 
-(* let s = "111121JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1"  *)
-
-(* rather than calculate rev index - should we just reverse the string first? or count down?
-
-  is there a way to could the leading zero's somehow ? rather than patch it up later?
-
-  check things like,
-  \x0000000000000000000000002a072728b6665500 = 1111111111111o111111111cLV3wA
-*)
-
-(*
-  functions at the start and then calculation at the end
-*)
 
 

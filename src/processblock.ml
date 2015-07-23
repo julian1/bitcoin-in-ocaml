@@ -244,7 +244,13 @@ let process_output x (index,output,tx_hash,tx_id) =
       | None ->
         return x
 
+(*
+  important - this is recording the redeeming signature for (non-script) multisig. 
+    it's only the hash160 output we are not recording. 
 
+  - we should be careful to do a left-join on address however to avoid excluding
+    rows with sigs, but no address 
+*)
 
 let process_input_script x (input_id, input) =
   let (input : M.tx_in) = input in

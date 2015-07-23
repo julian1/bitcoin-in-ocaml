@@ -1,287 +1,77 @@
-make changes and start reindex, then can work on other stuff...
 
----
-what did we learn,
-  - not many recent mistakes.
-  - there's still some 
-
-
-done - multisig is a problem for address stuff.
-    - maybe need to reindex without multisig, or be able to exclude multisig sigs 
-    - should record the script classifiction output type.   
-      pk, pkh, multi, s strange  etc.
-    - so can disambiguate multisig address types.
-
-done
-  - pos,len to get the specific txs to verify  
-  - need tx data, to run signing confirm, to compute z .
-  - means need pos of tx, or ability to get tx... 
-
-- ok, we probably should verify, that we can decode the txs from the db...
-    actually just have to hash...
-
-select substr(d.data,tx.pos,tx.len ) from tx join block b on b.id = tx.block_id join blockdata d on d.id = b.blockdata_id ;
-
-select tx.pos,tx.len, tx.hash,substr(d.data,tx.pos+1,tx.len ) from tx join block b on b.id = tx.block_id join blockdata d on d.id = b.blockdata_id order by tx.id;
-
---
-NEEDED
   - we're getting tx's recorded twice, because they're in an orphaned block
+  - lots of old filedescriptors in list, when they're probably not active. 
+  - fix our single entry packing of the inv request, which means we can't progress if the 
+      only leaf is an orphaned block. 
 
-- replaying blocks...
+  - issue - inventory tx cannot be cleared when block is produced, because a chainstate reoganisation could
+    mean that block becomes orphaned. 
+
+
+
+
+  - finish wif
+  - merkle tree
+  - compute difficuly in relation to time 
+  - store peers in db for easy resumption
+
+  - maven style dirs - mv test inside src
+
+  - we've got to get test code, extracted and working 
+  - connect to ltc, doge
+
+
+  - done - not null on main columns 
+  - done - organize with foreign keys first
+  - done put unique constraint on tx hash 
+  - done add a mapping table between 
+  - done rename views to use prefix underscores
+  - done - store the sigtype in signature
+  - done move the tx pos, length into the tx_block structure, maybe also add blockdata id... no 
+  - done - get rid of blockdata? since it's one-to-one with block?  
+      - no - because allows non-null enforcement and might be faster
+  - done record pos, len in output, starting from 0 in tx and check 
+  - done maybe same for input
+  - done lookup the tx before insert to see if already have it
+  - done - the blockdata i think should point at block. rather than block at blockdata. 
+      because for the first query hash there will be no blockdata. 
+  - done - and previous should be a separate table.
+
+
+  - done - whether a block is mainnet, or orphaned or testnet is a dynamic property - now db.
+
+  - http/or cli interface to examine the read-only structures now, so
+    it's not really necessary to dump state everytime.
+
+
+  - simplify address storing not to use complicated prepared stmt 
+  - change var name 'x' to acc or something
+  - wif, encode tx, send etc.
+
+  - difficulty, 
+    - can use either floating point, or z. float will be eaiser 
+  - merkle root 
+
+  - an module encapsulation of the String representation 
+    - with functions for Z or sha hashing or private/pub key, hex formatting  etc.
+    - rather than converting everything around in code when needed.
+
+----
+
+----
+  transaction malleability and removing items from mempool??? how? 
+    probably just record the block one, then the mempool one utxos will be spent
+----
+   - note that tx data may be stored twice in two forked blocks. we get it correctly... 
+  - meaning it may appear more than once...
+
+  - ok, there's an issue that tx data might be in block, or somewhere else
+    makes it har
 
 ---
-
-
-------
-- need to screen inv block hashes against what we already have.
-
-- lots of old filedescriptors in list, when they're probably not active. 
-
-----
-fix our current packing of the inv with a single entry, means we can't progress if the 
-only leaf is an orphaned block. 
-
-------
-- should potentially make the lookup of the output transactional in the db.
-    (not really necessary)
-- also need to handle case of block  
-
------
-To verify tx's in a new block, we actually have to set the chainstate at the 
-parent of that new block, to verify that the utxo's have not been spent.
-    - this is more complicated than it appears.  
-
---- 
-
-Ok, think we want to change - so it populates with the actual block
-data, without figuring out the leaves in code.
-
-----
-- it would be nice to have a consistent interface to support 
-    either replay of blocks, or actual operational node. 
-        - add_block
-        - get_leaves
-        etc.
-
-- we need to get the chain current. to see how often dups are an issue 
-- done - need height, and tips in the db.
-- fix the received to match bc.info and native client.
-    - 
-
-- there were some very large amounts. and on doge lite networks. 
-
---
-- we don't have to do anything sophisticated for ordering just use tx_id which
-    will be correct.
-
---
-- done get previous_id in, and we can start experimenting with sql height etc.
-
-- done want transactions organized around blocks.
-
-- done be very nice to have the previous_id. then we can compute height etc, and 
-    tips etc.
-
-    - very important the whole chain/heads structure could be put in db. 
-    - the issue of blocks coming in fast out-of-order sequence, can be handled
-    easily by just always pushing them in the sequential processing queue.
-    - when we have block.previous_id then it should be very simple to work
-    out the heads.
-
-
-
--------------------
-
-Ok, we can now access the blocks mutex and descriptor and heads etc. 
-
-
--------
-
-technical and civic/legal solutions to secure libery, property, economic freedom.  
-
----
-OK. it is possible to have a queue for synchronization if we want in the main structure?
-
-- inputs and outputs are different hence why we return (state, jobs) tuple ... 
-think we can really consolidate this..
-
-SO WIHT THE extra JOBS WE ARE ALREADY SHUFFLING THE CONSTRUCTION...
-
-----
-the problem of sharing data structures between the modules.
-it's messy.
-
-1) every function has access to everything else.
-	- issue is sharing of structure to functions that don't read or
-	return the fields. 
-
-2) we expose the type in the mli, so that the top level would create it with the
-	needed fields for the update() and create() functions 
-
-3) even better. read fields and return values and create() are going to be different be different. 
-	so maybe use tuples?.
-
-think the second option is best .
-
-
--------
-- there's a couple of ways of communicating...
-
-- linking together functions at the top level to the various bits. 
-- or using particular messages.
-
-- what we should avoid is having one module call another call another 
- - because then it's not composable.
-
-- for the chainstate all we do is add blocks... reorganisations 
-	who should calculate difficulty?  and merckles, and timing? 
-
-- ughhhh we're going to have to pass stuff about...
-	maybe maybo	
-	- eg. the heads, and the fd for the blocks, and the fd mutex will need to be
-	exposed to enable chainstate reorganisation.
-
-	- theres nothing really wrong with having something that's writes updates/data. 
-	and then accessing bits and plugging somewhere else.
-
-	- the way we do with connections
-
-	- but what's messy is maintaining our own details about connections...
-	actually it would be ok. 
-	- we should just sync
-
-	- actually we use Message.. and share connections
-	
-	--- we could use Block and pass the heads, fd mutex as a message.  
-
-	--- AND WE DON'T need to pass connections between functions at all.
-		can just monitor... the reads and closes.
-	--- Actually create a message when have handshake, then we can just
-		record those...
-
-	-- this makes it all self contained... without having to reach into
-		structures.
-
-	-- and correctly event driven... eg. we only do block updates on receipt
-		of a block message.  
-	
-	-- there's a problem, if have two blocks go through, then if update the
-	heads with new, rather than aggregate then it's a race condition . 
-	as to which updates.
-		- instead... we have to push the block without the heads.
-		(same problem when we tried to bind conns into return closures)
-	
-	IMPORTANT
-	-- there's another issue that if we wait for the io action of writing
-	the block before updating the heads. then we could receive a block in 
-	the meantime but because the head hasn't updated, we won't recognize it.  
-	ouch
-
-	-- issue of race conditions...
-
-	- think we almost have to separate out these actions...
-	- update the heads when we can.
-	- and update the pos in the heads when we can...
-
-	- ultimately we can't pass heads via message. because it's not a queue - it's 
-		a race condition what gets there first.
-	- so when get a block update heads immediately
-
-	IMPORTANT
-	- if we decide to just pass aspects of state to the next function 
-		(like connections from p2p to chain) then we avoid these sync issues. 
-	
-	- the module system allows easy separate initialization...
-	
-	- we are really only interested in when we get a new block. but...
-	we may still want to do io. 
-
-	
------
-
-block <- tx <- address
-
-isn't quite right because an address may be mentioned multiple times in different tx
-
-but only the last one is relevant - no it's accumulated. there may be 
-
-
-----
-leveldb, sqllite has transactions - we're going to need to use them, to prevent app/start
-	stop without getting the data in.
-
-----
-inventory cannot be cleared when block is produced, because a chainstate reoganisation could
-mean that block is orphaned. 
-
-- indexing is multiple layered. 
-
-- this is all fairly relational
-
-bloc <- tx <- (160 address, btc address) (static and indepdent of chainstate, can all be written on block receipt)
-
-
-
-utxo dynamic - (subject to chainstate reorgnisation) in memory, but probably requires 
-		storing to disk	for responsive app starting/stopping
-		- if sql then can just be a table. we add items to and remove on chain state reorgs.
-
-
-whether a block is mainnet, testnet or orphaned is a dynamic property
-
-
-to know if an address has funds - we have to find the associated tx, and check if it exists in
-utxo. 
-
-if we're going to store utxo on disk for faster loading, then we kind of need to also store
-the chain state seq. (or at least get it synchronized)
-
-btc address -> 160 address ->  
----
-
-	- actually 160 hash -> btc address is a one way hash 
-	- therefore to lookup unknown btc address, we will have to store btc addresses.
-
-
-
-
--------
-
-- Need difficulty so that in case of forks - we know the main chain 
-- Merckle tree to conform transaction set, is as the block header describes
-
-- get the height included back in.
-
-- manage uxtos - what is the desired outcome? have an index and offset into blocks.dat for each 
-	uxto. if they are kept in mem 
-		should try just scanning in memory first...
-
-----
-
-we can connect (http/or cli) to examine the read-only structures now, so
-it's not really necessary to dump state everytime.
-
-Ok, during runtime
-	- blocks go in append-only log
-	- leveldb for block and tx indexes - and can be regenerated
-
-- heads should go in leveldb because 
-	- writes should be fast 
-	- and heads can be created by re-indexing
-	- but we need serialization support?
-
-actually we don't need sexp to serialize heads at all. just use
-
-/head/hash1
-/head/hash2
-
-- peers are different in that they cannot be regenerated. actually they could
-if we retained addr messages...
-
-
-But what about the heads...
-And the initial set of peers...
-and the network type? 
-
+  change name process_block to store_block ?
+
+  - IMPORTANT should move the transaction isolation begin and commit outside the process block
+    so that if want to do other actions - like check if block has been inserted in the same
+    tx we can.
 
