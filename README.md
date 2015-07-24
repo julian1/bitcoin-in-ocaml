@@ -1,5 +1,5 @@
 
-refs
+### refs
 
 http://bitcoin.stackexchange.com/questions/28168/what-are-the-keys-used-in-the-blockchain-leveldb-ie-what-are-the-keyvalue-pair
 
@@ -22,5 +22,4 @@ https://ocaml.janestreet.com/ocaml-core/109.13.00/doc/core/String.html
 ---
 ### deps
 
-lwt
-opam install zarith
+lwt, zarith
