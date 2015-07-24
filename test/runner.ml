@@ -24,6 +24,7 @@ let () =
       "label" >: Address_test.tests; 
       Message_test.tests; 
       Wif_test.tests; 
+      Difficulty_test.tests; 
     ]
   )  
 
