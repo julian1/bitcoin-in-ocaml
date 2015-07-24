@@ -232,7 +232,11 @@ let sha256 (s:string) = Cryptokit.hash_string (Cryptokit.Hash.sha256 ()) s
 let ripemd160 (s:string) = Cryptokit.hash_string (Cryptokit.Hash.ripemd160()) s
 
 let sha256d s = s |> sha256 |> sha256
+<<<<<<< HEAD
 (* let checksum s = s |> sha256d |> fun x -> dec x 0 4 why is this here? *)
+=======
+let checksum s = s |> sha256d |> fun x -> dec x 0 4 (* TODO only used for message checksum - should move ? *)
+>>>>>>> devel
 
 (* hmmmn we don't always want to decode to integer *)
 let checksum2 s = s |> sha256d |> (fun x -> S.sub x 0 4 )

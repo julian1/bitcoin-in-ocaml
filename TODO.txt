@@ -1,4 +1,13 @@
 
+<<<<<<< HEAD
+=======
+  - get micro-ecc working with native code library linking
+
+  - get full script evaluation working, not just sig-checking
+
+  - just have a address to test address stuff in /test dir?
+
+>>>>>>> devel
   - we're getting tx's recorded twice, because they're in an orphaned block
   - lots of old filedescriptors in list, when they're probably not active. 
   - fix our single entry packing of the inv request, which means we can't progress if the 
@@ -7,6 +16,7 @@
   - issue - inventory tx cannot be cleared when block is produced, because a chainstate reoganisation could
     mean that block becomes orphaned. 
 
+<<<<<<< HEAD
 
 
 
@@ -52,6 +62,53 @@
     - can use either floating point, or z. float will be eaiser 
   - merkle root 
 
+=======
+  - get rid of caml case in message.ml
+
+
+  - finish wif
+  - merkle tree
+  - compute difficuly in relation to block time, so we can test against block difficulty
+  - store peers in db for easy resumption
+
+  - maven style dirs - mv test inside src
+
+  - we've got to get test code, extracted and working 
+  - connect to ltc, doge
+
+
+  - done - not null on main columns 
+  - done - organize with foreign keys first
+  - done put unique constraint on tx hash 
+  - done add a mapping table between 
+  - done rename views to use prefix underscores
+  - done - store the sigtype in signature
+  - done move the tx pos, length into the tx_block structure, maybe also add blockdata id... no 
+  - done - get rid of blockdata? since it's one-to-one with block?  
+      - no - because allows non-null enforcement and might be faster
+  - done record pos, len in output, starting from 0 in tx and check 
+  - done maybe same for input
+  - done lookup the tx before insert to see if already have it
+  - done - the blockdata i think should point at block. rather than block at blockdata. 
+      because for the first query hash there will be no blockdata. 
+  - done - and previous should be a separate table.
+
+
+  - done - whether a block is mainnet, or orphaned or testnet is a dynamic property - now db.
+
+  - http/or cli interface to examine the read-only structures now, so
+    it's not really necessary to dump state everytime.
+
+
+  - simplify address storing not to use complicated prepared stmt 
+  - change var name 'x' to acc or something
+  - wif, encode tx, send etc.
+
+  - difficulty, 
+    - can use either floating point, or z. float will be eaiser 
+  - merkle root 
+
+>>>>>>> devel
   - an module encapsulation of the String representation 
     - with functions for Z or sha hashing or private/pub key, hex formatting  etc.
     - rather than converting everything around in code when needed.
