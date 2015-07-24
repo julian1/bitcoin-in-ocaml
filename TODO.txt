@@ -1,11 +1,8 @@
 
-old test01 test10 test09
 
   - get micro-ecc working with native code library linking
 
   - get full script evaluation working, not just sig-checking
-
-  - just have a address to test address stuff in /test dir?
 
   - we're getting tx's recorded twice, because they're in an orphaned block
   - lots of old filedescriptors in list, when they're probably not active. 
@@ -15,19 +12,15 @@ old test01 test10 test09
   - issue - inventory tx cannot be cleared when block is produced, because a chainstate reoganisation could
     mean that block becomes orphaned. 
 
-  - get rid of caml case in message.ml
+  - get rid of caml case functions in message.ml
 
   - test for tx ecc checking. prev
-  - test for block header decode 
 
   - finish wif
   - merkle tree
   - compute difficuly in relation to block time, so we can test against block difficulty
   - store peers in db for easy resumption
 
-  - maven style dirs - mv test inside src
-
-  - we've got to get test code, extracted and working 
   - connect to ltc, doge
 
 
@@ -47,22 +40,21 @@ old test01 test10 test09
       because for the first query hash there will be no blockdata. 
   - done - and previous should be a separate table.
 
-
   - done - whether a block is mainnet, or orphaned or testnet is a dynamic property - now db.
+  - done - move address test stuff in /test dir?
+  - done - test for block header decode 
+  - done - we've got to get test code, extracted and working 
+  - done - decode difficulty, - can use either floating point, or z. float will be eaiser 
 
   - http/or cli interface to examine the read-only structures now, so
     it's not really necessary to dump state everytime.
 
-
   - simplify address storing not to use complicated prepared stmt 
   - change var name 'x' to acc or something
-  - wif, encode tx, send etc.
 
-  - difficulty, 
-    - can use either floating point, or z. float will be eaiser 
   - merkle root 
 
-  - an module encapsulation of the String representation 
+  - maybe an module encapsulation of the String Z hex representation 
     - with functions for Z or sha hashing or private/pub key, hex formatting  etc.
     - rather than converting everything around in code when needed.
 
