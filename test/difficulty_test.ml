@@ -21,7 +21,6 @@ let test2 ctx =
   assert_equal bdiff 16307. 
 
 
-
 let tests =
    "difficulty">::: [ "test1">:: test1; "test2">:: test2;  ] 
 

@@ -4,7 +4,7 @@ module A = Address
 
 open OUnit2
 
-(* client5 wif 
+(* 
   and tx sig checking 
 *)
 
