@@ -27,15 +27,15 @@ let initial_version =
       height = 127953;
       relay = 0xff;
   } in
-  U.encodeMessage "version" payload
+  M.encodeMessage "version" payload
 
 (* verack response to send *)
 let initial_verack =
-  U.encodeSimpleMessage "verack"
+  M.encodeSimpleMessage "verack"
 
  
 let initial_getaddr =
-  U.encodeSimpleMessage "getaddr"
+  M.encodeSimpleMessage "getaddr"
 
 
 

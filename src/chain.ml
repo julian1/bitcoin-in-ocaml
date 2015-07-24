@@ -41,7 +41,7 @@ let initial_getblocks starting_hash =
     ^ M.encodeHash32 starting_hash
     ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
-  U.encodeMessage "getblocks" payload
+  M.encodeMessage "getblocks" payload
 
 
 let initial_getdata hashes =
@@ -53,7 +53,7 @@ let initial_getdata hashes =
       ^ S.concat "" @@ L.map encodeInvItem hashes
   in
   let payload = encodeInventory hashes in
-  U.encodeMessage "getdata" payload
+  M.encodeMessage "getdata" payload
 
 
 let log s = U.write_stdout s >> return U.Nop

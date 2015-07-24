@@ -820,3 +820,42 @@ let formatTx tx =
   ^ "\n lockTime " ^ string_of_int tx.lockTime
 
 
+
+(*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
+  testnet magic_head: "\xFA\xBF\xB5\xDA",
+  litecoin magic_head: "\xfb\xc0\xb6\xdb",
+
+(* let m = 0xdbb6c0fb   litecoin *)
+*)
+
+
+let magic = 0xd9b4bef9  (* bitcoin *)
+
+
+(* 
+  - move this to message.ml, 
+  issue is that it refers to the magic value ...
+  so we'd have to put that in message also...
+  - or else just parametize message 
+  - we'd have to pass this var around everywhere... 
+*) 
+let encodeMessage command payload = 
+  let header = encodeHeader {
+    magic = magic ;
+    command = command ;
+    length = strlen payload;
+    checksum = checksum payload;
+  } in
+  header ^ payload
+
+
+let encodeSimpleMessage command = 
+  encodeHeader {
+    magic = magic ;
+    command = command;
+    length = 0;
+    (* clients seem to use e2e0f65d - hash of first part of header? *)
+    checksum = 0;
+  } 
+ 
+

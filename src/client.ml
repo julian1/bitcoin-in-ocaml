@@ -20,11 +20,9 @@ type whoot_t =
   state : U.my_app_state option;
 
   (* jobs : U.jobs_type; *) (* it's not a job it's a job completion code, or result or event *)
- jobs :  U.my_event Lwt.t list; 
-
+  jobs :  U.my_event Lwt.t list; 
 
   queue : U.my_event Myqueue.t;
-
 }
 
 
@@ -50,7 +48,7 @@ let run () =
 
     (* we'll have to think about db transactions *) 
     log "connecting and create db"
-    >> U.PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+    >> U.PG.connect ~host:"127.0.0.1" ~database: "test2" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
 
       Processblock.create_prepared_stmts db 
