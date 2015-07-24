@@ -1,4 +1,6 @@
 
+old test01 test10 test09
+
   - get micro-ecc working with native code library linking
 
   - get full script evaluation working, not just sig-checking
@@ -15,6 +17,8 @@
 
   - get rid of caml case in message.ml
 
+  - test for tx ecc checking. prev
+  - test for block header decode 
 
   - finish wif
   - merkle tree

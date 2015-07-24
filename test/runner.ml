@@ -22,11 +22,9 @@ let () =
   run_test_tt_main (
     test_list [ 
       "label" >: Address_test.tests; 
-      (* Address_test.tests  *)
+      Message_test.tests; 
+      Wif_test.tests; 
+      Difficulty_test.tests; 
     ]
   )  
-
-
-
-
 
