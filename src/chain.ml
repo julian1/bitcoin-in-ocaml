@@ -31,6 +31,7 @@ let return = Lwt.return
 *)
 
 
+(* TODO change name encode_getblocks_message *)
 let initial_getblocks network starting_hash =
   (* the list are the options, and peer will return a sequence
     from the first valid block in our list *)
@@ -44,6 +45,7 @@ let initial_getblocks network starting_hash =
   M.encodeMessage network "getblocks" payload
 
 
+(* TODO change name encode_getdata_message *)
 let initial_getdata network hashes =
   (* 2 means block hashes only *)
   let encodeInventory hashes =
@@ -51,6 +53,9 @@ let initial_getdata network hashes =
       (* encodeInv - move to Message  - and need to zip *)
       M.encodeVarInt (L.length hashes )
       ^ S.concat "" @@ L.map encodeInvItem hashes
+  in let hashes = match network with 
+      | M.Bitcoin -> hashes 
+      | M.Litecoin -> L.rev hashes 
   in
   let payload = encodeInventory hashes in
   M.encodeMessage network "getdata" payload
