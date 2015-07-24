@@ -23,6 +23,7 @@
 
   - connect to ltc, doge
 
+  - Consider using Z values instead of Int64 ...
 
   - done - not null on main columns 
   - done - organize with foreign keys first
