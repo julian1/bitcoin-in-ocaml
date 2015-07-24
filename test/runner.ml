@@ -23,11 +23,7 @@ let () =
     test_list [ 
       "label" >: Address_test.tests; 
       Message_test.tests; 
-      (* Address_test.tests  *)
+      Wif_test.tests; 
     ]
   )  
-
-
-
-
 
