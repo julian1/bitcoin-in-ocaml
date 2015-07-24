@@ -1,9 +1,17 @@
 
-drop view if exists _tx ;
-drop view if exists _main ;
+begin;
 
--- create materialized view _main as
-create view _main as
+drop view if exists _tx ;
+drop materialized view if exists _main ;
+
+-- OK, a way to do tx output verification 
+-- on receipt of block set the head to the block. this will make it available in main chain view 
+-- then call refresh materialized view on the _main 
+-- then tx's can refer to tx's in the just received block 
+
+
+create materialized view _main as
+--create view _main as
 with recursive t( id, depth ) AS (
   select (
     -- tree root
@@ -13,7 +21,6 @@ with recursive t( id, depth ) AS (
     where id = (
       select block_id from _leaves2 order by height desc limit 1
     )
-
   ), 0
   UNION ALL
   SELECT 
@@ -25,7 +32,7 @@ with recursive t( id, depth ) AS (
 select t.depth, block.* 
 FROM t join block on block.id = t.id;
 
-
+create index on _main( id );
 
 
 create view _tx as
@@ -38,8 +45,8 @@ from tx
 join tx_block on tx_block.tx_id = tx.id 
 join _main on _main.id = tx_block.block_id 
 left join block_data on block_data.block_id = tx_block.block_id 
-
+;
 
 -- it does appear to work
 -- select * from _tx order by hash  limit 50 ;
-
+commit;
