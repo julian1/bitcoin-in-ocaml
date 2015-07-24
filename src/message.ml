@@ -828,18 +828,21 @@ let formatTx tx =
 (* let m = 0xdbb6c0fb   litecoin *)
 *)
 
+(*
+  - Do we want an option type for the different networks that control
+    generation of magic number ...
+  - there might be other things that need to change as well ....
+*)
 
-let magic = 0xd9b4bef9  (* bitcoin *)
+type network =
+  | Bitcoin
 
 
-(* 
-  - move this to message.ml, 
-  issue is that it refers to the magic value ...
-  so we'd have to put that in message also...
-  - or else just parametize message 
-  - we'd have to pass this var around everywhere... 
-*) 
-let encodeMessage command payload = 
+
+let encodeMessage network command payload = 
+  let magic = match network with 
+    | Bitcoin -> 0xd9b4bef9 
+  in 
   let header = encodeHeader {
     magic = magic ;
     command = command ;
@@ -849,7 +852,10 @@ let encodeMessage command payload =
   header ^ payload
 
 
-let encodeSimpleMessage command = 
+let encodeSimpleMessage network command = 
+  let magic = match network with 
+    | Bitcoin -> 0xd9b4bef9 
+  in 
   encodeHeader {
     magic = magic ;
     command = command;

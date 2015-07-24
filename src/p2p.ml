@@ -14,7 +14,7 @@ let log s = U.write_stdout s >> return U.Nop
 
 
 (* initial version message to send *)
-let initial_version =
+let initial_version network =
   let payload = M.encodeVersion {
       protocol = 70002;
       nlocalServices = 1L; (* doesn't seem to like non- full network 0L *)
@@ -27,15 +27,15 @@ let initial_version =
       height = 127953;
       relay = 0xff;
   } in
-  M.encodeMessage "version" payload
+  M.encodeMessage network "version" payload
 
 (* verack response to send *)
-let initial_verack =
-  M.encodeSimpleMessage "verack"
+let initial_verack network =
+  M.encodeSimpleMessage network "verack"
 
  
-let initial_getaddr =
-  M.encodeSimpleMessage "getaddr"
+let initial_getaddr network =
+  M.encodeSimpleMessage network "getaddr"
 
 
 
@@ -144,7 +144,7 @@ let update state e =
       let jobs = [
         log @@ U.format_addr conn ^  " got connection "  ^
           ", connections now " ^ ( string_of_int @@ List.length state.connections )
-        >> U.send_message conn initial_version
+        >> U.send_message conn (initial_version state.network)
         >> log @@ "*** sent our version " ^ U.format_addr conn;
         get_message conn
       ]
@@ -176,7 +176,7 @@ let update state e =
         | "version" ->
           let jobs = [
             log @@ U.format_addr conn ^ " got version message"
-            >> U.send_message conn initial_verack
+            >> U.send_message conn (initial_verack state.network)
             >> log @@ "*** sent verack " ^ U.format_addr conn
             ;
             get_message conn

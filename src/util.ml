@@ -96,10 +96,9 @@ module PG = PGOCaml_generic.Make (Lwt_thread)
 
 
 
-
-
 type my_app_state =
 {
+  network : Message.network;
 
   connections : connection list ;
 
@@ -115,8 +114,6 @@ type my_app_state =
   db : int PG.t ; (* TODO what is this type *)
  
 }
-
-
 
 
 type my_event =
@@ -141,7 +138,6 @@ let send_message conn s =
     let oc = conn.oc in
     Lwt_io.write oc s >> return Nop  (* message sent *)
 
-module M = Message
 
 
 

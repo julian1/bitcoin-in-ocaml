@@ -14,7 +14,7 @@ let return = Lwt.return
 (*
   VERY VERY IMPORTANT
 
-    - rather than requesting the tip, we should request tip - 1. 
+    - rather than requesting the tip hash, we could request tip - 1. 
     - then when we get a block inventory back, we will get the tip hash back
       and know it's what we want.
        
@@ -31,7 +31,7 @@ let return = Lwt.return
 *)
 
 
-let initial_getblocks starting_hash =
+let initial_getblocks network starting_hash =
   (* the list are the options, and peer will return a sequence
     from the first valid block in our list *)
   (* TODO should be list of hashes *)
@@ -41,10 +41,10 @@ let initial_getblocks starting_hash =
     ^ M.encodeHash32 starting_hash
     ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
-  M.encodeMessage "getblocks" payload
+  M.encodeMessage network "getblocks" payload
 
 
-let initial_getdata hashes =
+let initial_getdata network hashes =
   (* 2 means block hashes only *)
   let encodeInventory hashes =
     let encodeInvItem hash = M.encodeInteger32 2 ^ M.encodeHash32 hash in
@@ -53,7 +53,7 @@ let initial_getdata hashes =
       ^ S.concat "" @@ L.map encodeInvItem hashes
   in
   let payload = encodeInventory hashes in
-  M.encodeMessage "getdata" payload
+  M.encodeMessage network "getdata" payload
 
 
 let log s = U.write_stdout s >> return U.Nop
@@ -167,7 +167,7 @@ let manage_chain1 (state : U.my_app_state) e    =
                   ^ " *** got inventory blocks " ^ (string_of_int @@ L.length block_hashes  )
                   ^ " - on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request ;
                   (* request blocks from the peer *)
-                  U.send_message conn (initial_getdata block_hashes );
+                  U.send_message conn (initial_getdata state.network block_hashes );
               ]
             in
             return (U.SeqJobFinished (state, jobs))
@@ -333,7 +333,7 @@ let manage_chain2 (state : U.my_app_state) e  =
             block_inv_pending = Some (conn.fd, now ) ;
         } in
         let jobs = [
-          U.send_message conn (initial_getblocks head)
+          U.send_message conn (initial_getblocks state.network head)
         ] in
         return (U.SeqJobFinished (state, jobs))
 

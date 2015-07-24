@@ -135,6 +135,7 @@ let run () =
 
         let whoot = {
           state = Some ({
+            network = Bitcoin;
             connections = [];
             db = db; 
             (* should be hidden ?? *)
