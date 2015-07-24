@@ -121,11 +121,11 @@ let get_tx_from_db db hash =
   (*log @@ "getting tx " ^ M.hex_of_string hash
   >>*)
   let query =
-  "select substr(d.data,tx.pos+1,tx.len) as data
+  "select substr(d.data,tx_block.pos+1,tx_block.length) as data
     from tx
-    join block b on b.id = tx.block_id
-    join blockdata d on d.id =
-    b.blockdata_id
+    join tx_block on tx_block.tx_id = tx.id 
+    join block b on b.id = tx_block.block_id
+    join block_data d on d.block_id = b.id 
     where tx.hash = $1;
   " in
     PG.prepare db ~query:query ()
@@ -157,7 +157,7 @@ let get_tx_outputs_from_db db lst =
 let () = Lwt_main.run U.(M.(
 
   log "connecting to db"
-  >> PG.connect ~host:"127.0.0.1" ~database: "prod" ~user:"meteo" ~password:"meteo" ()
+  >> PG.connect ~host:"127.0.0.1" ~database: "test" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
  (*   let hash = M.string_of_hex "0e7b95f5640018b0255d840a7ec673d014c2cb2252641b629038244a6c703ecb" in *) 
  (*   let hash  = M.string_of_hex "90bbbbf21ecd7017b341c44bb1a0860a3adcbee04b716f1798861a368931f667" in  *)
