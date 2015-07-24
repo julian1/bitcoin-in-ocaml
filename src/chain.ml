@@ -318,7 +318,7 @@ let manage_chain2 (state : U.my_app_state) e  =
           "\n fds\n" ; S.concat "\n" ( L.map (fun (x : U.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ]
         >> U.PG.begin_work state.db
-        >> U.PG.prepare state.db ~query:"select pb from leaves order by random() limit 1" ()
+        >> U.PG.prepare state.db ~query:"select hash from _leaves order by random() limit 1" ()
         >> U.PG.execute state.db ~params:[ ] ()
         >>= fun rows -> 
           let head = 

@@ -352,6 +352,7 @@ let update (state : U.my_app_state) e =
 (* initial jobs *)
 let create () = [
   (* https://github.com/bitcoin/bitcoin/blob/master/share/seeds/nodes_main.txt *)
+(*
   get_connection     "23.227.177.161" 8333;
   get_connection     "23.227.191.50" 8333;
   get_connection     "23.229.45.32" 8333;
@@ -366,6 +367,14 @@ let create () = [
   get_connection     "62.43.40.154" 8333;
   get_connection     "62.43.40.154" 8333;
   get_connection     "62.80.185.213" 8333;
+*)
+
+   (* nc -v  dnsseed.litecointools.com 9333 *)
+  get_connection     "212.71.235.114"  9333;
+  get_connection     "199.217.119.33" 9333; 
+  get_connection     "46.28.206.65" 9333;
+  get_connection     "188.138.125.48" 9333;
+  get_connection     "24.160.59.242" 9333;
 ] 
 
 

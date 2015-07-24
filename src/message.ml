@@ -836,15 +836,16 @@ let formatTx tx =
 
 type network =
   | Bitcoin
+  | Litecoin 
 
 
+let get_magic = function 
+  | Bitcoin -> 0xd9b4bef9 
+  | Litecoin -> 0xdbb6c0fb 
 
 let encodeMessage network command payload = 
-  let magic = match network with 
-    | Bitcoin -> 0xd9b4bef9 
-  in 
   let header = encodeHeader {
-    magic = magic ;
+    magic = get_magic network ;
     command = command ;
     length = strlen payload;
     checksum = checksum payload;
@@ -853,11 +854,8 @@ let encodeMessage network command payload =
 
 
 let encodeSimpleMessage network command = 
-  let magic = match network with 
-    | Bitcoin -> 0xd9b4bef9 
-  in 
   encodeHeader {
-    magic = magic ;
+    magic = get_magic network ;
     command = command;
     length = 0;
     (* clients seem to use e2e0f65d - hash of first part of header? *)
