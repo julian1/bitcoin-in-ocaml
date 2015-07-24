@@ -82,26 +82,8 @@ let string_of_base58 (s : string) =
     |> string_of_z in
   let n = count_prefix_chars s (code58_of_int 0) in
   fill n (char_of_int 0) ^ ret
-<<<<<<< HEAD
 
 
-
-let s = string_of_base58 "1JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" in
-let () = print_endline (M.hex_of_string s) in
-let s = base58_of_string s in
-let () = print_endline s in
-()
-
-
-
-let btc_address_of_hash160 (s: string) =
-  let s = "\x00" ^ s in
-  let checksum = M.checksum2 s in
-  base58_of_string (s ^ checksum)
-=======
-
-
->>>>>>> devel
 
 let btc_address_of_hash160 (s: string) =
   let s = "\x00" ^ s in
@@ -113,38 +95,14 @@ let hash160_of_btc_address(s: string) =
   let s = string_of_base58 s in
   let s, checksum = split_at_pos s (S.length s - 4) in
   if M.checksum2 s = checksum then
-<<<<<<< HEAD
-    s
-=======
     let prefix,base = split_at_pos s 1 in
     match prefix with 
       (* TODO check 01, or 03 *)
       | "\x00" -> base
->>>>>>> devel
   else
     raise (Failure "bad checksum")
 
 
-<<<<<<< HEAD
-let s = M.string_of_hex "000000000000000000000000248bc90202c849ea" in
-let a = btc_address_of_hash160 s in
-let () = print_endline a in
-let s = hash160_of_btc_address a in
-print_endline (M.hex_of_string s )
-
-
-(*
-  be nice to have some utils. eg.
-  private key (c or u)
-    wif encode
-    pubkey
-    hash160
-    btc address
-
-  and back again? from wif private key?
-*)
-
-=======
 (*
 let s = string_of_base58 "1JeqjYhy7GzCMkbKZ7N9Um6usLNuhsjji1" in
 let () = print_endline (M.hex_of_string s) in
@@ -173,7 +131,6 @@ print_endline (M.hex_of_string s )
   and back again? from wif private key?
 *)
 
->>>>>>> devel
 (* this should be held in a test *)
 (*
 let test1 () =
