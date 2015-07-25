@@ -9,11 +9,6 @@ module A = Address
 let (<|) f g x = f(g(x))
 
 
-let read_file filename =
-  let in_channel = open_in filename in
-  let s = Core.In_channel.input_all in_channel in
-  let () = close_in in_channel in
-  s
 
 (*
 let compare a b =
@@ -70,6 +65,13 @@ let test2 ctx =
   let ret = merkle lst in
   let expected = M.string_of_hex "d47780c084bad3830bcdaf6eace035e4c6cbf646d103795d22104fb105014ba3" in
   assert_equal ret expected
+
+
+let read_file filename =
+  let in_channel = open_in filename in
+  let s = Core.In_channel.input_all in_channel in
+  let () = close_in in_channel in
+  s
 
 
 let test3 ctx =
