@@ -460,9 +460,6 @@ let decodeTx s pos =
   }
 
 
-
-
-
 (* change name decode_block_header *)
 let decodeBlock (s:string) pos =
 	let pos, version = decodeInteger32 s pos in
@@ -472,22 +469,21 @@ let decodeBlock (s:string) pos =
 	let pos, bits = decodeInteger32 s pos in
 	let pos, nonce = decodeInteger32 s pos in
 
-	(* TODO remove this - tx count is not part of block header, but the block description *)
-	(* let pos, tx_count = decodeVarInt s pos in  *)
 	pos, ({ version = version; previous = previous; merkle = merkle;
-		nTime = nTime; bits = bits; nonce = nonce; (* tx_count = tx_count *)  } : block)
+		nTime = nTime; bits = bits; nonce = nonce; 
+    } : block)
 
 
 let decode_block_txs payload =
+    (* TODO pass the 80 offset, and maybe return the pos as well *)
     let pos = 80 in
     let pos, tx_count = decodeVarInt payload pos in
     let _, txs = decodeNItems payload pos decodeTx tx_count in
     txs
 
+
 let decode_block_hash payload =
   strsub payload 0 80 |> sha256d |> strrev
-
-
 
 
 let decodeInv s pos =
