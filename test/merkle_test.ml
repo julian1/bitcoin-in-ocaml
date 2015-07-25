@@ -31,8 +31,8 @@ let compare a b =
 
 
 (* ok, if we're foldding then we have to keep the order
-
   does fold_left preserve order ?
+    So it looks right...
  *)
 
 let hash tx = tx |> M.sha256d |> M.strrev 
@@ -55,11 +55,11 @@ let rec f lst =
         | None -> lst, Some e
         | Some e2 -> 
 
-          let () = print_endline @@ " hasing " ^ M.hex_of_string e2 ^ " and " ^ M.hex_of_string e in
+          let () = print_endline @@ " hasing " ^ M.hex_of_string e2 ^ " and " ^ M.hex_of_string e ^ " " ^ M.hex_of_string (hash (e2 ^ e)) in
       
           hash (e2 ^ e)::lst, None   (* this reverses the order? *)
       in
-      let lst, previous = L.fold_left aggregate ([],None) lst in
+      let lst, None = L.fold_left aggregate ([],None) lst in
       let lst = L.rev lst in
       f lst 
 
@@ -83,7 +83,6 @@ let test1 ctx =
  
   assert_bool "true" true  
   )
-
 
 let tests =
    "message">::: [ "test1">:: test1; ]
