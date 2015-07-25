@@ -32,14 +32,15 @@ let compare a b =
 *)
 let rec f lst =
   match lst with 
-    | e :: [] -> e
-    | first::tail ->
-
-      let aggregate a b =
-        a ^ b |> M.sha256d |> M.strrev 
+    | e :: [] -> e 
+    | lst ->
+      let aggregate (lst,previous) e = match previous with
+        | None -> lst, Some e
+        | Some e2 -> (e2 ^ e |> M.sha256d |> M.strrev) :: lst, None 
       in
-      let lst = L.fold_left aggregate first tail in
-      lst
+      let lst, previous = L.fold_left aggregate ([],None) lst in
+      f lst 
+
 
 let test1 ctx =
   M.(
@@ -51,8 +52,9 @@ let test1 ctx =
   let txs = L.map hash_of_tx txs in
   let txs = L.sort compare txs in  
 
-  (* let () = print_endline @@ M.hex_of_string ( L.hd txs) in *)
   let _ = L.fold_left (fun acc hash -> print_endline @@ M.hex_of_string hash) () txs in
+
+  let _ = f txs in
  
   assert_bool "true" true  
   )
