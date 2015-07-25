@@ -1,33 +1,30 @@
 
--- todo change this to a materialized view 
-
-
--- drop table test;
--- create table test( id integer, input_id integer, r bytea, row integer );
-
--- truncate test;
--- insert into test
 
 begin;
 
-CREATE MATERIALIZED VIEW _test as 
+-- has to be changed to only take sigs from the tx in the 'main' chain, not orphaned blocks.
+-- or do we need to do this only for the _dups2 ? .
+
+-- actually no - tx (and outputs, sigs) will only ever be recorded once
+-- it's the raw blockdata that's an issue
+-- still might be good to exclude txs not on the main chain
+
+CREATE MATERIALIZED VIEW _dups as
 
 select * from
-(SELECT 
-    id,
-    input_id,
-    r,
-    ROW_NUMBER() OVER(PARTITION BY r ) AS Row
-    
-    -- ROW_NUMBER() OVER(PARTITION BY r order by id ) AS Row
-    FROM signature ) as s2
+  (SELECT
+      id,
+      r,
+      ROW_NUMBER() OVER(PARTITION BY r ) AS Row
+  FROM signature ) as s2
 
-    -- actually want >= so can see last date of change.
-    where Row =  2
+-- no we just want row = 2, then we'll do a later join for all entries
+-- else using >= 2 we miss where Row = 1
+where Row = 2
 ;
 
--- create index on test( input_id);
--- create index on test( r); 
+create index on test( id);
+create index on test( r);
 
 commit;
 
