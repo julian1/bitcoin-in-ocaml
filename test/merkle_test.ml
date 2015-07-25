@@ -27,6 +27,8 @@ let compare a b =
 (* fold isn't right - unless we do a modulo or something - it has to skip over the list two at a time 
 
   we should be able to gobble it up recursively with patterns
+
+  ok, we can fold
 *)
 let rec f lst =
   match lst with 
