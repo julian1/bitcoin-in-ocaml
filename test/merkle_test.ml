@@ -38,33 +38,32 @@ let compare a b =
 let hash tx = tx |> M.sha256d |> M.strrev 
 
 let rec f lst =
-  (* hang on we have to handle the doubling up thing at the front *)
-
-  let lst = if (List.length lst) mod 2 = 1 then
-    lst 
-  else
-    lst
-  in
-
-  let () = print_endline @@ "count " ^ (string_of_int <| L.length) lst in
   match lst with 
     | e :: [] -> e 
     | lst ->
+      let lst = 
+        if (L.length lst) mod 2 = 1 then
+          let lst  = L.rev lst in
+          let lst = L.hd lst :: lst in
+          L.rev lst
+        else
+          lst
+      in
+      let () = print_endline @@ " count " ^ (string_of_int <| L.length) lst in
+
       let aggregate (lst,previous) e = match previous with
         | None -> lst, Some e
-        | Some e2 -> hash (e2 ^ e) :: lst, None 
+        | Some e2 -> 
+
+          let () = print_endline @@ " hasing " ^ M.hex_of_string e2 ^ " and " ^ M.hex_of_string e in
+      
+          hash (e2 ^ e)::lst, None   (* this reverses the order? *)
       in
       let lst, previous = L.fold_left aggregate ([],None) lst in
+      let lst = L.rev lst in
       f lst 
 
-      (* there's something going wrong with the last element *)
-(*      let lst, previous = L.fold_left aggregate ([],None) lst in
-      match previous with 
-        | None -> 
-            let () = print_endline @@ "none count " ^ (string_of_int <| L.length) lst in
-            f lst 
-        | Some e -> f ( lst @ [ hash e ^ e ] )
-*)
+
 
 let test1 ctx =
   M.(
@@ -77,7 +76,7 @@ let test1 ctx =
   let txs = L.map hash_of_tx txs in
   let txs = L.sort compare txs in  
 
-(*  let _ = L.fold_left (fun acc hash -> print_endline @@ M.hex_of_string hash) () txs in *)
+  let _ = L.fold_left (fun _ hash -> print_endline @@ M.hex_of_string hash) () txs in 
 
   let ret = f txs in
   let () = print_endline @@ "ret " ^ M.hex_of_string ret in
@@ -90,6 +89,14 @@ let tests =
    "message">::: [ "test1">:: test1; ]
 
 (*
+
+      (* there's something going wrong with the last element *)
+      let lst, previous = L.fold_left aggregate ([],None) lst in
+      match previous with 
+        | None -> 
+            let () = print_endline @@ "none count " ^ (string_of_int <| L.length) lst in
+            f lst 
+        | Some e -> f ( lst @ [ hash e ^ e ] )
 
 (* fold isn't right - unless we do a modulo or something - it has to skip over the list two at a time *)
 let rec f lst =
