@@ -23,13 +23,12 @@
   - test for tx ecc checking. prev
 
   - finish wif
-  - merkle tree
   - compute difficuly in relation to block time, so we can test against block difficulty
   - store peers in db for easy resumption
 
   - connect to ltc, doge networks
 
-  - Consider using Z values instead of Int64 ...
+  - Consider using Zarith values instead of Int64 ...
 
   - done - not null on main columns 
   - done - organize with foreign keys first
@@ -52,6 +51,7 @@
   - done - test for block header decode 
   - done - we've got to get test code, extracted and working 
   - done - decode difficulty, - can use either floating point, or z. float will be eaiser 
+  - done - merkle tree
 
   - http/or cli interface to examine the read-only structures now, so
     it's not really necessary to dump state everytime.

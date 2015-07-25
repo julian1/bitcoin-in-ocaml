@@ -15,7 +15,9 @@ let compare a b =
   else -1
 *)
 
-let hash =  M.strrev <| M.sha256d 
+(* TODO could get rid of the rev by doing it once at the start and finish *)
+
+let hash = M.strrev <| M.sha256d 
 
 let concat_hash a b = hash (M.strrev a ^ M.strrev b)
 
