@@ -135,7 +135,7 @@ let manage_chain1 (state : U.my_app_state) e    =
 
           (* did we ask for this inv *)
           let solicited =
-              match state.block_inv_pending with
+            match state.block_inv_pending with
               | Some (fd, _) when fd == conn.fd -> true
               | _ -> false
           in
@@ -258,7 +258,7 @@ let manage_chain2 (state : U.my_app_state) e  =
       (* if peer never responded to an inv, clear the pending flag *)
       let state = { state with 
         block_inv_pending = match state.block_inv_pending with
-          | Some (_, t) when now > t +. 60. -> None
+          | Some (_, t) when now > t +. 15. -> None
           | x -> x 
         }
       in
