@@ -33,9 +33,15 @@ let compare a b =
 (* ok, if we're foldding then we have to keep the order
   does fold_left preserve order ?
     So it looks right...
+
+  do we have to sort in the middle of it?
  *)
 
 let hash tx = tx |> M.sha256d |> M.strrev 
+
+
+let concat_hash a b = hash (M.strrev a ^ M.strrev b) 
+
 
 let rec f lst =
   match lst with 
@@ -65,6 +71,30 @@ let rec f lst =
 
 
 
+let test3 ctx =
+  let a = M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000000" in
+  let b = M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000011" in
+  let ret = concat_hash a b in
+  (* get bc05 
+    should get 3265
+  *)
+  let () = print_endline @@ "ret " ^ M.hex_of_string ret in
+  
+  assert_equal ret (M.string_of_hex "32650049a0418e4380db0af81788635d8b65424d397170b8499cdc28c4d27006") 
+ 
+
+
+let test2 ctx =
+  let lst = [ 
+    M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000000";
+    M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000011";
+    M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000022";
+  ] in
+  let ret = f lst in
+  let () = print_endline @@ "ret " ^ M.hex_of_string ret in
+  assert_bool "true" true  
+  
+
 let test1 ctx =
   M.(
   let s = read_file "test/data/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in 
@@ -85,7 +115,7 @@ let test1 ctx =
   )
 
 let tests =
-   "message">::: [ "test1">:: test1; ]
+   "message">::: [ (* "test1">:: test1; *) "test3">:: test3; ]
 
 (*
 
