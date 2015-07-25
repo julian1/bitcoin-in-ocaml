@@ -60,10 +60,7 @@ let rec f lst =
       let aggregate (lst,previous) e = match previous with
         | None -> lst, Some e
         | Some e2 -> 
-
-          let () = print_endline @@ " hasing " ^ M.hex_of_string e2 ^ " and " ^ M.hex_of_string e ^ " " ^ M.hex_of_string (hash (e2 ^ e)) in
-      
-          hash (e2 ^ e)::lst, None   (* this reverses the order? *)
+          concat_hash e2 e::lst, None   (* this reverses the order? *)
       in
       let lst, None = L.fold_left aggregate ([],None) lst in
       let lst = L.rev lst in
@@ -71,16 +68,12 @@ let rec f lst =
 
 
 
-let test3 ctx =
+let test1 ctx =
   let a = M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000000" in
   let b = M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000011" in
   let ret = concat_hash a b in
-  (* get bc05 
-    should get 3265
-  *)
-  let () = print_endline @@ "ret " ^ M.hex_of_string ret in
-  
-  assert_equal ret (M.string_of_hex "32650049a0418e4380db0af81788635d8b65424d397170b8499cdc28c4d27006") 
+  let expected = M.string_of_hex "32650049a0418e4380db0af81788635d8b65424d397170b8499cdc28c4d27006" in 
+  assert_equal ret expected
  
 
 
@@ -91,11 +84,11 @@ let test2 ctx =
     M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000022";
   ] in
   let ret = f lst in
-  let () = print_endline @@ "ret " ^ M.hex_of_string ret in
-  assert_bool "true" true  
+  let expected = M.string_of_hex "d47780c084bad3830bcdaf6eace035e4c6cbf646d103795d22104fb105014ba3" in 
+  assert_equal ret expected
   
 
-let test1 ctx =
+let test3 ctx =
   M.(
   let s = read_file "test/data/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in 
    let _, header = M.decodeBlock s 0 in 
@@ -104,7 +97,7 @@ let test1 ctx =
   let () = print_endline @@ "merkle " ^ M.hex_of_string header.merkle in
   let hash_of_tx tx = S.sub s tx.pos tx.length |> hash in 
   let txs = L.map hash_of_tx txs in
-  let txs = L.sort compare txs in  
+(*  let txs = L.sort compare txs in  *)
 
   let _ = L.fold_left (fun _ hash -> print_endline @@ M.hex_of_string hash) () txs in 
 
@@ -115,7 +108,7 @@ let test1 ctx =
   )
 
 let tests =
-   "message">::: [ (* "test1">:: test1; *) "test3">:: test3; ]
+   "message">::: [ "test1">:: test1; "test2">:: test2;  "test3">:: test3; ]
 
 (*
 
