@@ -19,12 +19,17 @@ let read_file filename =
 let compare a b =
   let za = A.z_of_string a in
   let zb = A.z_of_string b in
-  if Z.lt za zb then
-    1
-  else if Z.equal za zb then
-    0
-  else
-    -1
+  if Z.gt za zb then 1
+  else if Z.equal za zb then 0
+  else -1
+
+
+let rec f lst =
+  match lst with 
+    | e :: [] -> e
+    | first::tail ->
+      let lst = L.fold_left (fun acc e -> acc ) first tail in
+      lst
 
 let test1 ctx =
   M.(
@@ -32,13 +37,12 @@ let test1 ctx =
   (* let _, header = M.decodeBlock s 0 in *)
   let txs = M.decode_block_txs s in 
   let () = print_endline @@ "count " ^ (string_of_int <| L.length) txs in
+  let hash_of_tx tx = S.sub s tx.pos tx.length |> M.sha256d |> M.strrev in 
+  let txs = L.map hash_of_tx txs in
+  let txs = L.sort compare txs in  
 
-  let txs = L.map (fun tx -> S.sub s tx.pos tx.length |> M.sha256d |>  M.strrev) txs in
-(* we want the hashes *)
-
-  (* let txs = L.sort compare txs in *)
-
-  let () = print_endline @@ M.hex_of_string ( L.hd txs) in
+  (* let () = print_endline @@ M.hex_of_string ( L.hd txs) in *)
+  let _ = L.fold_left (fun acc hash -> print_endline @@ M.hex_of_string hash) () txs in
  
   assert_bool "true" true  
   )
