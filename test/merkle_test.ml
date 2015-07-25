@@ -38,6 +38,13 @@ let compare a b =
 let hash tx = tx |> M.sha256d |> M.strrev 
 
 let rec f lst =
+  (* hang on we have to handle the doubling up thing at the front *)
+
+  let lst = if (List.length lst) mod 2 = 1 then
+    lst 
+  else
+    lst
+  in
 
   let () = print_endline @@ "count " ^ (string_of_int <| L.length) lst in
   match lst with 
@@ -47,12 +54,17 @@ let rec f lst =
         | None -> lst, Some e
         | Some e2 -> hash (e2 ^ e) :: lst, None 
       in
-      (* there's something going wrong with the last element *)
       let lst, previous = L.fold_left aggregate ([],None) lst in
-      match previous with 
-        | None -> f lst 
-        | Some e -> f ( lst @ [ hash e ^ e ] )
+      f lst 
 
+      (* there's something going wrong with the last element *)
+(*      let lst, previous = L.fold_left aggregate ([],None) lst in
+      match previous with 
+        | None -> 
+            let () = print_endline @@ "none count " ^ (string_of_int <| L.length) lst in
+            f lst 
+        | Some e -> f ( lst @ [ hash e ^ e ] )
+*)
 
 let test1 ctx =
   M.(
