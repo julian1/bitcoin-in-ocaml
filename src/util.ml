@@ -96,10 +96,9 @@ module PG = PGOCaml_generic.Make (Lwt_thread)
 
 
 
-
-
 type my_app_state =
 {
+  network : Message.network;
 
   connections : connection list ;
 
@@ -115,8 +114,6 @@ type my_app_state =
   db : int PG.t ; (* TODO what is this type *)
  
 }
-
-
 
 
 type my_event =
@@ -136,48 +133,12 @@ type my_event =
 type jobs_type =  my_event Lwt.t list 
 
 
-(* the head structure shouldn't be here - place it in app_state? *)
-
-(*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
-  testnet magic_head: "\xFA\xBF\xB5\xDA",
-  litecoin magic_head: "\xfb\xc0\xb6\xdb",
-
-(* let m = 0xdbb6c0fb   litecoin *)
-*)
-
-let magic = 0xd9b4bef9  (* bitcoin *)
-
 
 let send_message conn s =
     let oc = conn.oc in
     Lwt_io.write oc s >> return Nop  (* message sent *)
 
-module M = Message
-
-(* 
-  - move this to message.ml, 
-  issue is that it refers to the magic value ...
-  so we'd have to put that in message also...
-  - or else just parametize message 
-  - we'd have to pass this var around everywhere... 
-*) 
-let encodeMessage command payload = 
-  let header = M.encodeHeader {
-    magic = magic ;
-    command = command ;
-    length = M.strlen payload;
-    checksum = M.checksum payload;
-  } in
-  header ^ payload
 
 
-let encodeSimpleMessage command = 
-  M.encodeHeader {
-    magic = magic ;
-    command = command;
-    length = 0;
-    (* clients seem to use e2e0f65d - hash of first part of header? *)
-    checksum = 0;
-  } 
- 
+
 

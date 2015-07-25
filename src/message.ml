@@ -460,9 +460,6 @@ let decodeTx s pos =
   }
 
 
-
-
-
 (* change name decode_block_header *)
 let decodeBlock (s:string) pos =
 	let pos, version = decodeInteger32 s pos in
@@ -472,22 +469,21 @@ let decodeBlock (s:string) pos =
 	let pos, bits = decodeInteger32 s pos in
 	let pos, nonce = decodeInteger32 s pos in
 
-	(* TODO remove this - tx count is not part of block header, but the block description *)
-	(* let pos, tx_count = decodeVarInt s pos in  *)
 	pos, ({ version = version; previous = previous; merkle = merkle;
-		nTime = nTime; bits = bits; nonce = nonce; (* tx_count = tx_count *)  } : block)
+		nTime = nTime; bits = bits; nonce = nonce; 
+    } : block)
 
 
 let decode_block_txs payload =
+    (* TODO pass the 80 offset, and maybe return the pos as well *)
     let pos = 80 in
     let pos, tx_count = decodeVarInt payload pos in
     let _, txs = decodeNItems payload pos decodeTx tx_count in
     txs
 
+
 let decode_block_hash payload =
   strsub payload 0 80 |> sha256d |> strrev
-
-
 
 
 let decodeInv s pos =
@@ -819,4 +815,47 @@ let formatTx tx =
   ^ "\n" ^ formatTxOutputs tx.outputs
   ^ "\n lockTime " ^ string_of_int tx.lockTime
 
+
+
+(*  bitcoin magic_head: "\xF9\xBE\xB4\xD9",
+  testnet magic_head: "\xFA\xBF\xB5\xDA",
+  litecoin magic_head: "\xfb\xc0\xb6\xdb",
+
+(* let m = 0xdbb6c0fb   litecoin *)
+*)
+
+(*
+  - Do we want an option type for the different networks that control
+    generation of magic number ...
+  - there might be other things that need to change as well ....
+*)
+
+type network =
+  | Bitcoin
+  | Litecoin 
+
+
+let get_magic = function 
+  | Bitcoin -> 0xd9b4bef9 
+  | Litecoin -> 0xdbb6c0fb 
+
+let encodeMessage network command payload = 
+  let header = encodeHeader {
+    magic = get_magic network ;
+    command = command ;
+    length = strlen payload;
+    checksum = checksum payload;
+  } in
+  header ^ payload
+
+
+let encodeSimpleMessage network command = 
+  encodeHeader {
+    magic = get_magic network ;
+    command = command;
+    length = 0;
+    (* clients seem to use e2e0f65d - hash of first part of header? *)
+    checksum = 0;
+  } 
+ 
 

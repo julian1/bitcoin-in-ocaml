@@ -6,6 +6,7 @@ module CS = Core.Core_string
 
 (* corebuild  -package cryptokit,zarith,lwt,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax address.byte *)
 
+(* these are used for difficulty as well so should factor into common place *)
 let z_of_string s =
   s |> CS.rev
     |> Z.of_bits
@@ -19,9 +20,9 @@ let string_of_z z =
 
 let fill n ch = S.init n (fun _ -> ch)
 
+
 let split_at_pos s i =
   S.sub s 0 i, S.sub s i (S.length s - i)
-
 
 
 let code58_of_int i =
@@ -64,7 +65,6 @@ let base58_of_string (s : string) =
   fill n (code58_of_int 0) ^ ret
 
 
-
 let string_of_base58 (s : string) =
   let len = S.length s in
   let rget i = S.get s (len - i - 1) in
@@ -82,7 +82,6 @@ let string_of_base58 (s : string) =
     |> string_of_z in
   let n = count_prefix_chars s (code58_of_int 0) in
   fill n (char_of_int 0) ^ ret
-
 
 
 let btc_address_of_hash160 (s: string) =

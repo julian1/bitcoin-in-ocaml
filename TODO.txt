@@ -2,9 +2,15 @@
 
   - get micro-ecc working with native code library linking
 
+  - weight the p2p leave selection in favor of longest chain
+
+  - store received blocks in queue, rather than blocking on the db writing, also automatic re-read 
+
   - get full script evaluation working, not just sig-checking
 
   - we're getting tx's recorded twice, because they're in an orphaned block
+      (should be fixed with _main and _tx views)
+
   - lots of old filedescriptors in list, when they're probably not active. 
   - fix our single entry packing of the inv request, which means we can't progress if the 
       only leaf is an orphaned block. 
@@ -21,8 +27,9 @@
   - compute difficuly in relation to block time, so we can test against block difficulty
   - store peers in db for easy resumption
 
-  - connect to ltc, doge
+  - connect to ltc, doge networks
 
+  - Consider using Z values instead of Int64 ...
 
   - done - not null on main columns 
   - done - organize with foreign keys first
