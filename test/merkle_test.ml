@@ -15,56 +15,41 @@ let read_file filename =
   let () = close_in in_channel in
   s
 
-
+(*
 let compare a b =
   let za = A.z_of_string a in
   let zb = A.z_of_string b in
   if Z.gt za zb then 1
   else if Z.equal za zb then 0
   else -1
-
-
-(* fold isn't right - unless we do a modulo or something - it has to skip over the list two at a time 
-  we should be able to gobble it up recursively with patterns
-  ok, we can fold
 *)
 
-
-(* ok, if we're foldding then we have to keep the order
-  does fold_left preserve order ?
-    So it looks right...
-
-  do we have to sort in the middle of it?
- *)
-
-let hash tx = tx |> M.sha256d |> M.strrev 
+let hash tx = tx |> M.sha256d |> M.strrev
 
 
-let concat_hash a b = hash (M.strrev a ^ M.strrev b) 
+let concat_hash a b = hash (M.strrev a ^ M.strrev b)
 
 
-let rec f lst =
-  match lst with 
-    | e :: [] -> e 
+let rec merkle lst =
+  match lst with
+    | e :: [] -> e
     | lst ->
-      let lst = 
+      let lst =
         if (L.length lst) mod 2 = 1 then
+          (* duplicate last element *)
           let lst  = L.rev lst in
-          let lst = L.hd lst :: lst in
-          L.rev lst
+          L.hd lst :: lst |> L.rev
         else
           lst
       in
-      let () = print_endline @@ " count " ^ (string_of_int <| L.length) lst in
-
-      let aggregate (lst,previous) e = match previous with
-        | None -> lst, Some e
-        | Some e2 -> 
-          concat_hash e2 e::lst, None   (* this reverses the order? *)
+      let aggregate (lst,previous) e =
+        match previous with
+          | None -> lst, Some e
+          | Some e2 -> concat_hash e2 e::lst, None
       in
       let lst, None = L.fold_left aggregate ([],None) lst in
       let lst = L.rev lst in
-      f lst 
+      merkle lst
 
 
 
@@ -72,74 +57,43 @@ let test1 ctx =
   let a = M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000000" in
   let b = M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000011" in
   let ret = concat_hash a b in
-  let expected = M.string_of_hex "32650049a0418e4380db0af81788635d8b65424d397170b8499cdc28c4d27006" in 
+  let expected = M.string_of_hex "32650049a0418e4380db0af81788635d8b65424d397170b8499cdc28c4d27006" in
   assert_equal ret expected
- 
 
 
 let test2 ctx =
-  let lst = [ 
+  let lst = [
     M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000000";
     M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000011";
     M.string_of_hex "0000000000000000000000000000000000000000000000000000000000000022";
   ] in
-  let ret = f lst in
-  let expected = M.string_of_hex "d47780c084bad3830bcdaf6eace035e4c6cbf646d103795d22104fb105014ba3" in 
+  let ret = merkle lst in
+  let expected = M.string_of_hex "d47780c084bad3830bcdaf6eace035e4c6cbf646d103795d22104fb105014ba3" in
   assert_equal ret expected
-  
+
 
 let test3 ctx =
   M.(
-  let s = read_file "test/data/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in 
-   let _, header = M.decodeBlock s 0 in 
-  let txs = M.decode_block_txs s in 
-  let () = print_endline @@ "count " ^ (string_of_int <| L.length) txs in
-  let () = print_endline @@ "merkle " ^ M.hex_of_string header.merkle in
-  let hash_of_tx tx = S.sub s tx.pos tx.length |> hash in 
-  let txs = L.map hash_of_tx txs in
-(*  let txs = L.sort compare txs in  *)
-
-  let _ = L.fold_left (fun _ hash -> print_endline @@ M.hex_of_string hash) () txs in 
-
-  let ret = f txs in
-  let () = print_endline @@ "ret " ^ M.hex_of_string ret in
- 
-  assert_bool "true" true  
+    let s = read_file "test/data/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in
+    let _, header = M.decodeBlock s 0 in
+    let txs = M.decode_block_txs s in
+    let hash_of_tx tx = S.sub s tx.pos tx.length |> hash in
+    let txs = L.map hash_of_tx txs in
+    (* let txs = L.sort compare txs in *)
+    let ret = merkle txs in
+    assert_equal header.merkle ret
   )
 
 let tests =
    "message">::: [ "test1">:: test1; "test2">:: test2;  "test3">:: test3; ]
 
+
+
 (*
+  let () = print_endline @@ "count " ^ (string_of_int <| L.length) txs in
+  let () = print_endline @@ "merkle " ^ M.hex_of_string header.merkle in
+    let () = print_endline @@ "ret " ^ M.hex_of_string ret in
 
-      (* there's something going wrong with the last element *)
-      let lst, previous = L.fold_left aggregate ([],None) lst in
-      match previous with 
-        | None -> 
-            let () = print_endline @@ "none count " ^ (string_of_int <| L.length) lst in
-            f lst 
-        | Some e -> f ( lst @ [ hash e ^ e ] )
+  let _ = L.fold_left (fun _ hash -> print_endline @@ M.hex_of_string hash) () txs in
 
-(* fold isn't right - unless we do a modulo or something - it has to skip over the list two at a time *)
-let rec f lst =
-  match lst with 
-    | e :: [] -> e
-    | first::tail ->
-
-      let aggregate a b =
-        a ^ b |> M.sha256d |> M.strrev 
-      in
-      let lst = L.fold_left aggregate first tail in
-      lst
-
-
-  ok, now we want to sort the list...
-
-(
-    header.previous = M.string_of_hex "000000000000000010006fe522dd3d6251c7d7ba217d294bcb4f99dcc11b1d24"
-    && header.merkle = M.string_of_hex "e658aef520b5fa1687f1c33a3bfc0336722fab49fe87ef0c96d46693f68d914b"
-    && header.bits = 404196666
-    && header.nTime = 1425091936
-    && header.nonce = 2316010512
-    )
 *)
