@@ -30,13 +30,18 @@ let compare a b =
 
   ok, we can fold
 *)
+
+
+let hash tx = tx |> M.sha256d |> M.strrev 
+
 let rec f lst =
   match lst with 
     | e :: [] -> e 
     | lst ->
+      let hash tx = tx |> M.sha256d |> M.strrev in
       let aggregate (lst,previous) e = match previous with
         | None -> lst, Some e
-        | Some e2 -> (e2 ^ e |> M.sha256d |> M.strrev) :: lst, None 
+        | Some e2 -> hash (e2 ^ e) :: lst, None 
       in
       let lst, previous = L.fold_left aggregate ([],None) lst in
       f lst 
@@ -48,7 +53,7 @@ let test1 ctx =
   (* let _, header = M.decodeBlock s 0 in *)
   let txs = M.decode_block_txs s in 
   let () = print_endline @@ "count " ^ (string_of_int <| L.length) txs in
-  let hash_of_tx tx = S.sub s tx.pos tx.length |> M.sha256d |> M.strrev in 
+  let hash_of_tx tx = S.sub s tx.pos tx.length |> hash in 
   let txs = L.map hash_of_tx txs in
   let txs = L.sort compare txs in  
 
