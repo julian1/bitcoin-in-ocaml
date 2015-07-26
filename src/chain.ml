@@ -351,6 +351,8 @@ let manage_chain2 (state : U.my_app_state) e  =
         >>
           log @@ "\n&&& hashes len " ^ ( string_of_int (L.length hashes )) 
         >> 
+        (* must reset now due to the sql query time *)
+        let now = Unix.time () in
         let state = { state with
             block_inv_pending = Some (conn.fd, now ) ;
         } in
