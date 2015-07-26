@@ -107,7 +107,6 @@ let manage_chain1 (state : U.my_app_state) e    =
             inv
             |> L.filter (fun (inv_type,hash) ->
               inv_type = 2
-           (*   && not (U.SS.mem hash state.heads ) *)
               && not ( U.SS.mem hash state.blocks_on_request))  (* eg. ignore if we've already requested the block *)
             |> L.map (fun (_,hash) -> hash)
           in
@@ -185,51 +184,30 @@ let manage_chain1 (state : U.my_app_state) e    =
           (* we received a block *)
           let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
           let _, header = M.decodeBlock payload 0 in
-
-          (* if we don't yet have the block, and it links into chain then include 
-              ok, we are committed to writing the block to disk and including, 
-              then lets do the io, first not screate another message
-          *)
-(*
-          let heads, height =
-            if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then
-                let height = (U.SS.find header.previous state.heads).height + 1 in
-                U.SS.add hash ( {
-                  previous = header.previous;
-                  height =  height;
-                } : U.my_head )  state.heads, height
-            else
-              state.heads, -1 (* should be None *)
-          in
-*)
           (* update the time that we got a valid block from the peer *)
           let last =
-              (* update the fd to indicate we got a good block, TODO tidy this *)
+              (* update the fd to indicate we got a good block, TODO tidy this 
+                  should only do this, if block was actually valid and was inserted.. 
+              *)
               let last = L.filter (fun (x : U.ggg) -> x.fd != conn .fd) state.last_block_received_time in
               ({ fd = conn.fd; t = now ;
               } : U.ggg )::last
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
-
-          let x = Processblock.(  
-            {
+          let x = Processblock.( {
               block_count = 0;
               db = state.db;
             })
           in
-
           (* OK. now we have to run this computation inline *) 
           log "\nbegin writing db"
           >> Processblock.process_block x payload 
           >> log "done writing db"
           >>
-
           let state = { state with
-            (* heads = heads; *)
             blocks_on_request = blocks_on_request;
             last_block_received_time = last;
-            (* seq_jobs_pending = Myqueue.add state.seq_jobs_pending y ; *) 
 			    } in
           let jobs = [ 
               log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
@@ -424,5 +402,17 @@ let update_ state e =
               (Some field ::_ )::_ -> U.PG.bytea_of_string field
               | _ -> raise (Failure "couldn't get leaf")
         in 
+*)
+(*
+          let heads, height =
+            if not (U.SS.mem hash state.heads ) && (U.SS.mem header.previous state.heads) then
+                let height = (U.SS.find header.previous state.heads).height + 1 in
+                U.SS.add hash ( {
+                  previous = header.previous;
+                  height =  height;
+                } : U.my_head )  state.heads, height
+            else
+              state.heads, -1 (* should be None *)
+          in
 *)
 
