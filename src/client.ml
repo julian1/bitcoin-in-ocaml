@@ -48,15 +48,10 @@ let run () =
 
     (* we'll have to think about db transactions *) 
     log "connecting and create db"
-    >> U.PG.connect ~host:"127.0.0.1" ~database: "test2" ~user:"meteo" ~password:"meteo" ()
+    >> U.PG.connect ~host:"127.0.0.1" ~database: "litecoin" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
-
       Processblock.create_prepared_stmts db 
     >>
-(*
-      Chain.create () 
-    >>= fun blocks_fd -> 
-    *)
        (
 
         let rec loop whoot =

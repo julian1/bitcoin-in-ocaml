@@ -3,6 +3,7 @@
   - get micro-ecc working with native code library linking
 
   - weight the p2p leave selection in favor of longest chain
+      if random.int 4 < 3 pick... else pick next...
 
   - store received blocks in queue, rather than blocking on the db writing, also automatic re-read 
 
@@ -27,6 +28,11 @@
   - store peers in db for easy resumption
 
   - connect to ltc, doge networks
+
+  - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 47000ms = 20x more expensive
+      - it may make sense to record height - especially if we record difficulty
+      - counter argument - getting list of blocks in main chain will always be slow due to recursive
+        cte parent_id function 
 
   - Consider using Zarith values instead of Int64 ...
 

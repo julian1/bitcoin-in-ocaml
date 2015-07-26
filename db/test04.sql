@@ -9,6 +9,9 @@ begin;
 -- it's the raw blockdata that's an issue
 -- still might be good to exclude txs not on the main chain
 
+
+-- note this selects duplicate r, but s could repeat 
+
 CREATE MATERIALIZED VIEW _dups as
 
 select * from
@@ -23,8 +26,9 @@ select * from
 where Row = 2
 ;
 
-create index on test( id);
-create index on test( r);
+-- shouldn't 
+--create index on _dups( id);
+--create index on _dups( r);
 
 commit;
 

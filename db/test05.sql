@@ -15,15 +15,22 @@ drop MATERIALIZED VIEW if exists _dups2 ;
 
 CREATE MATERIALIZED VIEW _dups2 as
 
+
 --explain
 select
-  substr( s.r, 0, 10 ),
-  tx.hash as tx,
-  o.index,
+  -- substr( s.r, 0, 8 ) as r,
+  s.r as r,
+  substr( s.s, 0, 8 ) as s,
+  sig_type ,
+  
+  -- tx.hash as spending_tx,
+  -- o.index,
 
   a.hash as address,
+  a.script as script,
+
   -- format_amount( unspent( a.hash) ) as unspent
-  unspent( a.hash)  as unspent
+  unspent( a.hash) as unspent
 
 -- from _test t
 from _dups t
@@ -35,9 +42,15 @@ join output o on o.id = i.output_id  -- the output we're unlocking
 join output_address oa on oa.output_id = o.id
 join address a on a.id = oa.address_id
 
-limit 100
+offset 0
 ;
 -- shouldn't do the order here
 --order by s.r;
 
 commit;
+
+-- order by unspent to see if have value, then r 
+-- select * from _dups2 order by unspent, r ;
+
+
+
