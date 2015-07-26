@@ -1,15 +1,10 @@
 
-
+todo
   - get micro-ecc working with native code library linking
-
-  - weight the p2p leave selection in favor of longest chain
 
   - store received blocks in queue, rather than blocking on the db writing, also automatic re-read 
 
   - get full script evaluation working, not just sig-checking
-
-  - we're getting tx's recorded twice, because they're in an orphaned block
-      (should be fixed with _main and _tx views)
 
   - lots of old filedescriptors in list, when they're probably not active. 
   - fix our single entry packing of the inv request, which means we can't progress if the 
@@ -23,13 +18,19 @@
   - test for tx ecc checking. prev
 
   - finish wif
-  - merkle tree
   - compute difficuly in relation to block time, so we can test against block difficulty
   - store peers in db for easy resumption
 
-  - connect to ltc, doge networks
+  - connect to doge network
 
-  - Consider using Z values instead of Int64 ...
+  - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 47000ms = 20x more expensive
+      - it may make sense to record height - especially if we record difficulty
+      - counter argument - getting list of blocks in main chain will always be slow due to recursive
+        cte parent_id function 
+
+  - Consider using Zarith values instead of Int64 ...
+  - refactor util and put app state in its own module 
+
 
   - done - not null on main columns 
   - done - organize with foreign keys first
@@ -52,22 +53,29 @@
   - done - test for block header decode 
   - done - we've got to get test code, extracted and working 
   - done - decode difficulty, - can use either floating point, or z. float will be eaiser 
+  - done - merkle root / tree
+  - done weight the p2p leave selection in favor of longest chain
+      if random.int 4 < 3 pick... else pick next...
+  - done we're getting tx's recorded twice, because they're in an orphaned block
+      (should be fixed with _main and _tx views)
+  - done - connect to ltc network
 
+old
   - http/or cli interface to examine the read-only structures now, so
     it's not really necessary to dump state everytime.
 
-  - simplify address storing not to use complicated prepared stmt 
+  - simplify address storing in process_block not to use complicated prepared stmt 
   - change var name 'x' to acc or something
 
-  - merkle root 
-
-  - maybe an module encapsulation of the String Z hex representation 
+  - maybe an module encapsulation of the String, Z, hex representation for hashes 
     - with functions for Z or sha hashing or private/pub key, hex formatting  etc.
     - rather than converting everything around in code when needed.
 
 ----
 
 ----
+issues
+
   transaction malleability and removing items from mempool??? how? 
     probably just record the block one, then the mempool one utxos will be spent
 ----

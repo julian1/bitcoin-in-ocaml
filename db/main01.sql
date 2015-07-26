@@ -111,7 +111,7 @@ create table coinbase(
 );
 create index on coinbase(tx_id);
 
-
+-- unique as a tuple, duplicates don't need to be normalized at insertion
 create table signature(
   id serial primary key, 
   input_id integer references input(id) not null, 

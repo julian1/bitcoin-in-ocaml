@@ -52,7 +52,7 @@ select
   _leaves.id as block_id
 from _leaves
 join _height on _height.id = _leaves.id 
-order by _height.height desc
+-- order by _height.height desc
 ;
 
 commit;

@@ -79,29 +79,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-    select 
-        b.time,
-        substring( tx.hash, 0, 5) as output_tx, 
-        --tx.hash,
-        o.index, 
-        o.amount, 
-        -- i.tx_id as spending_tx_id
-        substring( stx.hash, 0, 5) as spending_tx 
-    from address a
-    join output_address oa on oa.address_id = a.id 
-    join output o on o.id = oa.output_id 
 
-    join tx tx on tx.id = o.tx_id
-    join block b on b.id = tx.block_id
 
-    left join input i on i.output_id = o.id
-    left join tx stx on stx.id = i.tx_id
-
-    -- where i.id is null -- ie unspent
-    where a.hash = '\x11b366edfc0a8b66feebae5c2e25a7b6a5d1cf31'
-     --where a.hash =  '\x0136d001619faba572df2ef3d193a57ad29122d9';
-    order by tx.id desc -- process order is correct 
-;
 
     -- ahhhh i think blockchain.info hash160 is wrong
     -- looking up the individual tx 

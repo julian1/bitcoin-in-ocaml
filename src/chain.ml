@@ -247,25 +247,53 @@ let manage_chain1 (state : U.my_app_state) e    =
     to see what blocks we need...
 *)
 
+(* bsd rand *)
+let random v = 
+  (1103515245 * v + 12345) mod (0x7fffffff + 1)
+
+let weighted_random_select seed lst = 
+  (* select item randomly from list biased towards the front *)
+  (* TODO random is a stateful procedure, use lwt or explicit seed *)
+  (* 
+      fucking hell, we'll have to the rand value through the fold...
+  *)
+  let weight = 3 in
+  let f lst =
+    L.fold_left (fun (acc,r) e -> 
+      match acc with 
+        | None -> (
+          let r = random r in
+          match (r mod weight) with 
+            | 0 -> None,r 
+            | _ -> Some e,r
+          )
+        | _ -> acc,r
+    )
+    (None,seed) lst 
+  in 
+  match f lst with
+    | None, _ -> L.hd lst  (* none returned, then just take the first *)
+    | Some e, _ -> e
+
+
 let manage_chain2 (state : U.my_app_state) e  =
   (* issue inventory requests for blocks based on current chainstate leaves *)
   match e with
     | _ ->
-      (* we need to check we have completed handshake *)
+      (* TODO we need to check we have completed handshake *)
       (* shouldn't we always issue a request when blocks_on_request *)
       let now = Unix.time () in
 
-      (* if peer never responded to an inv, clear the pending flag *)
+      (* if peer never responded to an inv, then clear the pending flag *)
       let state = { state with 
         block_inv_pending = match state.block_inv_pending with
-          | Some (_, t) when now > t +. 15. -> None
+          | Some (_, t) when now > t +. 20. -> None
           | x -> x 
         }
       in
-
-      (* if a block was requested at least 60 seconds ago, and
-      we haven't received any valid blocks from the corresponding peer for at least 60 seconds, then
-      clear from blocks_on_request to permit re-request from a different peer *)
+      (* if a block was requested at least 60 seconds ago, and we haven't 
+        received any valid blocks from the corresponding peer for at least 60 seconds, then
+        clear from blocks_on_request to permit re-request from a different peer *)
       let state = { state with
         blocks_on_request = U.SS.filter (fun hash (fd,t, solicited) ->
           not (
@@ -276,63 +304,52 @@ let manage_chain2 (state : U.my_app_state) e  =
             )
           ) state.blocks_on_request
       } in
-
-      (* are there solicited blocks on request *)
+      (* are there any solicited blocks on request *)
       let has_solicited = 
         U.SS.exists (fun _ (_,_,solicited) -> solicited) state.blocks_on_request 
       in
-
       (* if only unsolicited blocks on request, and no inv pending then make an inv request *)
       if not has_solicited 
         && state.block_inv_pending = None 
         && state.connections <> [] 
         (* && state.seq_jobs_pending = Myqueue.empty *)
         then
+        (* choose a peer fd at random - TODO state *)
+        (* let index = Random.int (List.length state.connections) in *)
 
 (*
-        (* create a set of all pointed-to block hashes *)
-        (* watch out for non-tail call optimised functions here which might blow stack  *)
-        let previous =
-          U.SS.bindings state.heads
-          |> List.rev_map (fun (_, (head : U.my_head) ) -> head.previous)
-          |> U.SSS.of_list
-        in
-        (* get the tips of the blockchain tree by filtering all block hashes against the set *)
-        let heads =
-          U.SS.filter (fun hash _ -> not @@ U.SSS.mem hash previous ) state.heads
-          |> U.SS.bindings
-          |> List.rev_map (fun (tip,_ ) -> tip)
-        in
-        (* choose a tip at random *)
-        let index = now |> int_of_float |> (fun x -> x mod List.length heads) in
-        let head = List.nth heads index in
+  think the random function isn't working... with lwt
 *)
-        (* choose a peer fd at random *)
-        let index = now |> int_of_float |> (fun x -> x mod List.length state.connections ) in
+        let seed = int_of_float now in
+
+        let index = seed mod List.length state.connections in
         let (conn : U.connection) = List.nth state.connections index in
 
-        (* TODO fixme *)
-        (* let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in *)
         (* TODO we need to record if handshake has been performed *)
-
         log @@ S.concat "" [
-          "request addr " ; conn.addr;
+
+          "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"; 
+          "\nnow " ; string_of_float now;
+          "\nseed " ; string_of_int seed ;
+          "\nindex " ; string_of_int index ;
+          "\nrequest conn addr " ; conn.addr;
           "\nblocks on request " ; string_of_int (U.SS.cardinal state.blocks_on_request) ;
           (* "\nheads count " ; string_of_int (L.length heads); *)
           (* "\nrequested head is ";  M.hex_of_string head ; *)
           "\n fds\n" ; S.concat "\n" ( L.map (fun (x : U.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ]
         >> U.PG.begin_work state.db
-        >> U.PG.prepare state.db ~query:"select hash from _leaves order by random() limit 1" ()
+        (* TODO this query is very expensive - 5 seconds to run *)
+        >> U.PG.prepare state.db ~query:"select hash from _leaves2 order by height desc" ()
         >> U.PG.execute state.db ~params:[ ] ()
         >>= fun rows -> 
-          let head = 
-            match rows with
-              (Some field ::_ )::_ -> U.PG.bytea_of_string field
-              | _ -> raise (Failure "couldn't get leaf")
-        in 
-        U.PG.commit state.db
-        >> log @@ "\nrequested head is " ^ M.hex_of_string head
+          U.PG.commit state.db
+        >>
+          let hashes = L.map (function (Some field ::_ ) -> U.PG.bytea_of_string field ) rows in
+          let head = weighted_random_select seed hashes in 
+          log @@ "\n&&& requested head is " ^ M.hex_of_string head
+        >>
+          log @@ "\n&&& hashes len " ^ ( string_of_int (L.length hashes )) 
         >> 
         let state = { state with
             block_inv_pending = Some (conn.fd, now ) ;
@@ -369,11 +386,41 @@ let update state e =
   val update : Util.my_app_state -> Util.my_event -> (Util.my_event ) Lwt.t
 *)
 
+(*
 let update_ state e =
   let state = manage_chain1 state e in
 (*  let state = manage_chain2 state e in *)
   state
 
+*)
 
 
+(*
+        (* create a set of all pointed-to block hashes *)
+        (* watch out for non-tail call optimised functions here which might blow stack  *)
+        let previous =
+          U.SS.bindings state.heads
+          |> List.rev_map (fun (_, (head : U.my_head) ) -> head.previous)
+          |> U.SSS.of_list
+        in
+        (* get the tips of the blockchain tree by filtering all block hashes against the set *)
+        let heads =
+          U.SS.filter (fun hash _ -> not @@ U.SSS.mem hash previous ) state.heads
+          |> U.SS.bindings
+          |> List.rev_map (fun (tip,_ ) -> tip)
+        in
+        (* choose a tip at random *)
+        let index = now |> int_of_float |> (fun x -> x mod List.length heads) in
+        let head = List.nth heads index in
+*)
+  (* TODO fixme *)
+        (* let head = (M.string_of_hex "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") in *)
+          (* let head = L.hd hashes in *)
+(*
+          let head = 
+            match rows with
+              (Some field ::_ )::_ -> U.PG.bytea_of_string field
+              | _ -> raise (Failure "couldn't get leaf")
+        in 
+*)
 
