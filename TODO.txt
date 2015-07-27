@@ -19,11 +19,16 @@ todo
 
   - finish wif
   - compute difficuly in relation to block time, so we can test against block difficulty
+      - select * from _height where height % 2016 = 0;
+      - we don't really want to store something that's a dynamic calc (like height or difficulty)
+      - but we can't do expensive sql queries for each block ...
+
   - store peers in db for easy resumption
+      - could set initial peer via command line. if wanted.
 
   - connect to doge network
 
-  - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 47000ms = 20x more expensive
+  - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 4700ms = 20x more expensive
       - it may make sense to record height - especially if we record difficulty
       - counter argument - getting list of blocks in main chain will always be slow due to recursive
         cte parent_id function 
