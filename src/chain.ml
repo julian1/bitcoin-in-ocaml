@@ -55,7 +55,7 @@ let initial_getdata network hashes =
       ^ S.concat "" @@ L.map encodeInvItem hashes
   in let hashes = match network with 
       | M.Bitcoin -> hashes 
-      | M.Litecoin -> L.rev hashes 
+      | M.Litecoin | M.Dogecoin -> L.rev hashes 
   in
   let payload = encodeInventory hashes in
   M.encodeMessage network "getdata" payload
