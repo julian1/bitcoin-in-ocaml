@@ -48,7 +48,7 @@ let run () =
 
     (* we'll have to think about db transactions *) 
     log "connecting and create db"
-    >> U.PG.connect ~host:"127.0.0.1" ~database: "litecoin" ~user:"meteo" ~password:"meteo" ()
+    >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
     >>= fun db ->
       Processblock.create_prepared_stmts db 
     >>
@@ -130,7 +130,7 @@ let run () =
 
         let whoot = {
           state = Some ({
-            network = Litecoin ;
+            network = Dogecoin;
             connections = [];
             db = db; 
             (* should be hidden ?? *)
