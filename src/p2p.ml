@@ -380,6 +380,12 @@ let create () = [
   get_connection     "24.160.59.242" 9333;
 *)
 
-  get_connection     "162.243.251.36" 22556;
+(* doge  https://github.com/lian/bitcoin-ruby/blob/master/lib/bitcoin.rb 
+    nc -v seed.dogecoin.com  22556
+  *)
+  get_connection "162.243.251.36" 22556;
+  get_connection "128.250.195.242" 22556;
+
+  get_connection "216.155.138.34" 2255;
 ] 
 
