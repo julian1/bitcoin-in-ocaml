@@ -16,7 +16,10 @@ let log s = U.write_stdout s >> return U.Nop
 (* initial version message to send *)
 let initial_version network =
   let payload = M.encodeVersion {
-      protocol = 70002;
+
+      (* protocol = 70002;  bitcoin/litecoin  match network with ... *)
+      protocol = 70003;
+
       nlocalServices = 1L; (* doesn't seem to like non- full network 0L *)
       nTime = 1424343054L;
       from = { address = 127,0,0,1; port = 8333 };
@@ -370,12 +373,19 @@ let create () = [
 *)
 
    (* nc -v  dnsseed.litecointools.com 9333 *)
-  get_connection     "212.71.235.114"  9333;
+(*  get_connection     "212.71.235.114"  9333;
   get_connection     "199.217.119.33" 9333; 
   get_connection     "46.28.206.65" 9333;
   get_connection     "188.138.125.48" 9333;
   get_connection     "24.160.59.242" 9333;
+*)
+
+(* doge  https://github.com/lian/bitcoin-ruby/blob/master/lib/bitcoin.rb 
+    nc -v seed.dogecoin.com  22556
+  *)
+  get_connection "162.243.251.36" 22556;
+  get_connection "128.250.195.242" 22556;
+
+  get_connection "216.155.138.34" 2255;
 ] 
-
-
 

@@ -1,5 +1,8 @@
 
 todo
+  - peers in the db. just select at random like leaves. eg. if conns < 8, select random peer 
+    -this then gets the configuration out of p2p.
+
   - get micro-ecc working with native code library linking
 
   - store received blocks in queue, rather than blocking on the db writing, also automatic re-read 
@@ -19,11 +22,23 @@ todo
 
   - finish wif
   - compute difficuly in relation to block time, so we can test against block difficulty
+      - select * from _height where height % 2016 = 0;
+      - we don't really want to store something that's a dynamic calc (like height or difficulty)
+      - but we can't do expensive sql queries for each block ...
+
   - store peers in db for easy resumption
+      - could set initial peer via command line. if wanted.
 
-  - connect to doge network
+  - received time, different from stated block time.
 
-  - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 47000ms = 20x more expensive
+  - the fact that getting previous txo's takes a while due to calculating the _main chain is ok. We can simply
+    do one query and get all inputs for all txs in the block. o
+      - but unconfirmed txos are an issue if receive every 1sec and it take .5 sec . 
+    - uggh creating the _main mat-view is taking 12 seconds for litecoin.
+
+
+
+  - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 4700ms = 20x more expensive
       - it may make sense to record height - especially if we record difficulty
       - counter argument - getting list of blocks in main chain will always be slow due to recursive
         cte parent_id function 
@@ -59,6 +74,7 @@ todo
   - done we're getting tx's recorded twice, because they're in an orphaned block
       (should be fixed with _main and _tx views)
   - done - connect to ltc network
+  - done - connect to doge network
 
 old
   - http/or cli interface to examine the read-only structures now, so

@@ -833,11 +833,14 @@ let formatTx tx =
 type network =
   | Bitcoin
   | Litecoin 
+  | Dogecoin
 
 
 let get_magic = function 
   | Bitcoin -> 0xd9b4bef9 
   | Litecoin -> 0xdbb6c0fb 
+  | Dogecoin -> 0xc0c0c0c0 
+
 
 let encodeMessage network command payload = 
   let header = encodeHeader {

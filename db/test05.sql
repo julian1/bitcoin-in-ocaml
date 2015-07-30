@@ -23,8 +23,8 @@ select
   substr( s.s, 0, 8 ) as s,
   sig_type ,
   
-  -- tx.hash as spending_tx,
-  -- o.index,
+  tx.hash as spending_tx,
+  o.index,
 
   a.hash as address,
   a.script as script,
