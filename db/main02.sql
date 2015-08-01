@@ -23,7 +23,7 @@ where p.id is null
 
 
 create view _height as
-with recursive t( id, height ) AS (
+with recursive t( id, height_ ) AS (
   select (
     -- tree root
     select block.id 
@@ -33,12 +33,12 @@ with recursive t( id, height ) AS (
   ), 0
   UNION ALL
   SELECT 
-    block_id, t.height + 1
+    block_id, t.height_ + 1
   FROM block
   join previous on previous.block_id = block.id 
   join t on t.id = previous.block_previous_id
 )
-select t.height, block.* 
+select t.height_, block.* 
 FROM t join block on block.id = t.id;
 
 

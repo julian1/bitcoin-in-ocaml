@@ -29,6 +29,9 @@ type block_ =
     - merkle.
     - check hash is less than difficulty(don't know how this works.... with litecoin and doge )
     - check difficulty is correct for height and network parameters  
+  -----
+  
+    we should get the height stuff in because that's expensive to calculate leaves ...
 *)
 
 let calc_merkle txs payload =

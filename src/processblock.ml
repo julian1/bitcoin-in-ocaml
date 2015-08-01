@@ -108,9 +108,10 @@ let create_prepared_stmts db =
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
 
+      (* $1 hash, $2 previous hash, $3 time *)
       ("insert_block", "
-          insert into block(hash,time)
-          select $1, to_timestamp($2) at time zone 'UTC'
+          insert into block(hash,time, height)
+          select $1, to_timestamp($3) at time zone 'UTC', (select height+1 from block b where b.hash = $2) 
           returning id
       ");
  
@@ -404,9 +405,11 @@ let process_block (db : int PG.t ) payload =
     function
     | (Some "t" ::_ )::_ ->
         begin
+        (* TODO the following three stmts could be wrapped up in one prepared stmt *)
           PG.execute x.db ~name:"insert_block" ~params:[
-            Some (PG.string_of_bytea hash );
-            Some (PG.string_of_int block.nTime );
+            Some (PG.string_of_bytea hash);
+            Some (PG.string_of_bytea block.previous);  (* required for height *)
+            Some (PG.string_of_int block.nTime);
           ] ()
         >>= fun rows ->
           let block_id = decode_id rows in
