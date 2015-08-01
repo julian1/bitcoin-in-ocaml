@@ -14,6 +14,9 @@ todo
   - peers in the db. just select at random like leaves. eg. if conns < 8, select random peer 
     -this then gets the configuration out of p2p.
 
+  - store peers in db for easy resumption
+      - could set initial peer via command line. if wanted.
+
   - should change p2p, to always attempt connection when get new peer. and then drop on connection
     if have enough.
 
@@ -24,6 +27,7 @@ todo
   - get full script evaluation working, not just sig-checking
 
   - lots of old filedescriptors in list, when they're probably not active. 
+
   - fix our single entry packing of the inv request, which means we can't progress if the 
       only leaf is an orphaned block. 
 
@@ -35,13 +39,11 @@ todo
   - test for tx ecc checking. prev
 
   - finish wif
+
   - compute difficuly in relation to block time, so we can test against block difficulty
       - select * from _height where height % 2016 = 0;
       - we don't really want to store something that's a dynamic calc (like height or difficulty)
       - but we can't do expensive sql queries for each block ...
-
-  - store peers in db for easy resumption
-      - could set initial peer via command line. if wanted.
 
   - received time, different from stated block time.
 
@@ -52,10 +54,7 @@ todo
 
 
 
-  - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 4700ms = 20x more expensive
-      - it may make sense to record height - especially if we record difficulty
-      - counter argument - getting list of blocks in main chain will always be slow due to recursive
-        cte parent_id function 
+     
 
   - Consider using Zarith values instead of Int64 ...
   - refactor util and put app state in its own module 
@@ -93,7 +92,12 @@ todo
     - to check whether a tail is tail-call or not, you can use OCaml tools for
       that: compiling with the -annot option will produce an annotation file
       foo.annot (if your source was foo.ml) 
-
+  - done - - altered to store height on block insertion 
+      - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 4700ms = 20x more expensive
+      - it may make sense to record height - especially if we record difficulty
+      - counter argument - getting list of blocks in main chain will always be slow due to recursive
+        cte parent_id function 
+ 
 
 old
   - http/or cli interface to examine the read-only structures now, so
