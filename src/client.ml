@@ -106,8 +106,7 @@ let loop' whoot =
     )
 
 
-let run () =
-
+let () =
   Lwt_main.run U.(
 
     (* we'll have to think about db transactions *) 
@@ -145,6 +144,5 @@ let update state e =
   state
 *)
 
-let () = run () 
 
 
