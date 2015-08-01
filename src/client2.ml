@@ -41,11 +41,17 @@ module PG = U.PG
 
 let log s = U.write_stdout s
 
+type mytype2 =
+{
+  block_count : int;
+  db : int PG.t ; (* TODO what is this *)
+}
 
 
-let process_block x payload =
+
+let process_block (x : mytype2) payload =
   Lwt.catch (
-    fun () -> Processblock.process_block x payload
+    fun () -> return x (* Processblock.process_block x.db payload *)
   )
   (fun exn ->
     PG.rollback x.db
@@ -95,10 +101,10 @@ let process_file () =
     log "scanning blocks..."
   >>
     let x =
-      Processblock.({
+      {
         block_count = 0;
         db = db;
-      }) in
+      } in
     replay_blocks fd process_block x
   >> PG.close db
   >> log "finished "

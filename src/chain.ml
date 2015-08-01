@@ -195,14 +195,13 @@ let manage_chain1 (state : U.my_app_state) e    =
           in
           (* remove from blocks on request *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
-          let x = Processblock.( {
-              block_count = 0;
-              db = state.db;
-            })
-          in
+
+          Rules.validate_block state.db payload  
+          >>= fun _ ->
+
           (* OK. now we have to run this computation inline *) 
           log "\nbegin writing db"
-          >> Processblock.process_block x payload 
+          >> Processblock.process_block state.db payload 
           >> log "done writing db"
           >>
           let state = { state with

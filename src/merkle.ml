@@ -18,13 +18,11 @@ let compare a b =
 (* TODO should be able to get rid of all the reversing by doing once at the start and finish *)
 
 (*
-
-
   let concat_hash a b = M.sha256d a ^  b
 and
-  let lst = L.map M.strrev lst in 
+  let lst = L.map M.strrev lst in
   let e = root' lst in
-  M.strrev e 
+  M.strrev e
 *)
 
 
@@ -36,8 +34,8 @@ let root lst =
       | e :: [] -> e
       | lst ->
         let lst =
+          (* duplicate last element if odd number *)
           if (L.length lst) mod 2 = 1 then
-            (* duplicate last element *)
             let lst  = L.rev lst in
             L.hd lst :: lst |> L.rev
           else
@@ -52,7 +50,6 @@ let root lst =
         let lst = L.rev lst in
         root' lst
   in
-  root' lst 
-
+  root' lst
 
 

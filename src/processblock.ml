@@ -42,6 +42,9 @@ let map_m f lst =
 *)
 
 
+(* TODO get rid of this and just pass the db ref only 
+    else only use this in this module ...
+*)
 type mytype =
 {
   block_count : int;
@@ -379,7 +382,13 @@ let process_tx x (block_id,hash,tx) =
   ok, to check difficulty - we'll have to take db actions .... height etc.
 *)
 
-let process_block x payload =
+let process_block (db : int PG.t ) payload =
+
+  let x = {
+      block_count = 0;
+      db = db;
+    }
+  in
   let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
     log @@ "begin insert_block " ^ M.hex_of_string hash
