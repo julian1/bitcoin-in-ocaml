@@ -59,10 +59,8 @@ let rec loop (whoot : whoot_t ) =
             | None -> "unknown"  
         )
     >>   
-      (
       (* process a queue item if we can *)
       let whoot = 
-        (
         if whoot.queue <> Myqueue.empty && whoot.state <> None then 
           let e,queue = Myqueue.take whoot.queue in
           {  (* whoot with *) 
@@ -81,7 +79,6 @@ let rec loop (whoot : whoot_t ) =
           }
         else
           whoot
-        )
       in
    
       (* more jobs to process? *) 
@@ -90,7 +87,6 @@ let rec loop (whoot : whoot_t ) =
       else
         log "finishing - no more jobs to run!!"
         >> return ()
-      )
 
 
 let loop' whoot =
