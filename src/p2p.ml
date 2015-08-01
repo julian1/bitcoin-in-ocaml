@@ -3,9 +3,11 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 module M = Message
-module U = Util
 module S = String 
 module L = List
+
+module U = Util
+module PG = U.PG
 
 
 
@@ -147,6 +149,14 @@ let update state e =
       let state = { state with
         connections = conn :: state.connections; 
       } in
+
+        PG.prepare state.db "insert into peer(addr,port) values ($1, $2)" ()
+        >> PG.execute state.db ~params:[
+          Some (PG.string_of_bytea conn.addr );
+          Some (PG.string_of_int conn.port );
+        ] ()
+      >> 
+
       let jobs = [
         log @@ U.format_addr conn ^  " got connection "  ^
           ", connections now " ^ ( string_of_int @@ List.length state.connections )
@@ -389,7 +399,7 @@ let create () = [
   get_connection "162.243.251.36" 22556;
   get_connection "128.250.195.242" 22556;
 
-  get_connection "216.155.138.34" 22555;
+  get_connection "216.155.138.34" 22556;
 
   get_connection "128.199.78.238" 22556;
 ] 

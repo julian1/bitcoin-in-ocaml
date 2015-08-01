@@ -1,10 +1,9 @@
 
 todo
 
-  - check tail calls of main functions 
-    - to check whether a tail is tail-call or not, you can use OCaml tools for
-      that: compiling with the -annot option will produce an annotation file
-      foo.annot (if your source was foo.ml) 
+  - move logger into session/state object, rather than be a free function, so that
+    can partially apply at top level
+
 
     - change process block (eg. check, add acc difficulty, height with) with process block
         - rules ... block. 
@@ -90,6 +89,11 @@ todo
       (should be fixed with _main and _tx views)
   - done - connect to ltc network
   - done - connect to doge network
+  - done check tail calls of main functions 
+    - to check whether a tail is tail-call or not, you can use OCaml tools for
+      that: compiling with the -annot option will produce an annotation file
+      foo.annot (if your source was foo.ml) 
+
 
 old
   - http/or cli interface to examine the read-only structures now, so
