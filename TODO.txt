@@ -1,6 +1,10 @@
 
 todo
 
+  - catch sig interupt - and clean shutdown, closing sockets
+
+  - only add peer on receiving version message, and add client string to db.
+
   - move logger into session/state object, rather than be a free function, so that
     can partially apply at top level
 
@@ -16,6 +20,9 @@ todo
 
   - store peers in db for easy resumption
       - could set initial peer via command line. if wanted.
+
+  - scrypt 
+    - https://github.com/wg/scrypt/blob/master/src/main/java/com/lambdaworks/crypto/SCrypt.java
 
   - should change p2p, to always attempt connection when get new peer. and then drop on connection
     if have enough.
