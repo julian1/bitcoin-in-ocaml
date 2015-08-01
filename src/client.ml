@@ -81,8 +81,7 @@ let rec loop (whoot : whoot_t ) =
 
 
 let start () = 
-  (* we'll have to think about db transactions *) 
-  log "connecting and create db"
+  log "connecting to db"
   >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
   >>= fun db ->
     Processblock.create_prepared_stmts db 
