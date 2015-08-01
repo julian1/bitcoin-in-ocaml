@@ -19,27 +19,32 @@ let compare a b =
 
 let hash = M.strrev <| M.sha256d 
 
-let concat_hash a b = hash (M.strrev a ^ M.strrev b)
+let concat_hash a b = hash (M.strrev a ^ M.strrev b) 
+(* let concat_hash a b = M.sha256d ( a ^  b) *)
 
-
-let rec root lst =
-  match lst with
-    | e :: [] -> e
-    | lst ->
-      let lst =
-        if (L.length lst) mod 2 = 1 then
-          (* duplicate last element *)
-          let lst  = L.rev lst in
-          L.hd lst :: lst |> L.rev
-        else
-          lst
-      in
-      let aggregate (lst,previous) e =
-        match previous with
-          | None -> lst, Some e
-          | Some e2 -> concat_hash e2 e::lst, None
-      in
-      let lst, None = L.fold_left aggregate ([],None) lst in
-      let lst = L.rev lst in
-      root lst
+let root lst =
+ 
+  let rec root' lst =
+    match lst with
+      | e :: [] -> e
+      | lst ->
+        let lst =
+          if (L.length lst) mod 2 = 1 then
+            (* duplicate last element *)
+            let lst  = L.rev lst in
+            L.hd lst :: lst |> L.rev
+          else
+            lst
+        in
+        let aggregate (lst,previous) e =
+          match previous with
+            | None -> lst, Some e
+            | Some e2 -> concat_hash e2 e::lst, None
+        in
+        let lst, None = L.fold_left aggregate ([],None) lst in
+        let lst = L.rev lst in
+        root' lst
+  in
+  (* let lst = L.map M.strrev lst in *)
+  root' lst
 

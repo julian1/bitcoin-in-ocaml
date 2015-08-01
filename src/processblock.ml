@@ -289,6 +289,12 @@ let process_input_script x (input_id, input) =
 let process_input x (index, input, hash, tx_id) =
 
   let (input : M.tx_in) = input in
+
+    log @@ "input " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index 
+  >>
+
+
+
   (* let process_input x (i, input, hash,tx_id) = *)
   (* why can't we pattern match on string here ? eg. function *)
   (* so we have to look up the tx hash, which means we need an index on it *)
@@ -317,6 +323,10 @@ let process_input x (index, input, hash, tx_id) =
 
 let process_tx x (block_id,hash,tx) =
   let (tx : M.tx) = tx in
+
+    log @@ "tx " ^ M.hex_of_string hash 
+  >>
+
 
     (* TODO we have to lookup the tx first... rather than just insert and return the tx_id  
       the insertion of the tx, should be done completely before we insert the tx_block ? 
@@ -365,7 +375,9 @@ let process_tx x (block_id,hash,tx) =
     >>*) return x 
 
 
-
+(*
+  ok, to check difficulty - we'll have to take db actions .... height etc.
+*)
 
 let process_block x payload =
   let _, block  = M.decodeBlock payload 0 in
@@ -430,6 +442,7 @@ let process_block x payload =
       end 
 *)
     end
+    (* TODO exceptions and rollback..., or will calling commit here cause an exception if invalid?  *)
   >>= fun x ->
     PG.commit x.db
   >> return x
