@@ -1,9 +1,3 @@
-(*
-  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte
-
-  we don't need the syntax, but do need the package.
-  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax  src/client.byte
-*)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
@@ -11,8 +5,6 @@ let return = Lwt.return
 module M = Message
 module U = Util
 module L = List
-
-
 
 
 type whoot_t =
@@ -81,27 +73,11 @@ let rec loop (whoot : whoot_t ) =
       else
         whoot
     in
- 
     (* more jobs to process? *) 
     if L.length whoot.jobs = 0 then
       log "finishing - no more jobs to run!!"
-      >> return ()
     else
       loop whoot 
-
-(*
-let loop' whoot =
-  Lwt.catch (
-    fun () -> loop whoot 
-  )
-  (fun exn ->
-    (* must close *)
-    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-    log ("finishing - exception " ^ s )
-    >> (* just exist cleanly *)
-      return ()
-  )
-*)
 
 
 let start () = 
@@ -122,7 +98,6 @@ let start () =
         last_block_received_time = [];
       } : U.my_app_state )
     in
-
     let whoot = {
       state = Some state; 
       jobs = P2p.create(); 
@@ -138,8 +113,8 @@ let run f =
       f
   (fun exn ->
     (* must close *)
-    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
-    log ("finishing - exception " ^ s )
+    let s = Printexc.to_string exn ^ "\n" ^ (Printexc.get_backtrace ()) in
+    log ("finished with exception " ^ s )
     >> (* just exist cleanly *)
       return ()
   )
@@ -147,3 +122,16 @@ let run f =
 
 let () = run start 
 
+(*
+let loop' whoot =
+  Lwt.catch (
+    fun () -> loop whoot 
+  )
+  (fun exn ->
+    (* must close *)
+    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
+    log ("finishing - exception " ^ s )
+    >> (* just exist cleanly *)
+      return ()
+  )
+*)
