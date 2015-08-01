@@ -16,9 +16,12 @@ let log s = U.write_stdout s >> return U.Nop
 (* initial version message to send *)
 let initial_version network =
   let payload = M.encodeVersion {
-
+    
       (* protocol = 70002;  bitcoin/litecoin  match network with ... *)
-      protocol = 70003;
+      protocol = (match network with 
+        | M.Bitcoin | M.Litecoin -> 70002
+        | M.Dogecoin -> 70003
+        ) ;
 
       nlocalServices = 1L; (* doesn't seem to like non- full network 0L *)
       nTime = 1424343054L;
