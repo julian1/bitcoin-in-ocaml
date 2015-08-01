@@ -13,6 +13,7 @@ create table block(
   height integer not null
 );
 create index on block(hash);
+create index on block(height); -- for leaves max...
 
 
 create table previous (
