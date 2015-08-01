@@ -30,6 +30,7 @@ let log s = U.write_stdout s
 
 
 let rec loop (whoot : whoot_t ) =
+  (* must be tail-recursive *)
   (* select completed jobs *)            
   Lwt.nchoose_split whoot.jobs
   >>= fun (complete, incomplete) ->
@@ -82,13 +83,13 @@ let rec loop (whoot : whoot_t ) =
     in
  
     (* more jobs to process? *) 
-    if L.length whoot.jobs > 0 then
-      loop whoot 
-    else
+    if L.length whoot.jobs = 0 then
       log "finishing - no more jobs to run!!"
       >> return ()
+    else
+      loop whoot 
 
-
+(*
 let loop' whoot =
   Lwt.catch (
     fun () -> loop whoot 
@@ -100,44 +101,48 @@ let loop' whoot =
     >> (* just exist cleanly *)
       return ()
   )
-
-
-let () =
-  Lwt_main.run U.(
-
-    (* we'll have to think about db transactions *) 
-    log "connecting and create db"
-    >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
-    >>= fun db ->
-      Processblock.create_prepared_stmts db 
-    >>
-      (* we actually need to read it as well... as write it... *)
-      let whoot = {
-        state = Some ({
-          network = Dogecoin;
-          connections = [];
-          db = db; 
-          (* should be hidden ?? *)
-          block_inv_pending  = None;
-          blocks_on_request = U.SS.empty;
-          last_block_received_time = [];
-        } : U.my_app_state )
-        ; 
-        jobs = P2p.create(); 
-        queue = Myqueue.empty ;
-      }  
-      in
-          loop' whoot 
-  )
-
-
-(*
-let update state e =
-  let state = P2p.update state e in
-  let state = Chain.update state e in
-  let state = Seq.update state e in
-  state
 *)
 
 
+let start () = 
+  (* we'll have to think about db transactions *) 
+  log "connecting and create db"
+  >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
+  >>= fun db ->
+    Processblock.create_prepared_stmts db 
+  >>
+    (* we actually need to read it as well... as write it... *)
+    let whoot = {
+      state = Some ({
+        network = Dogecoin;
+        connections = [];
+        db = db; 
+        (* should be hidden ?? *)
+        block_inv_pending  = None;
+        blocks_on_request = U.SS.empty;
+        last_block_received_time = [];
+      } : U.my_app_state )
+      ; 
+      jobs = P2p.create(); 
+      queue = Myqueue.empty ;
+    }  
+    in
+      loop whoot 
+
+
+let run f =
+  Lwt_main.run (
+    Lwt.catch (
+      f
+  )
+  (fun exn ->
+    (* must close *)
+    let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
+    log ("finishing - exception " ^ s )
+    >> (* just exist cleanly *)
+      return ()
+  )
+)
+
+let () = run start 
 

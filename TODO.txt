@@ -1,7 +1,22 @@
 
 todo
+
+  - check tail calls of main functions 
+    - to check whether a tail is tail-call or not, you can use OCaml tools for
+      that: compiling with the -annot option will produce an annotation file
+      foo.annot (if your source was foo.ml) 
+
+    - change process block (eg. check, add acc difficulty, height with) with process block
+        - rules ... block. 
+        - rules -> store_block (passed as function)
+
+  - actually use the merkle check on blocks - to guanarantee the txs are right.
+  
   - peers in the db. just select at random like leaves. eg. if conns < 8, select random peer 
     -this then gets the configuration out of p2p.
+
+  - should change p2p, to always attempt connection when get new peer. and then drop on connection
+    if have enough.
 
   - get micro-ecc working with native code library linking
 
