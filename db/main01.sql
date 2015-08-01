@@ -126,5 +126,13 @@ create index on signature(input_id);
 create index on signature(r);
 create index on signature(sig_type);
 
+
+create table peer( 
+  id serial primary key, 
+  addr text not null,  
+  port int not null 
+);
+
+
 commit;
 
