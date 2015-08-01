@@ -112,8 +112,7 @@ let start () =
     Processblock.create_prepared_stmts db 
   >>
     (* we actually need to read it as well... as write it... *)
-    let whoot = {
-      state = Some ({
+    let state = ({
         network = Dogecoin;
         connections = [];
         db = db; 
@@ -122,7 +121,10 @@ let start () =
         blocks_on_request = U.SS.empty;
         last_block_received_time = [];
       } : U.my_app_state )
-      ; 
+    in
+
+    let whoot = {
+      state = Some state; 
       jobs = P2p.create(); 
       queue = Myqueue.empty ;
     }  
