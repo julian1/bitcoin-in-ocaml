@@ -132,7 +132,6 @@ let get_message (conn : U.connection ) =
 - app state is effectively a fold over the network events...
 *)
 
-(* let update connections e = *)
 
 
 
@@ -146,17 +145,6 @@ let update state e =
     | U.GotConnection conn ->
       log "whoot got connection"
       >> 
-      let state = { state with
-        connections = conn :: state.connections; 
-      } in
-
-        PG.prepare state.db "insert into peer(addr,port) values ($1, $2)" ()
-        >> PG.execute state.db ~params:[
-          Some (PG.string_of_bytea conn.addr );
-          Some (PG.string_of_int conn.port );
-        ] ()
-      >> 
-
       let jobs = [
         log @@ U.format_addr conn ^  " got connection "  ^
           ", connections now " ^ ( string_of_int @@ List.length state.connections )
@@ -190,14 +178,48 @@ let update state e =
       match header.command with
 
         | "version" ->
-          let jobs = [
-            log @@ U.format_addr conn ^ " got version message"
-            >> U.send_message conn (initial_verack state.network)
-            >> log @@ "*** sent verack " ^ U.format_addr conn
-            ;
-            get_message conn
-          ] in
-          return @@ U.SeqJobFinished (state, jobs)
+
+          log @@ U.format_addr conn ^ " got version message"
+          >>
+          (* record the new connection TODO if doesn't exist *)
+            PG.prepare state.db "insert into peer(addr,port) values ($1, $2) where not exists ( select 1 from peer where addr = $1) " ()
+          >> PG.execute state.db ~params:[
+              Some (PG.string_of_bytea conn.addr );
+              Some (PG.string_of_int conn.port );
+            ] ()
+            (* and we want to record *)
+          >> 
+            let drop = L.length state.connections >= 8  in
+            let state, jobs =
+              if drop then 
+                state, [
+                    (match Lwt_unix.state conn.fd with
+                      | Opened -> ( Lwt_unix.close conn.fd ) >> return () 
+                      | _ -> return ()
+                    )
+                    >> log @@ "*** dropping conn " ^ U.format_addr conn
+                ] 
+              else 
+                { state with
+                  connections = conn :: state.connections; 
+                } ,
+                [
+                  U.send_message conn (initial_verack state.network)
+                  >> log @@ "*** sent verack " ^ U.format_addr conn
+                  ; 
+                  log @@ "*** adding conn " ^ U.format_addr conn
+                  >> get_message conn
+              ]
+            in
+
+(*            let jobs = [
+              log @@ U.format_addr conn ^ " got version message"
+              >> U.send_message conn (initial_verack state.network)
+              >> log @@ "*** sent verack " ^ U.format_addr conn
+              ;
+              get_message conn
+            ] in
+*)          return @@ U.SeqJobFinished (state, jobs)
 
         | "verack" ->
           let jobs = [
@@ -209,6 +231,8 @@ let update state e =
           return @@ U.SeqJobFinished (state, jobs)
 
         | "addr" ->
+            (* on unknown peer - try to make a connection to a new peer *)
+
             let pos, count = M.decodeVarInt payload 0 in
             (* should take more than the first *)
             let pos, _ = M.decodeInteger32 payload pos in (* timeStamp  *)
@@ -221,20 +245,28 @@ let update state e =
               ] (* ^ ":" ^ soi h.port *)
             in
             let a = formatAddress addr in
-            (* ignore, same addr instances on different ports *)
-            let already_have = L.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            (* ignore, same addr instances on different ports - hmmm we should look up in db first *)
+
+            PG.prepare state.db "select exists ( select 1 from peer where addr = $1) " ()
+            >> PG.execute state.db ~params:[
+                Some (PG.string_of_bytea conn.addr );
+              ] ()
+            >>= fun rows -> 
+              let already_have = match rows with 
+                | (Some "t"::[])::_ -> true
+                | (Some "f"::[])::_ -> false 
             in
-            if already_have || L.length state.connections >= 8 then
+            (* let already_have = L.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
+            in *)
+            if already_have (* || L.length state.connections >= 8 *) then
               let jobs = [
-                  log @@ U.format_addr conn ^ " addr - already got or ignore "
-                    ^ a ^ ":" ^ string_of_int addr.port ;
+                  log @@ U.format_addr conn ^ " addr - already got conn " ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
               ] in 
               return @@ U.SeqJobFinished (state, jobs)
             else
               let jobs = [ 
-                 log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count )
-                    ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
+                 log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count ) ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
                 ] in 
