@@ -49,9 +49,11 @@ type mytype2 =
 
 
 
-let process_block (x : mytype2) payload =
+let process_block x  payload =
   Lwt.catch (
-    fun () -> return x (* Processblock.process_block x.db payload *)
+    fun () -> 
+      Processblock.process_block x.db payload 
+      >> return x 
   )
   (fun exn ->
     PG.rollback x.db
