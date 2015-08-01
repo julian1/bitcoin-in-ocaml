@@ -835,7 +835,7 @@ type network =
   | Litecoin 
   | Dogecoin
 
-
+(* perhaps move out of here? *) 
 let get_magic = function 
   | Bitcoin -> 0xd9b4bef9 
   | Litecoin -> 0xdbb6c0fb 
