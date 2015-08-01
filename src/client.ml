@@ -132,9 +132,8 @@ let start () =
 
 let run f =
   Lwt_main.run (
-    Lwt.catch (
+    Lwt.catch 
       f
-  )
   (fun exn ->
     (* must close *)
     let s = Printexc.to_string exn  ^ "\n" ^ (Printexc.get_backtrace () ) in
