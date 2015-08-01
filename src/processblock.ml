@@ -107,7 +107,8 @@ let create_prepared_stmts db =
     ]
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
-
+      
+      (* should be able to aggregate these three into single prepared stmt *)
       (* $1 hash, $2 previous hash, $3 time *)
       ("insert_block", "
           insert into block(hash,time, height)
@@ -294,9 +295,9 @@ let process_input x (index, input, hash, tx_id) =
 
   let (input : M.tx_in) = input in
 
-    log @@ "input " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index 
+  (*  log @@ "input " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index 
   >>
-
+  *)
 
 
   (* let process_input x (i, input, hash,tx_id) = *)
@@ -328,8 +329,9 @@ let process_input x (index, input, hash, tx_id) =
 let process_tx x (block_id,hash,tx) =
   let (tx : M.tx) = tx in
 
-    log @@ "tx " ^ M.hex_of_string hash 
+  (*  log @@ "tx " ^ M.hex_of_string hash 
   >>
+  *)
 
 
     (* TODO we have to lookup the tx first... rather than just insert and return the tx_id  
