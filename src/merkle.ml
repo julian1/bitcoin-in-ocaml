@@ -15,15 +15,22 @@ let compare a b =
   else -1
 *)
 
-(* TODO could get rid of the rev by doing it once at the start and finish *)
+(* TODO should be able to get rid of all the reversing by doing once at the start and finish *)
 
-let hash = M.strrev <| M.sha256d 
+(*
 
-let concat_hash a b = hash (M.strrev a ^ M.strrev b) 
-(* let concat_hash a b = M.sha256d ( a ^  b) *)
+
+  let concat_hash a b = M.sha256d a ^  b
+and
+  let lst = L.map M.strrev lst in 
+  let e = root' lst in
+  M.strrev e 
+*)
+
+
+let concat_hash a b = M.strrev a ^ M.strrev b |> M.sha256d |> M.strrev
 
 let root lst =
- 
   let rec root' lst =
     match lst with
       | e :: [] -> e
@@ -45,6 +52,7 @@ let root lst =
         let lst = L.rev lst in
         root' lst
   in
-  (* let lst = L.map M.strrev lst in *)
-  root' lst
+  root' lst 
+
+
 
