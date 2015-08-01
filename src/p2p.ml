@@ -181,13 +181,13 @@ let update state e =
 
           log @@ U.format_addr conn ^ " got version message"
           >>
-          (* record the new connection TODO if doesn't exist *)
-            PG.prepare state.db "insert into peer(addr,port) values ($1, $2) where not exists ( select 1 from peer where addr = $1) " ()
+          (* record the new ipeer if it doesn't exist *)
+
+            PG.prepare state.db "insert into peer(addr,port) select $1, $2 where not exists ( select 1 from peer where addr = $1) " ()
           >> PG.execute state.db ~params:[
               Some (PG.string_of_bytea conn.addr );
               Some (PG.string_of_int conn.port );
             ] ()
-            (* and we want to record *)
           >> 
             let drop = L.length state.connections >= 8  in
             let state, jobs =
@@ -232,6 +232,9 @@ let update state e =
 
         | "addr" ->
             (* on unknown peer - try to make a connection to a new peer *)
+
+            log @@ U.format_addr conn ^ " got addr message"
+            >>
 
             let pos, count = M.decodeVarInt payload 0 in
             (* should take more than the first *)
