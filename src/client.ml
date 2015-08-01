@@ -42,18 +42,6 @@ log "running myupdate"
 *) 
 
 
-let run () =
-
-  Lwt_main.run U.(
-
-    (* we'll have to think about db transactions *) 
-    log "connecting and create db"
-    >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
-    >>= fun db ->
-      Processblock.create_prepared_stmts db 
-    >>
-       (
-
         let rec loop whoot =
 
           Lwt.catch (
@@ -116,6 +104,7 @@ let run () =
               else
                 log "finishing - no more jobs to run!!"
                 >> return ()
+
           )
             (fun exn ->
               (* must close *)
@@ -124,8 +113,18 @@ let run () =
               >> (* just exist cleanly *)
                 return ()
             )
-          in
 
+
+let run () =
+
+  Lwt_main.run U.(
+
+    (* we'll have to think about db transactions *) 
+    log "connecting and create db"
+    >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
+    >>= fun db ->
+      Processblock.create_prepared_stmts db 
+    >>
         (* we actually need to read it as well... as write it... *)
 
         let whoot = {
@@ -141,10 +140,11 @@ let run () =
           ; 
           jobs = P2p.create(); 
           queue = Myqueue.empty ;
-        } in
-        loop whoot 
-        )
+        }  
+        in
+          loop whoot 
   )
+
 
 (*
 let update state e =
