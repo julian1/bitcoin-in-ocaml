@@ -9,8 +9,6 @@ module S = String
 
 let (<|) f g x = f(g(x))
 
-let hash_ = M.strrev <| M.sha256d 
-
 
 type whoot_t =
 {
@@ -23,6 +21,8 @@ let log s = U.write_stdout s
 
 
 let check_block hash s =
+  let hash_ = M.strrev <| M.sha256d in
+
   let _, header = M.decodeBlock s 0 in
   let txs = M.decode_block_txs s in
   let hash_of_tx tx = M.( S.sub s tx.pos tx.length |> hash_) in

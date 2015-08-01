@@ -454,6 +454,8 @@ let process_block (db : int PG.t ) payload =
     (* TODO exceptions and rollback..., or will calling commit here cause an exception if invalid?  *)
   >>= fun x ->
     PG.commit x.db
-  >> return x
+
+  (* return null here? or the db input arg? *)
+  >> return ()
 
 
