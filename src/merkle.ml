@@ -15,31 +15,41 @@ let compare a b =
   else -1
 *)
 
-(* TODO could get rid of the rev by doing it once at the start and finish *)
+(* TODO should be able to get rid of all the reversing by doing once at the start and finish *)
 
-let hash = M.strrev <| M.sha256d 
+(*
+  let concat_hash a b = M.sha256d a ^  b
+and
+  let lst = L.map M.strrev lst in
+  let e = root' lst in
+  M.strrev e
+*)
 
-let concat_hash a b = hash (M.strrev a ^ M.strrev b)
 
+let concat_hash a b = M.strrev a ^ M.strrev b |> M.sha256d |> M.strrev
 
-let rec root lst =
-  match lst with
-    | e :: [] -> e
-    | lst ->
-      let lst =
-        if (L.length lst) mod 2 = 1 then
-          (* duplicate last element *)
-          let lst  = L.rev lst in
-          L.hd lst :: lst |> L.rev
-        else
-          lst
-      in
-      let aggregate (lst,previous) e =
-        match previous with
-          | None -> lst, Some e
-          | Some e2 -> concat_hash e2 e::lst, None
-      in
-      let lst, None = L.fold_left aggregate ([],None) lst in
-      let lst = L.rev lst in
-      root lst
+let root lst =
+  let rec root' lst =
+    match lst with
+      | e :: [] -> e
+      | lst ->
+        let lst =
+          (* duplicate last element if odd number *)
+          if (L.length lst) mod 2 = 1 then
+            let lst  = L.rev lst in
+            L.hd lst :: lst |> L.rev
+          else
+            lst
+        in
+        let aggregate (lst,previous) e =
+          match previous with
+            | None -> lst, Some e
+            | Some e2 -> concat_hash e2 e::lst, None
+        in
+        let lst, None = L.fold_left aggregate ([],None) lst in
+        let lst = L.rev lst in
+        root' lst
+  in
+  root' lst
+
 

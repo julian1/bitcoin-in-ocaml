@@ -1,9 +1,3 @@
-(*
-  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax -syntax camlp4o,lwt.syntax src/client.byte
-
-  we don't need the syntax, but do need the package.
-  corebuild -I src  -package pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax  src/client.byte
-*)
 
 let (>>=) = Lwt.(>>=)
 let return = Lwt.return
@@ -11,8 +5,6 @@ let return = Lwt.return
 module M = Message
 module U = Util
 module L = List
-
-
 
 
 type whoot_t =
@@ -30,6 +22,7 @@ let log s = U.write_stdout s
 
 
 let rec loop (whoot : whoot_t ) =
+  (* must be tail-recursive *)
   (* select completed jobs *)            
   Lwt.nchoose_split whoot.jobs
   >>= fun (complete, incomplete) ->
@@ -80,15 +73,56 @@ let rec loop (whoot : whoot_t ) =
       else
         whoot
     in
- 
     (* more jobs to process? *) 
-    if L.length whoot.jobs > 0 then
-      loop whoot 
-    else
+    if L.length whoot.jobs = 0 then
       log "finishing - no more jobs to run!!"
-      >> return ()
+    else
+      loop whoot 
 
 
+let start () = 
+  log "connecting to db"
+  >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
+  >>= fun db ->
+    Processblock.create_prepared_stmts db 
+  >>
+    (* we actually need to read it as well... as write it... *)
+    let state = ({
+        network = Dogecoin;
+        connections = [];
+        pending_connections = 0;
+        db = db; 
+        (* should be hidden ?? *)
+        block_inv_pending  = None;
+        blocks_on_request = U.SS.empty;
+        last_block_received_time = [];
+      } : U.my_app_state )
+    in
+    let whoot = {
+      state = Some state; 
+      jobs = [ return U.Start ] ; (* Nop is filtered rather than propagated *) 
+      queue = Myqueue.empty ;
+    }  
+    in
+      loop whoot 
+
+
+let run f =
+  Lwt_main.run (
+    Lwt.catch 
+      f
+  (fun exn ->
+    (* must close *)
+    let s = Printexc.to_string exn ^ "\n" ^ (Printexc.get_backtrace ()) in
+    log ("finished with exception " ^ s )
+    >> (* just exist cleanly *)
+      return ()
+  )
+)
+
+let () = run start 
+
+(*
 let loop' whoot =
   Lwt.catch (
     fun () -> loop whoot 
@@ -100,44 +134,4 @@ let loop' whoot =
     >> (* just exist cleanly *)
       return ()
   )
-
-
-let () =
-  Lwt_main.run U.(
-
-    (* we'll have to think about db transactions *) 
-    log "connecting and create db"
-    >> U.PG.connect ~host:"127.0.0.1" ~database: "dogecoin" ~user:"meteo" ~password:"meteo" ()
-    >>= fun db ->
-      Processblock.create_prepared_stmts db 
-    >>
-      (* we actually need to read it as well... as write it... *)
-      let whoot = {
-        state = Some ({
-          network = Dogecoin;
-          connections = [];
-          db = db; 
-          (* should be hidden ?? *)
-          block_inv_pending  = None;
-          blocks_on_request = U.SS.empty;
-          last_block_received_time = [];
-        } : U.my_app_state )
-        ; 
-        jobs = P2p.create(); 
-        queue = Myqueue.empty ;
-      }  
-      in
-          loop' whoot 
-  )
-
-
-(*
-let update state e =
-  let state = P2p.update state e in
-  let state = Chain.update state e in
-  let state = Seq.update state e in
-  state
 *)
-
-
-

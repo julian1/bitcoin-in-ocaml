@@ -42,6 +42,9 @@ let map_m f lst =
 *)
 
 
+(* TODO get rid of this and just pass the db ref only 
+    else only use this in this module ...
+*)
 type mytype =
 {
   block_count : int;
@@ -104,10 +107,12 @@ let create_prepared_stmts db =
     ]
 
     >>= fun db ->  fold_m (fun db (name,query) -> prepare db ~name ~query () >> return db ) db [
-
+      
+      (* should be able to aggregate these three into single prepared stmt *)
+      (* $1 hash, $2 previous hash, $3 time *)
       ("insert_block", "
-          insert into block(hash,time)
-          select $1, to_timestamp($2) at time zone 'UTC'
+          insert into block(hash,time, height)
+          select $1, to_timestamp($3) at time zone 'UTC', (select height+1 from block b where b.hash = $2) 
           returning id
       ");
  
@@ -289,6 +294,12 @@ let process_input_script x (input_id, input) =
 let process_input x (index, input, hash, tx_id) =
 
   let (input : M.tx_in) = input in
+
+  (*  log @@ "input " ^ M.hex_of_string input.previous ^ " " ^ string_of_int input.index 
+  >>
+  *)
+
+
   (* let process_input x (i, input, hash,tx_id) = *)
   (* why can't we pattern match on string here ? eg. function *)
   (* so we have to look up the tx hash, which means we need an index on it *)
@@ -317,6 +328,11 @@ let process_input x (index, input, hash, tx_id) =
 
 let process_tx x (block_id,hash,tx) =
   let (tx : M.tx) = tx in
+
+  (*  log @@ "tx " ^ M.hex_of_string hash 
+  >>
+  *)
+
 
     (* TODO we have to lookup the tx first... rather than just insert and return the tx_id  
       the insertion of the tx, should be done completely before we insert the tx_block ? 
@@ -365,9 +381,17 @@ let process_tx x (block_id,hash,tx) =
     >>*) return x 
 
 
+(*
+  ok, to check difficulty - we'll have to take db actions .... height etc.
+*)
 
+let process_block (db : int PG.t ) payload =
 
-let process_block x payload =
+  let x = {
+      block_count = 0;
+      db = db;
+    }
+  in
   let _, block  = M.decodeBlock payload 0 in
     let hash = M.decode_block_hash payload in
     log @@ "begin insert_block " ^ M.hex_of_string hash
@@ -383,9 +407,11 @@ let process_block x payload =
     function
     | (Some "t" ::_ )::_ ->
         begin
+        (* TODO the following three stmts could be wrapped up in one prepared stmt *)
           PG.execute x.db ~name:"insert_block" ~params:[
-            Some (PG.string_of_bytea hash );
-            Some (PG.string_of_int block.nTime );
+            Some (PG.string_of_bytea hash);
+            Some (PG.string_of_bytea block.previous);  (* required for height *)
+            Some (PG.string_of_int block.nTime);
           ] ()
         >>= fun rows ->
           let block_id = decode_id rows in
@@ -430,8 +456,11 @@ let process_block x payload =
       end 
 *)
     end
+    (* TODO exceptions and rollback..., or will calling commit here cause an exception if invalid?  *)
   >>= fun x ->
     PG.commit x.db
-  >> return x
+
+  (* return null here? or the db input arg? *)
+  >> return ()
 
 

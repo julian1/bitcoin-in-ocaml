@@ -13,7 +13,7 @@ drop view if exists  _height;
 
 create view _leaves as
 select
-  b.id as id,
+  b.id as block_id,
   b.hash as hash
   -- p.*
 from block b
@@ -22,8 +22,8 @@ where p.id is null
 ;
 
 
-create view _height as
-with recursive t( id, height ) AS (
+create view _height_dynamic as
+with recursive t( id, height_ ) AS (
   select (
     -- tree root
     select block.id 
@@ -33,25 +33,37 @@ with recursive t( id, height ) AS (
   ), 0
   UNION ALL
   SELECT 
-    block_id, t.height + 1
+    block_id, t.height_ + 1
   FROM block
   join previous on previous.block_id = block.id 
   join t on t.id = previous.block_previous_id
 )
-select t.height, block.* 
+select t.height_, block.* 
 FROM t join block on block.id = t.id;
 
 
 
-create view _leaves2 as
+create view _leaves2_dynamic as
 select 
   now() - time as when, 
   time, 
-  _height.height,
+  _height_dynamic.height,
   _leaves.hash,
-  _leaves.id as block_id
+  _leaves.block_id 
 from _leaves
-join _height on _height.id = _leaves.id 
+join _height_dynamic on _height_dynamic.id = _leaves.block_id 
+-- order by _height.height desc
+;
+
+create view _leaves2 as
+select 
+  now() - block.time as when, 
+  block.time, 
+  block.height,
+  block.hash,
+  block.id as block_id
+from _leaves
+join block on block.id = _leaves.block_id 
 -- order by _height.height desc
 ;
 

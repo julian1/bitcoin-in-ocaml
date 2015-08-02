@@ -65,6 +65,5 @@ let test3 ctx =
 
 
 let tests =
-   "message">::: [ "test1">:: test1;  "test2">:: test2; "test3">::test3; ]
-
+   "message">::: [ "test1">:: test1;  "test2">:: test2; "test3">::test3; ] 
 

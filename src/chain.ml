@@ -182,8 +182,11 @@ let manage_chain1 (state : U.my_app_state) e    =
 
         | "block" -> (
           (* we received a block *)
-          let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in
-          let _, header = M.decodeBlock payload 0 in
+
+          let hash = M.decode_block_hash payload in
+ 
+          (* let hash = (M.strsub payload 0 80 |> M.sha256d |> M.strrev ) in *)
+          (*let _, header = M.decodeBlock payload 0 in *)
           (* update the time that we got a valid block from the peer *)
           let last =
               (* update the fd to indicate we got a good block, TODO tidy this 
@@ -193,25 +196,28 @@ let manage_chain1 (state : U.my_app_state) e    =
               ({ fd = conn.fd; t = now ;
               } : U.ggg )::last
           in
-          (* remove from blocks on request *)
+          (* remove from blocks on request - should always do this whether valid or invalid *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
-          let x = Processblock.( {
-              block_count = 0;
-              db = state.db;
-            })
-          in
-          (* OK. now we have to run this computation inline *) 
-          log "\nbegin writing db"
-          >> Processblock.process_block x payload 
-          >> log "done writing db"
+
+          Rules.validate_block state.db payload  
+          >>= (function
+            | Some valid -> ( 
+              (* OK. now we have to run this computation inline *) 
+              (* TODO these log statements are not in jobs and should'nt return Nop *) 
+              log "\nbegin writing db"
+              >> Processblock.process_block state.db payload 
+              >> log "done writing db"
+              ) 
+            | None -> return U.Nop 
+            ) 
           >>
           let state = { state with
             blocks_on_request = blocks_on_request;
             last_block_received_time = last;
 			    } in
           let jobs = [ 
-              log @@ U.format_addr conn ^ " block " ^ M.hex_of_string hash ^ 
-              " on request " ^ string_of_int @@ U.SS.cardinal blocks_on_request 
+              log @@ U.format_addr conn ^ " received block " ^ M.hex_of_string hash ^ 
+              " (on request " ^ (string_of_int @@ U.SS.cardinal blocks_on_request ) ^ ")" 
           ] 
           in
           return (U.SeqJobFinished (state, jobs ))

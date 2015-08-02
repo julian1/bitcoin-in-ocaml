@@ -9,9 +9,11 @@ begin;
 create table block(
   id serial primary key, 
   hash bytea unique not null, 
-  time timestamptz not null
+  time timestamptz not null,
+  height integer not null
 );
 create index on block(hash);
+create index on block(height); -- for leaves max...
 
 
 create table previous (
@@ -123,6 +125,14 @@ create table signature(
 create index on signature(input_id);
 create index on signature(r);
 create index on signature(sig_type);
+
+
+create table peer( 
+  id serial primary key, 
+  addr text not null,  
+  port int not null 
+);
+
 
 commit;
 
