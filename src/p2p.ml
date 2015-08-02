@@ -203,6 +203,8 @@ let manage_p2p1 state e =
 
     | U.GotConnectionError msg ->
       let jobs = [ log @@ "connection error " ^ msg ] in
+
+      let state = { state with pending_connections = pred state.pending_connections } in 
       return (U.SeqJobFinished (state, jobs))
 
     | U.GotMessageError (conn , msg) ->
@@ -309,6 +311,7 @@ let manage_p2p1 state e =
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
                 ] in
+              let state = { state with pending_connections = succ state.pending_connections } in 
               return @@ U.SeqJobFinished (state, jobs)
 
         | s ->

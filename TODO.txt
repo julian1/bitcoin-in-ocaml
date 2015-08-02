@@ -7,6 +7,14 @@ todo
     rather than trying to bounce messages, and record details across different network events, .... 
       - then we can get the version.agent etc... 
 
+  - IMPORTANT - also apply the above strategy to combine an inv request, and response against a peer?
+      - would mean that don't require solicited calculations etc inv pending etc?
+      - not sure when synched a new block can come from anywhere?
+      - also it's up to a peer to not respond to an inv message if it doesn't have data.
+
+  - should be storing ggg in the peer. eg. last_valid_block last_valid_inv ... just so we can 
+      monitor that the peer is responding. 
+
   - catch sig interupt - and clean shutdown, closing sockets
 
   - only add peer on receiving version message, and add client string to db.
