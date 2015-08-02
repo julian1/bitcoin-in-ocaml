@@ -147,31 +147,40 @@ let get_message (conn : U.connection ) =
    - db lookup to get peers.
   - another issue - is that if we don't have enough peers in the db at all. we
     don't want to do a lookup every second...
-
   - hmmm no, i think a pending connection count
+
+  - IMPORTANT rather than keep complicated pending count. just do it on 1 minute intervals ... 
+      first is to try to get connection...
 *)
 
 let manage_p2p2 state e =
   let state = (state : U.my_app_state) in
-(
-  if L.length state.connections < 8  then
-    (* need to insert current conns to get unique
 
-      select id,addr,port from peer where addr not in ( '49.116.148.241', '37.49.9.64' ) order by random();
-    *)
-    log "\n*****************8\n db lookup"
-    >> PG.prepare state.db "select addr,port from peer order by random() limit 1" ()
-    >> PG.execute state.db ~params:[ ] ()
-    >>= fun rows ->
-      let lst = L.map (function | (Some addr :: Some port :: []) -> addr,port)  rows in
+    let required = 8 - L.length state.connections in 
 
-    return ()
-  else
-    return ()
-)
-  >>
+    if required > 0 then
+      (* need to insert current conns to get unique
+        select id,addr,port from peer where addr not in ( '49.116.148.241', '37.49.9.64' ) order by random();
+        ok, somehow we need pending. Ahhh why not test if the queue is empty???? 
 
-  return (U.SeqJobFinished (state, []))
+        - may stall if no verack ? no it will get cleaned out...
+        - we kind of also want to avoid reconnecting to pending... 
+      *)
+      log "\n*****************8\n db lookup"
+      >> PG.prepare state.db "select addr,port from peer order by random() limit $1" ()
+      >> PG.execute state.db ~params:[
+          Some (PG.string_of_int required  );
+         ] ()
+      >>= fun rows ->
+        let lst = L.map (function | (Some addr :: Some port :: []) -> 
+          addr, PG.int_of_string port) rows 
+        in
+        let jobs = L.map (fun (addr,port) -> get_connection addr port ) lst in 
+        return @@ U.SeqJobFinished (state, jobs)
+    else
+      return @@ U.SeqJobFinished (state, [])
+
+
 
 
 
@@ -211,27 +220,23 @@ let manage_p2p1 state e =
 
     | U.GotMessage (conn, header, raw_header, payload) ->
       match header.command with
-      
           
         | "version" ->
-
           log @@ U.format_addr conn ^ " got version ";
-          >>
-          let jobs = [
-
-            U.send_message conn (initial_verack state.network)
-            ; 
-            get_message conn
-          ] in
-          return @@ U.SeqJobFinished (state, jobs)
+          >> 
+            let jobs = [
+              U.send_message conn (initial_verack state.network)
+              ; 
+              get_message conn
+            ] in
+            return @@ U.SeqJobFinished (state, jobs)
 
 
         | "verack" ->
-          (* actually we should only do this on verack *)
+          (* handshake complete *)
           log @@ U.format_addr conn ^ " got verack message"
           >>
-          (* record the new peer if it doesn't exist *)
-
+          (* record peer if not recorded *)
             PG.prepare state.db "insert into peer(addr,port) select $1, $2 where not exists ( select 1 from peer where addr = $1) " ()
           >> PG.execute state.db ~params:[
               Some (PG.string_of_bytea conn.addr );
@@ -254,7 +259,6 @@ let manage_p2p1 state e =
                 ]
             in
             return @@ U.SeqJobFinished (state, jobs)
-
 
 
         | "addr" ->
