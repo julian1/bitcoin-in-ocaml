@@ -211,9 +211,25 @@ let manage_p2p1 state e =
 
     | U.GotMessage (conn, header, raw_header, payload) ->
       match header.command with
-
+      
+          
         | "version" ->
-          log @@ U.format_addr conn ^ " got version message"
+          let jobs = [
+            log @@ U.format_addr conn ^ " got version ";
+
+            U.send_message conn (initial_verack state.network)
+            >> log @@ "*** sent verack " ^ U.format_addr conn
+            ; 
+            get_message conn
+          ] in
+          return @@ U.SeqJobFinished (state, jobs)
+
+
+
+
+        | "verack" ->
+          (* actually we should only do this on verack *)
+          log @@ U.format_addr conn ^ " got verack message"
           >>
           (* record the new peer if it doesn't exist *)
 
@@ -229,9 +245,6 @@ let manage_p2p1 state e =
                   connections = conn :: state.connections;
                 } ,
                 [
-                  U.send_message conn (initial_verack state.network)
-                  >> log @@ "*** sent verack " ^ U.format_addr conn
-                  ;
                   log @@ "*** adding conn " ^ U.format_addr conn
                   >> get_message conn
               ]
@@ -240,18 +253,10 @@ let manage_p2p1 state e =
                     close_fd conn.fd
                     >> log @@ "*** dropping conn " ^ U.format_addr conn
                 ]
-
             in
+            return @@ U.SeqJobFinished (state, jobs)
 
-(*            let jobs = [
-              log @@ U.format_addr conn ^ " got version message"
-              >> U.send_message conn (initial_verack state.network)
-              >> log @@ "*** sent verack " ^ U.format_addr conn
-              ;
-              get_message conn
-            ] in
-*)          return @@ U.SeqJobFinished (state, jobs)
-
+(*
         | "verack" ->
           let jobs = [
             (* should be 3 separate jobs? *)
@@ -260,6 +265,8 @@ let manage_p2p1 state e =
             get_message conn
           ] in
           return @@ U.SeqJobFinished (state, jobs)
+*)
+
 
         | "addr" ->
             (* on unknown peer - try to make a connection to a new peer *)
