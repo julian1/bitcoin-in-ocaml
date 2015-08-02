@@ -102,6 +102,8 @@ type my_app_state =
 
   connections : connection list ;
 
+  pending_connections : int ;
+
   (* set when inv request made to peer *)
   block_inv_pending  : (Lwt_unix.file_descr * float ) option ;
 
@@ -127,6 +129,7 @@ type my_event =
 
   | SeqJobFinished of my_app_state * my_event Lwt.t list
   | Nop
+  | Start
   | JJ of my_event
 
 

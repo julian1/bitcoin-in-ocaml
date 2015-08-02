@@ -143,21 +143,20 @@ let get_message (conn : U.connection ) =
 
 (* hmmmmm
 
-  - if we had a timer job, firing once every second - then we could use to control
-   - db lookup to get peers.
-  - another issue - is that if we don't have enough peers in the db at all. we
-    don't want to do a lookup every second...
-  - hmmm no, i think a pending connection count
-
   - IMPORTANT rather than keep complicated pending count. just do it on 1 minute intervals ... 
       first is to try to get connection...
+
+  - problem is peers that may send data (and therefore don't get closed), but never complete the handshake...
+
+  - we could return the time ...
 *)
 
 let manage_p2p2 state e =
   let state = (state : U.my_app_state) in
 
-    let required = 8 - L.length state.connections in 
-
+    log @@ "*** whoot pending " ^ string_of_int state.pending_connections
+    >> 
+    let required = 8 - (L.length state.connections + state.pending_connections) in 
     if required > 0 then
       (* need to insert current conns to get unique
         select id,addr,port from peer where addr not in ( '49.116.148.241', '37.49.9.64' ) order by random();
@@ -166,7 +165,7 @@ let manage_p2p2 state e =
         - may stall if no verack ? no it will get cleaned out...
         - we kind of also want to avoid reconnecting to pending... 
       *)
-      log "\n*****************8\n db lookup"
+      log "\n*****************\n db lookup peers"
       >> PG.prepare state.db "select addr,port from peer order by random() limit $1" ()
       >> PG.execute state.db ~params:[
           Some (PG.string_of_int required  );
@@ -176,12 +175,10 @@ let manage_p2p2 state e =
           addr, PG.int_of_string port) rows 
         in
         let jobs = L.map (fun (addr,port) -> get_connection addr port ) lst in 
+        let state = { state with pending_connections = state.pending_connections + L.length lst } in
         return @@ U.SeqJobFinished (state, jobs)
     else
       return @@ U.SeqJobFinished (state, [])
-
-
-
 
 
 
@@ -189,6 +186,9 @@ let manage_p2p2 state e =
 let manage_p2p1 state e =
   let state = (state : U.my_app_state) in
   match e with
+    | U.Start ->
+      return (U.SeqJobFinished (state, []))
+
     | U.GotConnection conn ->
       log "whoot got connection"
       >>
@@ -215,6 +215,7 @@ let manage_p2p1 state e =
         (* TODO move this outside jobs ??? *)
         close_fd conn.fd;
       ] in
+      let state = { state with pending_connections = pred state.pending_connections } in 
       return @@ U.SeqJobFinished (state, jobs)
 
 
@@ -247,13 +248,17 @@ let manage_p2p1 state e =
               if L.length state.connections < 8 then
                 { state with
                   connections = conn :: state.connections;
+                  pending_connections = pred state.pending_connections; 
                 } ,
                 [
                   log @@ "*** adding conn " ^ U.format_addr conn
                   >> get_message conn
-              ]
+                ]
               else
-                state, [
+                { state with
+                  pending_connections = pred state.pending_connections; 
+                }, 
+                [
                     close_fd conn.fd
                     >> log @@ "*** dropping conn " ^ U.format_addr conn
                 ]
@@ -473,11 +478,11 @@ let create () = [
 (* doge  https://github.com/lian/bitcoin-ruby/blob/master/lib/bitcoin.rb
     nc -v seed.dogecoin.com  22556
   *)
+(*
   get_connection "162.243.251.36" 22556;
   get_connection "128.250.195.242" 22556;
-
   get_connection "216.155.138.34" 22556;
-
   get_connection "128.199.78.238" 22556;
+*)
 ]
 

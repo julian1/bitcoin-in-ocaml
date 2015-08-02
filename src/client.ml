@@ -90,6 +90,7 @@ let start () =
     let state = ({
         network = Dogecoin;
         connections = [];
+        pending_connections = 0;
         db = db; 
         (* should be hidden ?? *)
         block_inv_pending  = None;
@@ -99,7 +100,7 @@ let start () =
     in
     let whoot = {
       state = Some state; 
-      jobs = P2p.create(); 
+      jobs = [ return U.Start ] ; (* Nop is filtered rather than propagated *) 
       queue = Myqueue.empty ;
     }  
     in
