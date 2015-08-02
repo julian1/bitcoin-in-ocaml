@@ -14,6 +14,7 @@ todo
 
   - should be storing ggg in the peer. eg. last_valid_block last_valid_inv ... just so we can 
       monitor that the peer is responding. 
+      - this will get rid of the long list of stale fds.
 
   - catch sig interupt - and clean shutdown, closing sockets
 
@@ -22,20 +23,9 @@ todo
   - move logger into session/state object, rather than be a free function, so that
     can partially apply at top level
 
+  - check target difficulty
 
-    - change process block (eg. check, add acc difficulty, height with) with process block
-        - rules ... block. 
-        - rules -> store_block (passed as function)
-
-  - actually use the merkle check on blocks - to guanarantee the txs are right.
-  
-  - peers in the db. just select at random like leaves. eg. if conns < 8, select random peer 
-    -this then gets the configuration out of p2p.
-
-  - store peers in db for easy resumption
-      - could set initial peer via command line. if wanted.
-
-  - scrypt 
+  - scrypt for lite and dogecoin
     - https://github.com/wg/scrypt/blob/master/src/main/java/com/lambdaworks/crypto/SCrypt.java
 
   - should change p2p, to always attempt connection when get new peer. and then drop on connection
@@ -74,9 +64,6 @@ todo
     - uggh creating the _main mat-view is taking 12 seconds for litecoin.
 
 
-
-     
-
   - Consider using Zarith values instead of Int64 ...
   - refactor util and put app state in its own module 
 
@@ -113,12 +100,19 @@ todo
     - to check whether a tail is tail-call or not, you can use OCaml tools for
       that: compiling with the -annot option will produce an annotation file
       foo.annot (if your source was foo.ml) 
-  - done - - altered to store height on block insertion 
+  - done - altered to store height on block insertion 
       - with 500k blocks - selecting _leaves is 200ms, selecting with height (_leaves2) 4700ms = 20x more expensive
       - it may make sense to record height - especially if we record difficulty
       - counter argument - getting list of blocks in main chain will always be slow due to recursive
         cte parent_id function 
  
+  - done - use the merkle check on blocks - to guanarantee the txs are right.
+
+  - done - change process block (eg. check, add acc difficulty, height with) with process block
+  - done peers in the db. just select at random like leaves. eg. if conns < 8, select random peer 
+    -this then gets the configuration out of p2p.
+
+
 
 old
   - http/or cli interface to examine the read-only structures now, so
@@ -135,6 +129,8 @@ old
 
 ----
 issues
+
+  - issue - could set initial peer via command line. if wanted.
 
   transaction malleability and removing items from mempool??? how? 
     probably just record the block one, then the mempool one utxos will be spent
