@@ -100,6 +100,12 @@ let readChannel inchan length (* timeout here *)  =
 
 
 
+let close_fd fd =
+  match Lwt_unix.state fd with
+    Opened -> ( Lwt_unix.close fd ) >> return U.Nop
+    | _ -> return U.Nop
+
+
 let get_message (conn : U.connection ) =
     Lwt.catch (
       fun () ->
@@ -146,8 +152,7 @@ let update state e =
       log "whoot got connection"
       >> 
       let jobs = [
-        log @@ U.format_addr conn ^  " got connection "  ^
-          ", connections now " ^ ( string_of_int @@ List.length state.connections )
+        log @@ U.format_addr conn ^  " got connection " 
         >> U.send_message conn (initial_version state.network)
         >> log @@ "*** sent our version " ^ U.format_addr conn;
         get_message conn
@@ -167,9 +172,7 @@ let update state e =
       let jobs = [
         log @@ U.format_addr conn ^ "msg error " ^ msg;
         (* TODO move this outside jobs ??? *)
-        match Lwt_unix.state conn.fd with
-          Opened -> ( Lwt_unix.close conn.fd ) >> return U.Nop
-          | _ -> return U.Nop
+        close_fd conn.fd;
       ] in
       return @@ U.SeqJobFinished (state, jobs)
 
@@ -178,10 +181,9 @@ let update state e =
       match header.command with
 
         | "version" ->
-
           log @@ U.format_addr conn ^ " got version message"
           >>
-          (* record the new ipeer if it doesn't exist *)
+          (* record the new peer if it doesn't exist *)
 
             PG.prepare state.db "insert into peer(addr,port) select $1, $2 where not exists ( select 1 from peer where addr = $1) " ()
           >> PG.execute state.db ~params:[
@@ -193,10 +195,7 @@ let update state e =
             let state, jobs =
               if drop then 
                 state, [
-                    (match Lwt_unix.state conn.fd with
-                      | Opened -> ( Lwt_unix.close conn.fd ) >> return () 
-                      | _ -> return ()
-                    )
+                    close_fd conn.fd
                     >> log @@ "*** dropping conn " ^ U.format_addr conn
                 ] 
               else 
