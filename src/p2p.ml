@@ -9,6 +9,8 @@ module L = List
 module U = Util
 module PG = U.PG
 
+let (<|) f g x = f(g(x))
+
 
 
 
@@ -149,6 +151,11 @@ let get_message (conn : U.connection ) =
   - problem is peers that may send data (and therefore don't get closed), but never complete the handshake...
 
   - we could return the time ...
+
+type string_array = string option list
+val string_of_string_array : string_array -> string
+v
+
 *)
 
 let manage_p2p2 state e =
@@ -166,11 +173,19 @@ let manage_p2p2 state e =
         - we kind of also want to avoid reconnecting to pending... 
       *)
       log "\n*****************\n db lookup peers"
-      >> PG.prepare state.db "select addr,port from peer order by random() limit $1" ()
+
+      >> PG.prepare state.db "select addr,port from peer where not ( addr = any ( $2))  order by random() limit $1" ()
+      (* >> PG.prepare state.db "select addr,port from peer where addr not in (select unnest( $2) ) order by random() limit $1" () *)
       >> PG.execute state.db ~params:[
           Some (PG.string_of_int required  );
+
+          let lst = L.map U.(fun conn -> Some conn.addr) state.connections in
+          Some (U.PG.string_of_string_array lst )
+
          ] ()
       >>= fun rows ->
+        log @@ " got " ^ (string_of_int <| L.length) rows 
+      >>
         let lst = L.map (function | (Some addr :: Some port :: []) -> 
           addr, PG.int_of_string port) rows 
         in

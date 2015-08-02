@@ -16,6 +16,8 @@ todo
       monitor that the peer is responding. 
       - this will get rid of the long list of stale fds.
 
+ 
+
   - catch sig interupt - and clean shutdown, closing sockets
 
   - only add peer on receiving version message, and add client string to db.
@@ -112,6 +114,7 @@ todo
   - done peers in the db. just select at random like leaves. eg. if conns < 8, select random peer 
     -this then gets the configuration out of p2p.
 
+  - done - in p2p when getting new peers, filter according to what we are already connected to.
 
 
 old
