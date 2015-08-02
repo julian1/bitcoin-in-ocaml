@@ -214,17 +214,16 @@ let manage_p2p1 state e =
       
           
         | "version" ->
+
+          log @@ U.format_addr conn ^ " got version ";
+          >>
           let jobs = [
-            log @@ U.format_addr conn ^ " got version ";
 
             U.send_message conn (initial_verack state.network)
-            >> log @@ "*** sent verack " ^ U.format_addr conn
             ; 
             get_message conn
           ] in
           return @@ U.SeqJobFinished (state, jobs)
-
-
 
 
         | "verack" ->
@@ -256,16 +255,6 @@ let manage_p2p1 state e =
             in
             return @@ U.SeqJobFinished (state, jobs)
 
-(*
-        | "verack" ->
-          let jobs = [
-            (* should be 3 separate jobs? *)
-            log @@ U.format_addr conn ^ " got verack";
-            (* >> send_message conn initial_getaddr *)
-            get_message conn
-          ] in
-          return @@ U.SeqJobFinished (state, jobs)
-*)
 
 
         | "addr" ->
