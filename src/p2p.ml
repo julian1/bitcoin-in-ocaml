@@ -3,7 +3,7 @@ let (>>=) = Lwt.(>>=)
 let return = Lwt.return
 
 module M = Message
-module S = String 
+module S = String
 module L = List
 
 module U = Util
@@ -18,9 +18,9 @@ let log s = U.write_stdout s >> return U.Nop
 (* initial version message to send *)
 let initial_version network =
   let payload = M.encodeVersion {
-    
+
       (* protocol = 70002;  bitcoin/litecoin  match network with ... *)
-      protocol = (match network with 
+      protocol = (match network with
         | M.Bitcoin | M.Litecoin -> 70002
         | M.Dogecoin -> 70003
         ) ;
@@ -37,11 +37,11 @@ let initial_version network =
   } in
   M.encodeMessage network "version" payload
 
-(* verack response to send *)
+(* verack response to send TODO get rid of these one line functions *)
 let initial_verack network =
   M.encodeSimpleMessage network "verack"
 
- 
+
 let initial_getaddr network =
   M.encodeSimpleMessage network "getaddr"
 
@@ -141,18 +141,50 @@ let get_message (conn : U.connection ) =
 
 
 
+(* hmmmmm
+
+  - if we had a timer job, firing once every second - then we could use to control
+   - db lookup to get peers.
+  - another issue - is that if we don't have enough peers in the db at all. we
+    don't want to do a lookup every second...
+
+  - hmmm no, i think a pending connection count
+*)
+
+let manage_p2p2 state e =
+  let state = (state : U.my_app_state) in
+(
+  if L.length state.connections < 8  then
+    (* need to insert current conns to get unique
+
+      select id,addr,port from peer where addr not in ( '49.116.148.241', '37.49.9.64' ) order by random();
+    *)
+    log "\n*****************8\n db lookup"
+    >> PG.prepare state.db "select addr,port from peer order by random() limit 1" ()
+    >> PG.execute state.db ~params:[ ] ()
+    >>= fun rows ->
+      let lst = L.map (function | (Some addr :: Some port :: []) -> addr,port)  rows in
+
+    return ()
+  else
+    return ()
+)
+  >>
+
+  return (U.SeqJobFinished (state, []))
 
 
 
-let update state e = 
-  let state = (state : U.my_app_state) in 
+
+(* let update state e =  *)
+let manage_p2p1 state e =
+  let state = (state : U.my_app_state) in
   match e with
-
     | U.GotConnection conn ->
       log "whoot got connection"
-      >> 
+      >>
       let jobs = [
-        log @@ U.format_addr conn ^  " got connection " 
+        log @@ U.format_addr conn ^  " got connection "
         >> U.send_message conn (initial_version state.network)
         >> log @@ "*** sent our version " ^ U.format_addr conn;
         get_message conn
@@ -166,7 +198,7 @@ let update state e =
 
     | U.GotMessageError (conn , msg) ->
       (* fd test is physical equality *)
-      let state = { state with 
+      let state = { state with
         connections = List.filter (fun (c : U.connection) -> c.fd != conn.fd) state.connections;
       } in
       let jobs = [
@@ -190,25 +222,25 @@ let update state e =
               Some (PG.string_of_bytea conn.addr );
               Some (PG.string_of_int conn.port );
             ] ()
-          >> 
-            let drop = L.length state.connections >= 8  in
+          >>
             let state, jobs =
-              if drop then 
-                state, [
-                    close_fd conn.fd
-                    >> log @@ "*** dropping conn " ^ U.format_addr conn
-                ] 
-              else 
+              if L.length state.connections < 8 then
                 { state with
-                  connections = conn :: state.connections; 
+                  connections = conn :: state.connections;
                 } ,
                 [
                   U.send_message conn (initial_verack state.network)
                   >> log @@ "*** sent verack " ^ U.format_addr conn
-                  ; 
+                  ;
                   log @@ "*** adding conn " ^ U.format_addr conn
                   >> get_message conn
               ]
+              else
+                state, [
+                    close_fd conn.fd
+                    >> log @@ "*** dropping conn " ^ U.format_addr conn
+                ]
+
             in
 
 (*            let jobs = [
@@ -226,7 +258,7 @@ let update state e =
             log @@ U.format_addr conn ^ " got verack";
             (* >> send_message conn initial_getaddr *)
             get_message conn
-          ] in 
+          ] in
           return @@ U.SeqJobFinished (state, jobs)
 
         | "addr" ->
@@ -253,10 +285,10 @@ let update state e =
             >> PG.execute state.db ~params:[
                 Some (PG.string_of_bytea conn.addr );
               ] ()
-            >>= fun rows -> 
-              let already_have = match rows with 
+            >>= fun rows ->
+              let already_have = match rows with
                 | (Some "t"::[])::_ -> true
-                | (Some "f"::[])::_ -> false 
+                | (Some "f"::[])::_ -> false
             in
             (* let already_have = L.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in *)
@@ -264,35 +296,46 @@ let update state e =
               let jobs = [
                   log @@ U.format_addr conn ^ " addr - already got conn " ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
-              ] in 
+              ] in
               return @@ U.SeqJobFinished (state, jobs)
             else
-              let jobs = [ 
+              let jobs = [
                  log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count ) ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
-                ] in 
+                ] in
               return @@ U.SeqJobFinished (state, jobs)
 
-        | s -> 
+        | s ->
           let jobs = [
-            (* *) log @@ U.format_addr conn ^ " message " ^ s; 
+            (* *) log @@ U.format_addr conn ^ " message " ^ s;
             get_message conn
-          ] in 
+          ] in
           return @@ U.SeqJobFinished (state, jobs)
- 
-    | _  -> 
+
+    | _  ->
       return (U.SeqJobFinished (state, []))
+
+
+
+
+let update state e =
+  manage_p2p1 state e
+  >>= fun (U.SeqJobFinished (state, jobs1)) ->
+    manage_p2p2 state e
+  >>= fun (U.SeqJobFinished (state, jobs2)) ->
+    return (U.SeqJobFinished (state, jobs1 @ jobs2))
+
 
 
   (* we have to always return U.SeqJobFinished *)
 
-(* VERY IMPORTANT - we can now log sequentially if we want, but we have to be a able to return another job 
+(* VERY IMPORTANT - we can now log sequentially if we want, but we have to be a able to return another job
   uggh... it's gone astray...
 
   - io completion might be,
     - events
-    - seqjobcomplete state [events] 
+    - seqjobcomplete state [events]
 
 *)
 
@@ -313,15 +356,15 @@ let update (state : U.my_app_state) e =
           ;
            get_message conn
       ] }
-      
+
     | U.GotConnectionError msg ->
-	  { state with 
+	  { state with
       jobs = state.jobs @ [  log @@ "connection error " ^ msg ]
 		}
 
     | U.GotMessageError ((conn : U.connection), msg) ->
       (* fd test is physical equality *)
-	  { state with 
+	  { state with
 		connections = List.filter (fun (c : U.connection) -> c.fd != conn.fd) state.connections;
 		jobs = state.jobs @
        [
@@ -336,7 +379,7 @@ let update (state : U.my_app_state) e =
       match header.command with
 
         | "version" ->
-		{ state with 
+		{ state with
              jobs = state.jobs @ [
               log @@ U.format_addr conn ^ " got version message"
               >> U.send_message conn initial_verack
@@ -346,7 +389,7 @@ let update (state : U.my_app_state) e =
             ] }
 
         | "verack" ->
-			{ state with 
+			{ state with
              jobs = state.jobs @ [
               (* should be 3 separate jobs? *)
               log @@ U.format_addr conn ^ " got verack";
@@ -371,14 +414,14 @@ let update (state : U.my_app_state) e =
             let already_have = List.exists (fun (c : U.connection) -> c.addr = a (* && peer.conn.port = addr.port *) ) state.connections
             in
             if already_have || List.length state.connections >= 8 then
-				{ state with 
+				{ state with
                  jobs = state.jobs @ [
                   log @@ U.format_addr conn ^ " addr - already got or ignore "
                     ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
                   ] }
             else
-				{ state with 
+				{ state with
 					jobs = state.jobs @
 				[
                  log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count )
@@ -388,15 +431,15 @@ let update (state : U.my_app_state) e =
                 ] }
 
         | s ->
-			{ state with 
-				jobs = state.jobs @ 
+			{ state with
+				jobs = state.jobs @
              [
               (* log @@ U.format_addr conn ^ " message " ^ s ; *)
               get_message conn
               ] }
         )
 
-    | _ -> state 
+    | _ -> state
 *)
 
 (* initial jobs *)
@@ -421,13 +464,13 @@ let create () = [
 
    (* nc -v  dnsseed.litecointools.com 9333 *)
 (*  get_connection     "212.71.235.114"  9333;
-  get_connection     "199.217.119.33" 9333; 
+  get_connection     "199.217.119.33" 9333;
   get_connection     "46.28.206.65" 9333;
   get_connection     "188.138.125.48" 9333;
   get_connection     "24.160.59.242" 9333;
 *)
 
-(* doge  https://github.com/lian/bitcoin-ruby/blob/master/lib/bitcoin.rb 
+(* doge  https://github.com/lian/bitcoin-ruby/blob/master/lib/bitcoin.rb
     nc -v seed.dogecoin.com  22556
   *)
   get_connection "162.243.251.36" 22556;
@@ -436,5 +479,5 @@ let create () = [
   get_connection "216.155.138.34" 22556;
 
   get_connection "128.199.78.238" 22556;
-] 
+]
 
