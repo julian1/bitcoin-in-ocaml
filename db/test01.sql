@@ -2,7 +2,8 @@
 begin;
 
 drop view if exists _tx ;
-drop materialized view if exists _main ;
+-- drop materialized view if exists _main ;
+drop view if exists _main ;
 
 -- OK, a way to do tx output verification 
 -- on receipt of block set the head to the block. this will make it available in main chain view 
@@ -10,14 +11,13 @@ drop materialized view if exists _main ;
 -- then tx's can refer to tx's in the just received block 
 
 
-create materialized view _main as
---create view _main as
+-- create materialized view _main as
+create view _main as
 with recursive t( id, depth ) AS (
   select (
     -- tree root
     select block.id 
     from block 
-    -- where hash = '\x0000000000000000147011a429bd8c2e30475ad61eaa544c3b971e99bb7bc307'  -- chain tip
     where id = (
       select block_id from _leaves2 order by height desc limit 1
     )
@@ -32,7 +32,7 @@ with recursive t( id, depth ) AS (
 select t.depth, block.* 
 FROM t join block on block.id = t.id;
 
-create index on _main( id );
+-- create index on _main( id );
 
 
 create view _tx as
