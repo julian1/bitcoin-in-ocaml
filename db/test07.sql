@@ -6,13 +6,14 @@ drop view locator_hashes;
 
 create view locator_hashes as
 
-with recursive t( id, height ) AS (
+with recursive t( i, start_, step ) AS (
     -- tree root
-    select 100, 0
+    select 100, 0, 1
   UNION ALL
   SELECT 
-    t.id, t.height + 1
-  FROM t where t.height < 100 
+    t.i - t.step, t.start_ + 1, t.step * 2
+  FROM t 
+  where t.i > 0 
 )
 
 select * 
