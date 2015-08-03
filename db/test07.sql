@@ -8,10 +8,14 @@ create view locator_hashes as
 
 with recursive t( i, start_, step ) AS (
     -- tree root
-    select 100, 0, 1
+    select 100, 1, 1
   UNION ALL
   SELECT 
-    t.i - t.step, t.start_ + 1, t.step * 2
+      t.i - t.step, t.start_ + 1, 
+      CASE
+      WHEN t.start_ >= 10 THEN t.step * 2 
+      ELSE t.step
+  END  
   FROM t 
   where t.i > 0 
 )
