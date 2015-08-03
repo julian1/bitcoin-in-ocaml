@@ -116,6 +116,13 @@ create view _main as
   FROM t join block on block.id = t.id
 ;
 
+-- ok, it takes 2 secs, to get _main, this means, i wonder how long it will take
+-- to get all utxos to verfiy a block?  it may be a lot less than this.  
+
+-- and... ughhh... the block kind of has to be inserted... txs that self-referential txs in the same block.
+-- damnnn.
+
+-- TODO change name/function longest to best?
 
 create view _locator_hashes as (
   with recursive t( height, start_, step ) AS (
