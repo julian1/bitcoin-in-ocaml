@@ -66,7 +66,7 @@ $$ LANGUAGE plpgsql volatile ;
 
 
 -------------------------
--- main chain this function is expensive and could use a memoizing table for height, depth...
+-- calculate chain, this function is expensive and could use a memoizing table for height, depth...
 
 drop function if exists fmain( int );
 
@@ -108,13 +108,12 @@ RETURNS TABLE(block_id int, height int, depth int)
 AS $$ 
 begin 
   return query 
-
     select 
       m.block_id, 
       m.height, 
       m.depth 
-    from fmain( 373858 ) m 
-    join flocator_height( 373836) l on l.height = m.height  
+    from fmain( arg ) m 
+    join flocator_height(( select b.height from block b where b.id = arg) ) l on l.height = m.height  
     order by m.height desc 
 ; 
 end;
