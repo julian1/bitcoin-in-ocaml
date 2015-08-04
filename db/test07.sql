@@ -35,7 +35,7 @@ create view _locator_hashes as
 
 drop function if exists flocator_height( int );
 
-CREATE FUNCTION flocator_height(arg int) 
+CREATE FUNCTION flocator_height(arg_height int) 
 RETURNS TABLE(height int)
 AS $$ 
 begin 
@@ -43,7 +43,7 @@ begin
     (
       with recursive t( height_, start_, step ) AS (
         -- non recursive
-        select arg, 1, 1
+        select arg_height, 1, 1
         UNION ALL
         -- recursive
         SELECT
@@ -70,14 +70,14 @@ $$ LANGUAGE plpgsql volatile ;
 
 drop function if exists fmain( int );
 
-CREATE FUNCTION fmain(arg int) 
+CREATE FUNCTION fmain(arg_block_id int) 
 RETURNS TABLE(block_id int, height int, depth int)
 AS $$ 
 begin 
   return query select * from ( 
 
     with recursive t( id, depth ) AS (
-      select arg, 0
+      select arg_block_id, 0
       UNION ALL
       SELECT
         block_previous_id, t.depth + 1
@@ -99,21 +99,24 @@ $$ LANGUAGE plpgsql volatile ;
 
 --- so now we want to join them...
 
-
+-- change name to locator_block_id
+-- should we add the hash. yes because that's what we send
 
 drop function if exists fx( int );
 
-CREATE FUNCTION fx(arg int) 
-RETURNS TABLE(block_id int, height int, depth int)
+CREATE FUNCTION fx(arg_block_id int) 
+RETURNS TABLE(block_id int, height int, depth int, hash bytea)
 AS $$ 
 begin 
   return query 
     select 
       m.block_id, 
       m.height, 
-      m.depth 
-    from fmain( arg ) m 
-    join flocator_height(( select b.height from block b where b.id = arg) ) l on l.height = m.height  
+      m.depth, 
+      b.hash
+    from fmain( arg_block_id ) m 
+    join flocator_height(( select b.height from block b where b.id = arg_block_id) ) l on l.height = m.height  
+    join block b on b.id = m.block_id
     order by m.height desc 
 ; 
 end;
