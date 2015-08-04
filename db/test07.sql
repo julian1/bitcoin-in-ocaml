@@ -32,10 +32,6 @@ create view _locator_hashes as
 
 
 
-drop table if exists t ;
-create table t(v int ) ; 
-insert into t( v) values (1);
-insert into t( v) values (2);
 
 drop function if exists dup( int );
 
@@ -44,29 +40,25 @@ RETURNS TABLE(f1 int)
 AS $$ 
 begin 
  return query select * from ( 
-
-
-(
-  with recursive t( height, start_, step ) AS (
-    -- tree leaf
-    select (select height from _longest), 1, 1
-    UNION ALL
-    SELECT
-        t.height - t.step,
-        t.start_ + 1,
-        CASE WHEN t.start_ >= 10 THEN t.step * 2
-        ELSE t.step
-    END
-    FROM t
-    where t.height > 0
-  )
-  select height 
-  FROM t where t.height > 0
-  )
-  union all
-  select 0
-
-
+    (
+      with recursive t( height, start_, step ) AS (
+        -- tree leaf
+        select arg, 1, 1
+        UNION ALL
+        SELECT
+            t.height - t.step,
+            t.start_ + 1,
+            CASE WHEN t.start_ >= 10 THEN t.step * 2
+            ELSE t.step
+        END
+        FROM t
+        where t.height > 0
+      )
+      select height 
+      FROM t where t.height > 0
+      )
+      union all
+      select 0
   ) as x; 
 end;
 $$ LANGUAGE plpgsql volatile ;
