@@ -33,13 +33,13 @@ create view _locator_hashes as
 
 
 
-drop function if exists dup( int );
+drop function if exists flocator_hashes( int );
 
-CREATE FUNCTION dup(arg int) 
-RETURNS TABLE(f1 int)
+CREATE FUNCTION flocator_hashes(arg int) 
+RETURNS TABLE(height int)
 AS $$ 
 begin 
- return query select * from ( 
+  return query select * from ( 
     (
       with recursive t( height, start_, step ) AS (
         -- non recursive
@@ -63,6 +63,40 @@ begin
   ) as x; 
 end;
 $$ LANGUAGE plpgsql volatile ;
+
+
+drop function if exists fmain( int );
+
+CREATE FUNCTION fmain(arg int) 
+RETURNS TABLE(depth int, block_id int)
+AS $$ 
+begin 
+  return query select * from ( 
+
+    with recursive t( id, depth ) AS (
+      select (
+        -- tree tip
+        select arg
+      ), 0
+      UNION ALL
+      SELECT
+        block_previous_id, t.depth + 1
+      FROM block
+      join previous on previous.block_previous_id = block.id
+      join t on t.id = previous.block_id
+    )
+    select 
+      t.depth, 
+      -- block.*
+      block.id 
+    FROM t join block on block.id = t.id
+
+
+  ) as x; 
+end;
+$$ LANGUAGE plpgsql volatile ;
+
+
 
 
 
