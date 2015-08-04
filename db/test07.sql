@@ -6,32 +6,11 @@ begin;
 --- note that this thing is very fast to calculate - < 1 ms, because of the step size increment. 
 --- we want to pass in the height explicitly
 
-drop view if exists _locator_hashes ;
-
-create view _locator_hashes as 
-  (
-  with recursive t( height, start_, step ) AS (
-    -- tree leaf
-    select (select height from _longest), 1, 1
-    UNION ALL
-    SELECT
-        t.height - t.step,
-        t.start_ + 1,
-        CASE WHEN t.start_ >= 10 THEN t.step * 2
-        ELSE t.step
-    END
-    FROM t
-    where t.height > 0
-  )
-  select height 
-  FROM t where t.height > 0
-  )
-  union all
-  select 0
-;
 
 
-
+-----------------------------------------
+-- calulate the height series for getdata block requests 
+-- ref, https://en.bitcoin.it/wiki/Protocol_documentation#getblocks
 
 drop function if exists flocator_height( int );
 
@@ -66,7 +45,8 @@ $$ LANGUAGE plpgsql volatile ;
 
 
 -------------------------
--- calculate chain, this function is expensive and could use a memoizing table for height, depth...
+-- calculate ids of blocks in chain
+-- function is expensive and could use a memoizing table for height, depth...
 
 drop function if exists fmain( int );
 
@@ -97,14 +77,12 @@ end;
 $$ LANGUAGE plpgsql volatile ;
 
 
---- so now we want to join them...
+-----------------------------------
+-- create locator hashes by combining main chain ids, with locator height 
 
--- change name to locator_block_id
--- should we add the hash. yes because that's what we send
+drop function if exists flocator_hashes( int );
 
-drop function if exists fx( int );
-
-CREATE FUNCTION fx(arg_block_id int) 
+CREATE FUNCTION flocator_hashes(arg_block_id int) 
 RETURNS TABLE(block_id int, height int, depth int, hash bytea)
 AS $$ 
 begin 
@@ -122,7 +100,25 @@ begin
 end;
 $$ LANGUAGE plpgsql volatile ;
 
+------------------------------------------
+-- longest chain's block id - better name? 
 
+drop function if exists flongest();
+
+CREATE FUNCTION flongest() 
+RETURNS int
+AS $$ 
+    select
+      id -- as block_id,
+      -- height 
+    from block
+    order by height desc
+    limit 1
+;
+$$ LANGUAGE sql volatile ;
+
+
+-- select hash from flocator_hashes( flongest() ) ; 
 
 
 
