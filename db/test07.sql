@@ -8,7 +8,8 @@ begin;
 
 drop view if exists _locator_hashes ;
 
-create view _locator_hashes as (
+create view _locator_hashes as 
+  (
   with recursive t( height, start_, step ) AS (
     -- tree leaf
     select (select height from _longest), 1, 1
@@ -30,14 +31,37 @@ create view _locator_hashes as (
 ;
 
 
+
+drop function if exists dup( int );
+
 CREATE FUNCTION dup(arg int) 
 RETURNS TABLE(f1 int, f2 text)
 AS $$ 
 begin 
-  SELECT arg, CAST(arg AS text) || ' is text' ; 
+ select  (
+  with recursive t( height, start_, step ) AS (
+    -- tree leaf
+    select (select height from _longest), 1, 1
+    UNION ALL
+    SELECT
+        t.height - t.step,
+        t.start_ + 1,
+        CASE WHEN t.start_ >= 10 THEN t.step * 2
+        ELSE t.step
+    END
+    FROM t
+    where t.height > 0
+  )
+  select height 
+  FROM t where t.height > 0
+  )
+  union all
+  select 0
+  ;
 end
-$$ 
-  LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
+
+
 
 --    LANGUAGE SQL;
 
