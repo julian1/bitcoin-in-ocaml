@@ -1,16 +1,11 @@
 
 begin;
--- so we should'nt deal with hashes, just numbers
-
-
---- note that this thing is very fast to calculate - < 1 ms, because of the step size increment. 
---- we want to pass in the height explicitly
-
 
 
 -----------------------------------------
 -- calulate the height series for getdata block requests 
 -- ref, https://en.bitcoin.it/wiki/Protocol_documentation#getblocks
+--- this is very fast to calculate eg. < 1 ms, due to the exponentially increasing step size
 
 drop function if exists flocator_height( int );
 
@@ -45,7 +40,7 @@ $$ LANGUAGE plpgsql volatile ;
 
 
 -------------------------
--- calculate ids of blocks in chain
+-- calculate ids of blocks in chain starting from argument block id 
 -- function is expensive and could use a memoizing table for height, depth...
 
 drop function if exists fmain( int );
@@ -78,7 +73,7 @@ $$ LANGUAGE plpgsql volatile ;
 
 
 -----------------------------------
--- create locator hashes by combining main chain ids, with locator height 
+-- create locator hashes by combining main chain with locator height 
 
 drop function if exists flocator_hashes( int );
 
@@ -108,19 +103,17 @@ drop function if exists flongest();
 CREATE FUNCTION flongest() 
 RETURNS int
 AS $$ 
-    select
-      id -- as block_id,
-      -- height 
-    from block
-    order by height desc
-    limit 1
+  select
+    id -- as block_id,
+    -- height 
+  from block
+  order by height desc
+  limit 1
 ;
 $$ LANGUAGE sql volatile ;
 
 
 -- select hash from flocator_hashes( flongest() ) ; 
-
-
 
 
 commit;
