@@ -1,6 +1,9 @@
 
 TODO
 
+  - slow recursive db functions can be fixed with simple memoization tables.
+    - so we don't actually need height, but maybe easier.
+
   - do we care about the leaves when constructing the getblocks request?. the point is that a client 
     can send what it knows about. if the block is valid, it will get added even if not the longest chain
     which is what we want.

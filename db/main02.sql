@@ -29,6 +29,9 @@ create view _leaves as
   where p.id is null
 ;
 
+
+-- always just one 
+
 create view _genesis as
   select
     block.id as block_id
@@ -38,6 +41,7 @@ create view _genesis as
 ;
 
 -- max height
+-- always just one...
 
 create view _longest as
   select
@@ -123,6 +127,7 @@ create view _main as
 -- damnnn.
 
 -- TODO change name/function longest to best?
+-- change name hashes to height
 
 create view _locator_hashes as (
   with recursive t( height, start_, step ) AS (

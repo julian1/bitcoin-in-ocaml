@@ -30,7 +30,7 @@ let return = Lwt.return
             are we sure we don't want 
 *)
 
-
+(*
 (* TODO change name encode_getblocks_message *)
 let initial_getblocks network starting_hash =
   (* the list are the options, and peer will return a sequence
@@ -43,6 +43,23 @@ let initial_getblocks network starting_hash =
     ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
   M.encodeMessage network "getblocks" payload
+*)
+
+(* this got a bunch of responses with 500 blocks *)
+(* TODO change name encode_getblocks_message *)
+let initial_getblocks network hashes =
+  (* the list are the options, and peer will return a sequence
+    from the first valid block in our list *)
+  let payload =
+    M.encodeInteger32 1  (* version *)
+    ^ M.encodeVarInt (L.length hashes )
+(*    ^ (L.rev hashes |> L.map M.encodeHash32 |> S.concat ""  )  *)
+     ^ (L.map M.encodeHash32 hashes |> S.concat "") 
+    ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
+  in
+  M.encodeMessage network "getblocks" payload
+
+
 
 
 (* TODO change name encode_getdata_message *)
@@ -323,16 +340,20 @@ let manage_chain2 (state : U.my_app_state) e  =
           "\n fds\n" ; S.concat "\n" ( L.map (fun (x : U.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ]
         >> U.PG.begin_work state.db
-        (* TODO this query is very expensive - 5 seconds to run *)
-        >> U.PG.prepare state.db ~query:"select hash from _leaves2 order by height desc" ()
+        (* TODO this query is very expensive - 5 seconds to run 
+  
+            select hash from flocator_hashes( flongest() ) ;
+          *)
+        (*>> U.PG.prepare state.db ~query:"select hash from _leaves2 order by height desc" () *)
+        >> U.PG.prepare state.db ~query:"select hash from flocator_hashes( flongest() )" ()
         >> U.PG.execute state.db ~params:[ ] ()
         >>= fun rows -> 
           U.PG.commit state.db
         >>
           let hashes = L.map (function (Some field ::_ ) -> U.PG.bytea_of_string field ) rows in
-          let head = weighted_random_select seed hashes in 
+         (* let head = weighted_random_select seed hashes in 
           log @@ "\n&&& requested head is " ^ M.hex_of_string head
-        >>
+        >> *)
           log @@ "\n&&& hashes len " ^ ( string_of_int (L.length hashes )) 
         >> 
         (* must reset now due to the sql query time *)
@@ -341,7 +362,7 @@ let manage_chain2 (state : U.my_app_state) e  =
             block_inv_pending = Some (conn.fd, now ) ;
         } in
         let jobs = [
-          U.send_message conn (initial_getblocks state.network head)
+          U.send_message conn (initial_getblocks state.network hashes )
         ] in
         return (U.SeqJobFinished (state, jobs))
 
