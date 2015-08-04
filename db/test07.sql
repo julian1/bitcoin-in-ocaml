@@ -42,9 +42,10 @@ begin
  return query select * from ( 
     (
       with recursive t( height, start_, step ) AS (
-        -- tree leaf
+        -- non recursive
         select arg, 1, 1
         UNION ALL
+        -- recursive
         SELECT
             t.height - t.step,
             t.start_ + 1,
