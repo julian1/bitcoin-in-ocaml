@@ -33,30 +33,30 @@ create view _locator_hashes as
 
 
 
-drop function if exists flocator_hashes( int );
+drop function if exists flocator_height( int );
 
-CREATE FUNCTION flocator_hashes(arg int) 
+CREATE FUNCTION flocator_height(arg int) 
 RETURNS TABLE(height int)
 AS $$ 
 begin 
   return query select * from ( 
     (
-      with recursive t( height, start_, step ) AS (
+      with recursive t( height_, start_, step ) AS (
         -- non recursive
         select arg, 1, 1
         UNION ALL
         -- recursive
         SELECT
-            t.height - t.step,
+            t.height_ - t.step,
             t.start_ + 1,
             CASE WHEN t.start_ >= 10 THEN t.step * 2
             ELSE t.step
         END
         FROM t
-        where t.height > 0
+        where t.height_ > 0
       )
-      select height 
-      FROM t where t.height > 0
+      select height_ 
+      FROM t where t.height_ > 0
       )
       union all
       select 0
@@ -65,19 +65,19 @@ end;
 $$ LANGUAGE plpgsql volatile ;
 
 
+-------------------------
+-- main chain this function is expensive and could use a memoizing table for height, depth...
+
 drop function if exists fmain( int );
 
 CREATE FUNCTION fmain(arg int) 
-RETURNS TABLE(depth int, block_id int)
+RETURNS TABLE(block_id int, height int, depth int)
 AS $$ 
 begin 
   return query select * from ( 
 
     with recursive t( id, depth ) AS (
-      select (
-        -- tree tip
-        select arg
-      ), 0
+      select arg, 0
       UNION ALL
       SELECT
         block_previous_id, t.depth + 1
@@ -86,13 +86,37 @@ begin
       join t on t.id = previous.block_id
     )
     select 
-      t.depth, 
+      block.id,
+      block.height,
+      t.depth
       -- block.*
-      block.id 
     FROM t join block on block.id = t.id
 
-
   ) as x; 
+end;
+$$ LANGUAGE plpgsql volatile ;
+
+
+--- so now we want to join them...
+
+
+
+drop function if exists fx( int );
+
+CREATE FUNCTION fx(arg int) 
+RETURNS TABLE(block_id int, height int, depth int)
+AS $$ 
+begin 
+  return query 
+
+    select 
+      m.block_id, 
+      m.height, 
+      m.depth 
+    from fmain( 373858 ) m 
+    join flocator_height( 373836) l on l.height = m.height  
+    order by m.height desc 
+; 
 end;
 $$ LANGUAGE plpgsql volatile ;
 
@@ -100,8 +124,5 @@ $$ LANGUAGE plpgsql volatile ;
 
 
 
-
-
---    LANGUAGE SQL;
 
 commit;
