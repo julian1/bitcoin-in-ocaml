@@ -55,7 +55,7 @@ let initial_getblocks network hashes =
     ^ M.encodeVarInt (L.length hashes )
 (*    ^ (L.rev hashes |> L.map M.encodeHash32 |> S.concat ""  )  *)
      ^ (L.map M.encodeHash32 hashes |> S.concat "") 
-    ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
+    ^ M.zeros 32   (* finish block. zeros = no limit = 500 *)
   in
   M.encodeMessage network "getblocks" payload
 
