@@ -48,6 +48,12 @@ let initial_getaddr network =
   M.encodeSimpleMessage network "getaddr"
 
 
+let close_fd fd =
+  match Lwt_unix.state fd with
+    Opened -> ( Lwt_unix.close fd ) >> return U.Nop
+    | _ -> return U.Nop
+
+
 
 let get_connection host port =
   (* what is this lwt entry *)
@@ -64,22 +70,28 @@ let get_connection host port =
       in
       Lwt.catch
         (fun  () ->
-          Lwt_unix.connect fd a
-          >>
-          let (conn : U.connection) = {
-              addr = Unix.string_of_inet_addr a_;
-              port = port;
-              fd = fd;
-              ic = inchan ;
-              oc = outchan;
-          } in
-          return @@ U.GotConnection conn
+          Lwt.pick [
+            Lwt_unix.timeout 20.
+            (* >> Lwt_io.write_line Lwt_io.stdout "conn timeout!!!" doesn't run *)
+            ;
+            Lwt_unix.connect fd a
+            >>
+            let (conn : U.connection) = {
+                addr = Unix.string_of_inet_addr a_;
+                port = port;
+                fd = fd;
+                ic = inchan ;
+                oc = outchan;
+            } in
+            return @@ U.GotConnection conn
+          ]
         )
         (fun exn ->
           (* must close *)
+         close_fd fd
+          >>
           let s = Printexc.to_string exn in
-          Lwt_unix.close fd
-          >> return @@ U.GotConnectionError s
+          return @@ U.GotConnectionError s
         )
 
 (* read exactly n bytes from channel, returning a string
@@ -100,12 +112,6 @@ let readChannel inchan length (* timeout here *)  =
   >>= fun _ ->
     return @@ Bytes.to_string buf
 
-
-
-let close_fd fd =
-  match Lwt_unix.state fd with
-    Opened -> ( Lwt_unix.close fd ) >> return U.Nop
-    | _ -> return U.Nop
 
 
 let get_message (conn : U.connection ) =

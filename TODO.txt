@@ -1,6 +1,12 @@
 
 TODO
 
+  - netstat -tnp and strace + select() is showing a ton of conns in connect/write state?
+      - maybe resolve by putting a timeout on connect? 
+
+  - IMPORTANT - for locator hashes - if don't increase the step beyond 500, then we'll always be 
+    able to progress from a peer, on another chain.  
+
   - slow recursive db functions can be fixed with simple memoization tables.
     - so we don't actually need height, but maybe easier.
 

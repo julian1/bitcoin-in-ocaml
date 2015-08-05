@@ -46,7 +46,7 @@ let initial_getblocks network starting_hash =
 *)
 
 (* this got a bunch of responses with 500 blocks *)
-(* TODO change name encode_getblocks_message *)
+(* TODO change name encode_getblocks_message maybe move to message? *)
 let initial_getblocks network hashes =
   (* the list are the options, and peer will return a sequence
     from the first valid block in our list *)
@@ -62,7 +62,7 @@ let initial_getblocks network hashes =
 
 
 
-(* TODO change name encode_getdata_message *)
+(* TODO change name encode_getdata_message - move to message *)
 let initial_getdata network hashes =
   (* 2 means block hashes only *)
   let encodeInventory hashes =
