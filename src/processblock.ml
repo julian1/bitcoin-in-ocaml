@@ -392,9 +392,11 @@ let process_block network (db : int PG.t ) payload =
       db = db;
     }
   in
-    let _, block  = M.decodeBlock network payload 0 in
+    let pos, block  = M.decodeBlock network payload 0 in
     let hash = M.decode_block_hash payload in
+    let txs = M.decode_block_txs payload pos in
     log @@ "begin insert_block " ^ M.hex_of_string hash
+    >> log @@ "version " ^ string_of_int block.version 
 
   >> PG.begin_work x.db
 
@@ -429,8 +431,6 @@ let process_block network (db : int PG.t ) payload =
             Some (PG.string_of_bytea payload );
           ] ()
         >>= fun rows ->
-          (* this is wrong when using aux pow ... *)
-          let txs = M.decode_block_txs payload 80 in
           let txs = L.map (fun (tx : M.tx) ->
             block_id,
             (*M.strsub payload tx.pos tx.length, *)  (* TODO should pass raw payload and do hashing in process_tx *)

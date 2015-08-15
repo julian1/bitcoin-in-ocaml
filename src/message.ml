@@ -466,16 +466,42 @@ type network =
   | Litecoin 
   | Dogecoin
 
+(* https://en.bitcoin.it/wiki/Merged_mining_specification
+*)
+let decode_aux_pow network version payload pos =
+  match network with 
+    (* | Dogecoin when version = 6422530 -> 
+      pos, None
+    *)
+    | Dogecoin when version = 6422786  -> 
+      (* parent coinbase tx in parent *)
+      let pos, aux_tx = decodeTx payload 80 in 
+
+      let pos, aux_block_hash = decodeHash32 payload pos in
+
+      let pos, branch_length1 = decodeVarInt payload pos in
+      let pos = pos + (branch_length1 * 32) + 4 in
+
+      let pos, branch_length2 = decodeVarInt payload pos in
+      let pos = pos + (branch_length2 * 32) + 4 in
+
+      let pos = pos + 80 in 
+      pos, None
+
+    | _ -> pos, None
+
 
 (* change name decode_block_header *)
 let decodeBlock network (s:string) pos  =
-	let pos, version = decodeInteger32 s pos in
-	let pos, previous = decodeHash32 s pos in
-	let pos, merkle = decodeHash32 s pos in
-	let pos, nTime = decodeInteger32 s pos in
-	let pos, bits = decodeInteger32 s pos in
-	let pos, nonce = decodeInteger32 s pos in
+  let pos, version = decodeInteger32 s pos in
+  let pos, previous = decodeHash32 s pos in
+  let pos, merkle = decodeHash32 s pos in
+  let pos, nTime = decodeInteger32 s pos in
+  let pos, bits = decodeInteger32 s pos in
+  let pos, nonce = decodeInteger32 s pos in
 
+  let pos, _ = decode_aux_pow network version s pos in 
+ 
 	pos, ({ version = version; previous = previous; merkle = merkle;
 		nTime = nTime; bits = bits; nonce = nonce; 
     } : block)

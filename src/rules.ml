@@ -52,37 +52,21 @@ let calc_merkle txs payload =
     - ok, we stuffed something up. and it's likely we stuffed wrongly decoded tx's in the database.  
 *)
 
+
+
+
 let validate_block network db payload = 
     let hash = M.decode_block_hash payload in
     log @@ "hash " ^ M.hex_of_string hash
   >>
     let pos, header = M.decodeBlock network payload 0 in
     log @@ "payload length " ^ (string_of_int <| S.length) payload
-  >> 
-    (* parent coinbase tx in parent *)
-    let pos, aux_tx = M.decodeTx payload 80 in 
-    log @@ "auxpow " ^ M.formatTx aux_tx
+    >> log @@ "verison " ^ string_of_int  header.version 
   >>
-	  let pos, aux_block_hash = M.decodeHash32 payload pos in
-    log @@ "aux_block_hash " ^ M.hex_of_string aux_block_hash
-  >>
-    let pos, branch_length1 = M.decodeVarInt payload pos in
-    log @@ "branch length1 " ^ string_of_int branch_length1
+    let txs = M.decode_block_txs payload pos in
 
-  >> let pos = pos + (branch_length1 * 32) + 4 in
-    let pos, branch_length2 = M.decodeVarInt payload pos in
-    log @@ "branch length2 " ^ string_of_int branch_length2
-
-  >>
-    let pos = pos + (branch_length2 * 32) + 4 in
-    
-    let pos = pos + 80 in 
-    log @@ "hex " ^ M.hex_of_string (M.strsub payload pos (S.length payload - pos)) 
-    (*  >> log @@ "hex " ^ M.hex_of_string payload *)
-  >>
-  let txs = M.decode_block_txs payload pos in
-  log @@ "txs " ^ (string_of_int <| L.length) txs
-  >> log @@ "first tx " ^ M.formatTx (L.hd txs)
+    log @@ "txs " ^ (string_of_int <| L.length) txs
+(*  >> log @@ "first tx " ^ M.formatTx (L.hd txs) *)
 
   >> 
   let merkle_ok = header.merkle = calc_merkle txs payload in

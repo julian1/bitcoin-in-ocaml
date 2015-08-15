@@ -23,7 +23,8 @@ begin
         SELECT
             t.height_ - t.step,
             t.start_ + 1,
-            CASE WHEN t.start_ >= 10 and t.step <= 200 THEN t.step * 2
+            -- CASE WHEN t.start_ >= 10 and t.step <= 200 THEN t.step * 2
+            CASE WHEN t.start_ >= 10 THEN t.step * 2
             ELSE t.step
         END
         FROM t
