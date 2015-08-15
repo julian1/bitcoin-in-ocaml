@@ -1,8 +1,9 @@
 
 TODO
 
-  - netstat -tnp and strace + select() is showing a ton of conns in connect/write state?
-      - maybe resolve by putting a timeout on connect? 
+  - still lots of syn_sent - maybe because of pending counting, so it's always trying to open. 
+
+  - it doesn't look like we're getting more peers requests
 
   - IMPORTANT - for locator hashes - if don't increase the step beyond 500, then we'll always be 
     able to progress from a peer, on another chain.  
@@ -138,6 +139,10 @@ DONE
 
   - done - in p2p when getting new peers, filter according to what we are already connected to.
   - done - only add peer on receiving verack message,
+
+  - done - netstat -tnp and strace + select() is showing a ton of conns in connect/write state?
+      - maybe resolve by putting a timeout on connect? 
+
 
 
 old todo

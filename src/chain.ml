@@ -65,29 +65,9 @@ let initial_getblocks network hashes =
     - maybe there's something going on with the filter.
 
     - there's a fork.
-
-    407836
-    https://live.blockcypher.com/doge/block/340646e427dc34c6636498e1fc7f207ad163c9c22a92fde725cb4f7a544abe5e/
-    https://live.blockcypher.com/doge/block/0ab7e333949e4637845cad4ce1519cdaf0d53bf30402c3ca641c13bc3f95bdf0/
-
-    let's try changing the block locator list to include with increment... < 500
-
-    *** whoot pending 0
-merkle false
-60.240.67.193:22556 received block 8c70cd4072de4801c4b27113866d27835a89cc7c11ec61b4e8907a006a321f00 (on request 328)
- here !! jobs 10 queue 0 conns 8
- here !! jobs 8 queue 0 conns 8
-
-  ok, merkle gives false... 
----------------------------
-  but dogechain.info says valid block!
-
-    height 371511      b030450990cc18600e8db2c2d0887073e35248a914116642e6c1a5cad2092dca
-
-  remember there were no txs in the returned block - this is why merkle wrong.   
-      maybe we're reading the block incorrectly.
-      - or length is differently encoded?
   ------------------------
+
+  block 371337
 
     128.199.78.238:22556 *** got inventory blocks 372 - on request 372
    here !! jobs 11 queue 0 conns 3
@@ -108,6 +88,7 @@ merkle false
   50.149.31.242:22556 received block 60323982f9c5ff1b5a954eac9dc1269352835f47c2c5222691d80f0d50dcf053 (on request 371)
 
   ok, so when we have the longer thing in there.
+  actual txs is 6
 *)
 
 (* TODO change name encode_getdata_message - move to message *)
