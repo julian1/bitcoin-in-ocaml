@@ -482,11 +482,11 @@ let decode_block_txs payload =
     txs
 *)
 
-let decode_block_txs payload =
+let decode_block_txs payload pos =
     (* TODO pass the 80 offset, and maybe return the pos as well *)
-     let pos = 80 in 
-    (* let pos, tx_count = decodeVarInt payload pos in *)
-    let tx_count = 1 in
+     (* let pos = 80 in  *)
+     let pos, tx_count = decodeVarInt payload pos in 
+    (* let tx_count = 1 in *)
     let _, txs = decodeNItems payload pos decodeTx tx_count in
     txs
 

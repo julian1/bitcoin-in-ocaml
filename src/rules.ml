@@ -48,6 +48,8 @@ let calc_merkle txs payload =
     auxpow - is bitchy.
 
     the aux parent block hash is in the aux tx ...  
+
+    - lets just try to get the rest of the transactions...
 *)
 
 let validate_block db payload = 
@@ -57,6 +59,7 @@ let validate_block db payload =
     let pos, header = M.decodeBlock payload 0 in
     log @@ "payload length " ^ (string_of_int <| S.length) payload
   >> 
+    (* parent coinbase tx in parent *)
     let pos, aux_tx = M.decodeTx payload 80 in 
     log @@ "auxpow " ^ M.formatTx aux_tx
   >>
@@ -77,7 +80,7 @@ let validate_block db payload =
     log @@ "hex " ^ M.hex_of_string (M.strsub payload pos (S.length payload - pos)) 
     (*  >> log @@ "hex " ^ M.hex_of_string payload *)
   >>
-  let txs = M.decode_block_txs payload in
+  let txs = M.decode_block_txs payload pos in
   log @@ "txs " ^ (string_of_int <| L.length) txs
   >> log @@ "first tx " ^ M.formatTx (L.hd txs)
 

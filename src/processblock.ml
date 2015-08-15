@@ -429,7 +429,7 @@ let process_block (db : int PG.t ) payload =
             Some (PG.string_of_bytea payload );
           ] ()
         >>= fun rows ->
-          let txs = M.decode_block_txs payload in
+          let txs = M.decode_block_txs payload 80 in
           let txs = L.map (fun (tx : M.tx) ->
             block_id,
             (*M.strsub payload tx.pos tx.length, *)  (* TODO should pass raw payload and do hashing in process_tx *)

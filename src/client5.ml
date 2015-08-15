@@ -23,8 +23,8 @@ let log s = U.write_stdout s
 let check_block hash s =
   let hash_ = M.strrev <| M.sha256d in
 
-  let _, header = M.decodeBlock s 0 in
-  let txs = M.decode_block_txs s in
+  let pos, header = M.decodeBlock s 0 in
+  let txs = M.decode_block_txs s pos in
   let hash_of_tx tx = M.( S.sub s tx.pos tx.length |> hash_) in
   let txs = L.map hash_of_tx txs in
   let merkle = Merkle.root txs in
