@@ -54,7 +54,7 @@ let test3 ctx =
   let in_channel = open_in "test/data/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in
   let s = Core.In_channel.input_all in_channel in
   let () = close_in in_channel in
-  let _, header = M.decodeBlock s 0 in  
+  let _, header = M.decodeBlock Bitcoin s 0 in  
   assert_bool "true" (
     header.previous = M.string_of_hex "000000000000000010006fe522dd3d6251c7d7ba217d294bcb4f99dcc11b1d24"
     && header.merkle = M.string_of_hex "e658aef520b5fa1687f1c33a3bfc0336722fab49fe87ef0c96d46693f68d914b"

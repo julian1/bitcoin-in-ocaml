@@ -245,13 +245,13 @@ let manage_chain1 (state : U.my_app_state) e    =
           (* remove from blocks on request - should always do this whether valid or invalid *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
 
-          Rules.validate_block state.db payload  
+          Rules.validate_block state.network state.db payload  
           >>= (function
             | Some valid -> ( 
               (* OK. now we have to run this computation inline *) 
               (* TODO these log statements are not in jobs and should'nt return Nop *) 
               log "\nbegin writing db"
-              >> Processblock.process_block state.db payload 
+              >> Processblock.process_block state.network state.db payload 
               >> log "done writing db"
               ) 
             | None -> return U.Nop 

@@ -46,17 +46,17 @@ let calc_merkle txs payload =
 (*
     should look at the first tx and see if it's correct.
     auxpow - is bitchy.
-
     the aux parent block hash is in the aux tx ...  
-
     - lets just try to get the rest of the transactions...
+
+    - ok, we stuffed something up. and it's likely we stuffed wrongly decoded tx's in the database.  
 *)
 
-let validate_block db payload = 
+let validate_block network db payload = 
     let hash = M.decode_block_hash payload in
     log @@ "hash " ^ M.hex_of_string hash
   >>
-    let pos, header = M.decodeBlock payload 0 in
+    let pos, header = M.decodeBlock network payload 0 in
     log @@ "payload length " ^ (string_of_int <| S.length) payload
   >> 
     (* parent coinbase tx in parent *)

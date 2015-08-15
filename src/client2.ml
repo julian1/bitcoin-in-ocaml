@@ -52,7 +52,8 @@ type mytype2 =
 let process_block x  payload =
   Lwt.catch (
     fun () -> 
-      Processblock.process_block x.db payload 
+      (* TODO support more than bitcoin *)
+      Processblock.process_block M.Bitcoin x.db payload 
       >> return x 
   )
   (fun exn ->

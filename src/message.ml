@@ -460,8 +460,15 @@ let decodeTx s pos =
   }
 
 
+
+type network =
+  | Bitcoin
+  | Litecoin 
+  | Dogecoin
+
+
 (* change name decode_block_header *)
-let decodeBlock (s:string) pos =
+let decodeBlock network (s:string) pos  =
 	let pos, version = decodeInteger32 s pos in
 	let pos, previous = decodeHash32 s pos in
 	let pos, merkle = decodeHash32 s pos in
@@ -842,10 +849,6 @@ let formatTx tx =
   - there might be other things that need to change as well ....
 *)
 
-type network =
-  | Bitcoin
-  | Litecoin 
-  | Dogecoin
 
 (* perhaps move out of here? *) 
 let get_magic = function 

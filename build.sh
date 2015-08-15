@@ -11,5 +11,5 @@
 
 corebuild  -no-links  -I src  \
   -package microecc,pgocaml,cryptokit,zarith,lwt,lwt.preemptive,lwt.unix,lwt.syntax  \
- test/runner.byte  src/client.byte src/client2.byte src/client3.byte src/client4.byte src/client5.byte
+ test/runner.byte  src/client.byte src/client2.byte src/client3.byte src/client4.byte 
 

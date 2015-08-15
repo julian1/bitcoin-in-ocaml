@@ -385,14 +385,14 @@ let process_tx x (block_id,hash,tx) =
   ok, to check difficulty - we'll have to take db actions .... height etc.
 *)
 
-let process_block (db : int PG.t ) payload =
+let process_block network (db : int PG.t ) payload =
 
   let x = {
       block_count = 0;
       db = db;
     }
   in
-  let _, block  = M.decodeBlock payload 0 in
+    let _, block  = M.decodeBlock network payload 0 in
     let hash = M.decode_block_hash payload in
     log @@ "begin insert_block " ^ M.hex_of_string hash
 
@@ -429,6 +429,7 @@ let process_block (db : int PG.t ) payload =
             Some (PG.string_of_bytea payload );
           ] ()
         >>= fun rows ->
+          (* this is wrong when using aux pow ... *)
           let txs = M.decode_block_txs payload 80 in
           let txs = L.map (fun (tx : M.tx) ->
             block_id,

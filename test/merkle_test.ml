@@ -37,7 +37,7 @@ let hash = M.strrev <| M.sha256d
 let test3 ctx =
   M.(
     let s = read_file "test/data/000000000000000007c5b3e47c690e6ab9e75fdf1f47bfc7a247f29176be6d9f" in
-    let pos, header = M.decodeBlock s 0 in
+    let pos, header = M.decodeBlock Bitcoin s 0 in
     let txs = M.decode_block_txs s pos in
     let hash_of_tx tx = S.sub s tx.pos tx.length |> hash in
     let txs = L.map hash_of_tx txs in
