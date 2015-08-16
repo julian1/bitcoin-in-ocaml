@@ -11,6 +11,8 @@ begin;
 insert into block(hash,time, height) select '\x1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691',   to_timestamp(0) at time zone 'UTC', 0 ;
 
 
+-- TODO should dump as sql and get all peers.
+-- also separate files for bitcoin, litecoin, dogecoin
 -- dogecoin
 insert into peer(addr, port) values ( '128.199.78.238', 22556 );
 insert into peer(addr, port) values ( '216.155.138.34', 22556 ) ;
