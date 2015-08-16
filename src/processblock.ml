@@ -394,11 +394,11 @@ let process_block network (db : int PG.t ) payload =
   in
     let pos, block  = M.decodeBlock network payload 0 in
     let hash = M.decode_block_hash payload in
+    (* good to parse txs here, so that if throws/fails, we won't insert the block hash *)
     let txs = M.decode_block_txs payload pos in
-    log @@ "begin insert_block " ^ M.hex_of_string hash
-    >> log @@ "version " ^ string_of_int block.version 
+    (* log @@ "begin insert_block " ^ M.hex_of_string hash *)
 
-  >> PG.begin_work x.db
+    PG.begin_work x.db
 
   >> PG.( execute x.db ~name:"can_insert_block" ~params:[
       Some (string_of_bytea hash);
