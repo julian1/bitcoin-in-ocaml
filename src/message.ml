@@ -467,13 +467,20 @@ type network =
   | Dogecoin
 
 (* https://en.bitcoin.it/wiki/Merged_mining_specification
+
+  - we have to be careful, that we pick out auxpow header correctly or we risk
+  inserting incorrect txs/outputs in the db. 
 *)
 let decode_aux_pow network version payload pos =
+
+  let _BLOCK_VERSION_AUXPOW = 1 lsl 8 in
+
   match network with 
     (* | Dogecoin when version = 6422530 -> 
       pos, None
+      6422786  land (1 lsl 8) <> 0
     *)
-    | Dogecoin when version = 6422786  -> 
+    | Dogecoin when (version land _BLOCK_VERSION_AUXPOW) <> 0 -> 
       (* parent coinbase tx in parent *)
       let pos, aux_tx = decodeTx payload 80 in 
 
