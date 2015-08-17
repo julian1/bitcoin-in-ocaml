@@ -1,9 +1,9 @@
 
 TODO
 
-  - still lots of syn_sent - maybe because of pending counting, so it's always trying to open. 
+  - should change to record all peer ip's and ports, but then add just ips to the exclude list
+    so don't connect to the same node more than once.
 
-  - it doesn't look like we're getting more peers requests
 
   - IMPORTANT - for locator hashes - if don't increase the step beyond 500, then we'll always be 
     able to progress from a peer, on another chain.  
@@ -38,8 +38,7 @@ TODO
       monitor that the peer is responding.
       - this will get rid of the long list of stale fds.
 
-
-  - if we don't have enough peers in the db, then the peer lookup query will be triggered everytime
+  - if we don't have enough peers in the db, then the peer lookup query will be triggered on every event 
 
   - catch sig interupt - and clean shutdown, closing sockets
 
@@ -139,10 +138,13 @@ DONE
 
   - done - in p2p when getting new peers, filter according to what we are already connected to.
   - done - only add peer on receiving verack message,
-
   - done - netstat -tnp and strace + select() is showing a ton of conns in connect/write state?
       - maybe resolve by putting a timeout on connect? 
-
+  - done seems ok. 
+      lots of syn_sent - maybe because of pending counting, so it's always trying to open. 
+  - done it doesn't look like we're getting more peers requests
+      - getting lots of peers now.
+  - done auxpow headers for dogecoin 
 
 
 old todo
