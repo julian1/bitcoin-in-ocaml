@@ -9,13 +9,20 @@ module L = List
 module U = Util
 module PG = U.PG
 
+let (<|) f g x = f(g(x))
+
+let fold_m f acc lst =
+  let adapt f acc e = acc >>= fun acc -> f acc e in
+  L.fold_left (adapt f) (return acc) lst
 
 
 
 let log s = U.write_stdout s >> return U.Nop
 
 
-(* initial version message to send *)
+(* initial version message to send 
+  TODO change name encode_version_message
+*)
 let initial_version network =
   let payload = M.encodeVersion {
 
@@ -46,6 +53,12 @@ let initial_getaddr network =
   M.encodeSimpleMessage network "getaddr"
 
 
+let close_fd fd =
+  match Lwt_unix.state fd with
+    Opened -> ( Lwt_unix.close fd ) >> return U.Nop
+    | _ -> return U.Nop
+
+
 
 let get_connection host port =
   (* what is this lwt entry *)
@@ -62,22 +75,28 @@ let get_connection host port =
       in
       Lwt.catch
         (fun  () ->
-          Lwt_unix.connect fd a
-          >>
-          let (conn : U.connection) = {
-              addr = Unix.string_of_inet_addr a_;
-              port = port;
-              fd = fd;
-              ic = inchan ;
-              oc = outchan;
-          } in
-          return @@ U.GotConnection conn
+          Lwt.pick [
+            Lwt_unix.timeout 20.
+            (* >> Lwt_io.write_line Lwt_io.stdout "conn timeout!!!" doesn't run *)
+            ;
+            Lwt_unix.connect fd a
+            >>
+            let (conn : U.connection) = {
+                addr = Unix.string_of_inet_addr a_;
+                port = port;
+                fd = fd;
+                ic = inchan ;
+                oc = outchan;
+            } in
+            return @@ U.GotConnection conn
+          ]
         )
         (fun exn ->
           (* must close *)
+         close_fd fd
+          >>
           let s = Printexc.to_string exn in
-          Lwt_unix.close fd
-          >> return @@ U.GotConnectionError s
+          return @@ U.GotConnectionError s
         )
 
 (* read exactly n bytes from channel, returning a string
@@ -98,12 +117,6 @@ let readChannel inchan length (* timeout here *)  =
   >>= fun _ ->
     return @@ Bytes.to_string buf
 
-
-
-let close_fd fd =
-  match Lwt_unix.state fd with
-    Opened -> ( Lwt_unix.close fd ) >> return U.Nop
-    | _ -> return U.Nop
 
 
 let get_message (conn : U.connection ) =
@@ -149,6 +162,11 @@ let get_message (conn : U.connection ) =
   - problem is peers that may send data (and therefore don't get closed), but never complete the handshake...
 
   - we could return the time ...
+
+type string_array = string option list
+val string_of_string_array : string_array -> string
+v
+
 *)
 
 let manage_p2p2 state e =
@@ -166,14 +184,24 @@ let manage_p2p2 state e =
         - we kind of also want to avoid reconnecting to pending... 
       *)
       log "\n*****************\n db lookup peers"
-      >> PG.prepare state.db "select addr,port from peer order by random() limit $1" ()
+
+      >> PG.prepare state.db "select addr,port from peer where not ( addr = any ( $2))  order by random() limit $1" ()
+      (* >> PG.prepare state.db "select addr,port from peer where addr not in (select unnest( $2) ) order by random() limit $1" () *)
       >> PG.execute state.db ~params:[
           Some (PG.string_of_int required  );
+          let lst = L.map U.(fun conn -> Some conn.addr) state.connections in
+          Some (U.PG.string_of_string_array lst )
          ] ()
       >>= fun rows ->
+        log @@ " got " ^ (string_of_int <| L.length) rows 
+      >>
         let lst = L.map (function | (Some addr :: Some port :: []) -> 
-          addr, PG.int_of_string port) rows 
+          PG.string_of_string addr, PG.int_of_string port) rows 
         in
+
+        fold_m (fun acc (addr,port) -> U.write_stdout @@ "trying addr " ^ addr ^ " " ^ string_of_int port) () lst 
+
+      >>
         let jobs = L.map (fun (addr,port) -> get_connection addr port ) lst in 
         let state = { state with pending_connections = state.pending_connections + L.length lst } in
         return @@ U.SeqJobFinished (state, jobs)
@@ -203,6 +231,8 @@ let manage_p2p1 state e =
 
     | U.GotConnectionError msg ->
       let jobs = [ log @@ "connection error " ^ msg ] in
+
+      let state = { state with pending_connections = abs( pred state.pending_connections ) } in 
       return (U.SeqJobFinished (state, jobs))
 
     | U.GotMessageError (conn , msg) ->
@@ -215,7 +245,7 @@ let manage_p2p1 state e =
         (* TODO move this outside jobs ??? *)
         close_fd conn.fd;
       ] in
-      let state = { state with pending_connections = pred state.pending_connections } in 
+      let state = { state with pending_connections = abs ( pred state.pending_connections) } in 
       return @@ U.SeqJobFinished (state, jobs)
 
 
@@ -248,15 +278,16 @@ let manage_p2p1 state e =
               if L.length state.connections < 8 then
                 { state with
                   connections = conn :: state.connections;
-                  pending_connections = pred state.pending_connections; 
+                  pending_connections = abs( pred state.pending_connections ) ; 
                 } ,
                 [
                   log @@ "*** adding conn " ^ U.format_addr conn
+                  >> U.send_message conn (initial_getaddr state.network) 
                   >> get_message conn
                 ]
               else
                 { state with
-                  pending_connections = pred state.pending_connections; 
+                  pending_connections = abs( pred state.pending_connections ); 
                 }, 
                 [
                     close_fd conn.fd
@@ -288,7 +319,7 @@ let manage_p2p1 state e =
 
             PG.prepare state.db "select exists ( select 1 from peer where addr = $1) " ()
             >> PG.execute state.db ~params:[
-                Some (PG.string_of_bytea conn.addr );
+                Some (PG.string_of_bytea a );
               ] ()
             >>= fun rows ->
               let already_have = match rows with
@@ -299,16 +330,17 @@ let manage_p2p1 state e =
             in *)
             if already_have (* || L.length state.connections >= 8 *) then
               let jobs = [
-                  log @@ U.format_addr conn ^ " addr - already got conn " ^ a ^ ":" ^ string_of_int addr.port ;
+                  log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count) ^ " already got conn " ^ a ^ ":" ^ string_of_int addr.port ;
                   get_message conn
               ] in
               return @@ U.SeqJobFinished (state, jobs)
             else
               let jobs = [
-                 log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count ) ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
+                  log @@ U.format_addr conn ^ " addr - count "  ^ (string_of_int count) ^  " " ^ a ^ " port " ^ string_of_int addr.port ;
                   get_connection (formatAddress addr) addr.port ;
                   get_message conn
                 ] in
+              let state = { state with pending_connections = succ state.pending_connections } in 
               return @@ U.SeqJobFinished (state, jobs)
 
         | s ->

@@ -30,7 +30,7 @@ let return = Lwt.return
             are we sure we don't want 
 *)
 
-
+(*
 (* TODO change name encode_getblocks_message *)
 let initial_getblocks network starting_hash =
   (* the list are the options, and peer will return a sequence
@@ -43,9 +43,55 @@ let initial_getblocks network starting_hash =
     ^ M.zeros 32   (* block to stop - we don't know should be 32 bytes *)
   in
   M.encodeMessage network "getblocks" payload
+*)
 
+(* this got a bunch of responses with 500 blocks *)
+(* TODO change name encode_getblocks_message maybe move to message? *)
+let initial_getblocks network hashes =
+  (* the list are the options, and peer will return a sequence
+    from the first valid block in our list *)
+  let payload =
+    M.encodeInteger32 1  (* version *)
+    ^ M.encodeVarInt (L.length hashes )
+   (* ^ (L.rev hashes |> L.map M.encodeHash32 |> S.concat ""  )   *)
+      ^ (L.map M.encodeHash32 hashes |> S.concat "")   
+    ^ M.zeros 32   (* finish block. zeros = no limit = 500 *)
+  in
+  M.encodeMessage network "getblocks" payload
 
-(* TODO change name encode_getdata_message *)
+(*
+
+  - we should look at what the 500 blocks we got back are. 
+    - maybe there's something going on with the filter.
+
+    - there's a fork.
+  ------------------------
+
+  block 371337
+
+    128.199.78.238:22556 *** got inventory blocks 372 - on request 372
+   here !! jobs 11 queue 0 conns 3
+   here !! jobs 8 queue 0 conns 3
+   here !! jobs 7 queue 1 conns 3
+  128.199.78.238:22556 message block
+  *** whoot pending 5
+  merkle false
+  128.199.78.238:22556 received block 60323982f9c5ff1b5a954eac9dc1269352835f47c2c5222691d80f0d50dcf053 (on request 371)
+
+  50.149.31.242:22556 *** got inventory blocks 372 - on request 372
+   here !! jobs 11 queue 0 conns 4
+   here !! jobs 8 queue 0 conns 4
+   here !! jobs 7 queue 1 conns 4
+  50.149.31.242:22556 message block
+  *** whoot pending 4
+  merkle false
+  50.149.31.242:22556 received block 60323982f9c5ff1b5a954eac9dc1269352835f47c2c5222691d80f0d50dcf053 (on request 371)
+
+  ok, so when we have the longer thing in there.
+  actual txs is 6
+*)
+
+(* TODO change name encode_getdata_message - move to message *)
 let initial_getdata network hashes =
   (* 2 means block hashes only *)
   let encodeInventory hashes =
@@ -199,13 +245,13 @@ let manage_chain1 (state : U.my_app_state) e    =
           (* remove from blocks on request - should always do this whether valid or invalid *)
           let blocks_on_request = U.SS.remove hash state.blocks_on_request in
 
-          Rules.validate_block state.db payload  
+          Rules.validate_block state.network state.db payload  
           >>= (function
             | Some valid -> ( 
               (* OK. now we have to run this computation inline *) 
               (* TODO these log statements are not in jobs and should'nt return Nop *) 
               log "\nbegin writing db"
-              >> Processblock.process_block state.db payload 
+              >> Processblock.process_block state.network state.db payload 
               >> log "done writing db"
               ) 
             | None -> return U.Nop 
@@ -323,16 +369,20 @@ let manage_chain2 (state : U.my_app_state) e  =
           "\n fds\n" ; S.concat "\n" ( L.map (fun (x : U.ggg) -> string_of_float (now -. x.t ) ) state.last_block_received_time )
           ]
         >> U.PG.begin_work state.db
-        (* TODO this query is very expensive - 5 seconds to run *)
-        >> U.PG.prepare state.db ~query:"select hash from _leaves2 order by height desc" ()
+        (* TODO this query is very expensive - 5 seconds to run 
+  
+            select hash from flocator_hashes( flongest() ) ;
+          *)
+        (*>> U.PG.prepare state.db ~query:"select hash from _leaves2 order by height desc" () *)
+        >> U.PG.prepare state.db ~query:"select hash from flocator_hashes( flongest() )" ()
         >> U.PG.execute state.db ~params:[ ] ()
         >>= fun rows -> 
           U.PG.commit state.db
         >>
           let hashes = L.map (function (Some field ::_ ) -> U.PG.bytea_of_string field ) rows in
-          let head = weighted_random_select seed hashes in 
+         (* let head = weighted_random_select seed hashes in 
           log @@ "\n&&& requested head is " ^ M.hex_of_string head
-        >>
+        >> *)
           log @@ "\n&&& hashes len " ^ ( string_of_int (L.length hashes )) 
         >> 
         (* must reset now due to the sql query time *)
@@ -341,7 +391,7 @@ let manage_chain2 (state : U.my_app_state) e  =
             block_inv_pending = Some (conn.fd, now ) ;
         } in
         let jobs = [
-          U.send_message conn (initial_getblocks state.network head)
+          U.send_message conn (initial_getblocks state.network hashes )
         ] in
         return (U.SeqJobFinished (state, jobs))
 

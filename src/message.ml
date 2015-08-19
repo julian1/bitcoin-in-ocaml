@@ -460,26 +460,78 @@ let decodeTx s pos =
   }
 
 
-(* change name decode_block_header *)
-let decodeBlock (s:string) pos =
-	let pos, version = decodeInteger32 s pos in
-	let pos, previous = decodeHash32 s pos in
-	let pos, merkle = decodeHash32 s pos in
-	let pos, nTime = decodeInteger32 s pos in
-	let pos, bits = decodeInteger32 s pos in
-	let pos, nonce = decodeInteger32 s pos in
 
+type network =
+  | Bitcoin
+  | Litecoin 
+  | Dogecoin
+
+(* https://en.bitcoin.it/wiki/Merged_mining_specification
+
+  - we have to be careful, that we pick out auxpow header correctly or we risk
+  inserting incorrect txs/outputs in the db. 
+*)
+let decode_aux_pow network version payload pos =
+
+  let _BLOCK_VERSION_AUXPOW = 1 lsl 8 in
+
+  match network with 
+    (* | Dogecoin when version = 6422530 -> 
+      pos, None
+      6422786  land (1 lsl 8) <> 0
+    *)
+    | Dogecoin when (version land _BLOCK_VERSION_AUXPOW) <> 0 -> 
+      (* parent coinbase tx in parent *)
+      let pos, aux_tx = decodeTx payload 80 in 
+
+      let pos, aux_block_hash = decodeHash32 payload pos in
+
+      let pos, branch_length1 = decodeVarInt payload pos in
+      let pos = pos + (branch_length1 * 32) + 4 in
+
+      let pos, branch_length2 = decodeVarInt payload pos in
+      let pos = pos + (branch_length2 * 32) + 4 in
+
+      let pos = pos + 80 in 
+      pos, None
+
+    | _ -> pos, None
+
+
+(* change name decode_block_header *)
+let decodeBlock network (s:string) pos  =
+  let pos, version = decodeInteger32 s pos in
+  let pos, previous = decodeHash32 s pos in
+  let pos, merkle = decodeHash32 s pos in
+  let pos, nTime = decodeInteger32 s pos in
+  let pos, bits = decodeInteger32 s pos in
+  let pos, nonce = decodeInteger32 s pos in
+
+  let pos, _ = decode_aux_pow network version s pos in 
+ 
 	pos, ({ version = version; previous = previous; merkle = merkle;
 		nTime = nTime; bits = bits; nonce = nonce; 
     } : block)
 
-
+(*
 let decode_block_txs payload =
     (* TODO pass the 80 offset, and maybe return the pos as well *)
     let pos = 80 in
     let pos, tx_count = decodeVarInt payload pos in
     let _, txs = decodeNItems payload pos decodeTx tx_count in
     txs
+*)
+
+let decode_block_txs payload pos =
+    (* TODO pass the 80 offset, and maybe return the pos as well *)
+     (* let pos = 80 in  *)
+     let pos, tx_count = decodeVarInt payload pos in 
+    (* let tx_count = 1 in *)
+    let _, txs = decodeNItems payload pos decodeTx tx_count in
+    txs
+
+
+
 
 
 let decode_block_hash payload =
@@ -830,10 +882,6 @@ let formatTx tx =
   - there might be other things that need to change as well ....
 *)
 
-type network =
-  | Bitcoin
-  | Litecoin 
-  | Dogecoin
 
 (* perhaps move out of here? *) 
 let get_magic = function 

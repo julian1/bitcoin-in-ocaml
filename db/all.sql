@@ -6,6 +6,7 @@
 \i db/main01.sql
 \i db/main02.sql
 \i db/main03.sql
+\i db/test07.sql
 
 -- \i db/main04.sql
 

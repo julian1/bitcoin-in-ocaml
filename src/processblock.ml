@@ -385,18 +385,20 @@ let process_tx x (block_id,hash,tx) =
   ok, to check difficulty - we'll have to take db actions .... height etc.
 *)
 
-let process_block (db : int PG.t ) payload =
+let process_block network (db : int PG.t ) payload =
 
   let x = {
       block_count = 0;
       db = db;
     }
   in
-  let _, block  = M.decodeBlock payload 0 in
+    let pos, block  = M.decodeBlock network payload 0 in
     let hash = M.decode_block_hash payload in
-    log @@ "begin insert_block " ^ M.hex_of_string hash
+    (* good to parse txs here, so that if throws/fails, we won't insert the block hash *)
+    let txs = M.decode_block_txs payload pos in
+    (* log @@ "begin insert_block " ^ M.hex_of_string hash *)
 
-  >> PG.begin_work x.db
+    PG.begin_work x.db
 
   >> PG.( execute x.db ~name:"can_insert_block" ~params:[
       Some (string_of_bytea hash);
@@ -429,7 +431,6 @@ let process_block (db : int PG.t ) payload =
             Some (PG.string_of_bytea payload );
           ] ()
         >>= fun rows ->
-          let txs = M.decode_block_txs payload in
           let txs = L.map (fun (tx : M.tx) ->
             block_id,
             (*M.strsub payload tx.pos tx.length, *)  (* TODO should pass raw payload and do hashing in process_tx *)
